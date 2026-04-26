@@ -18,12 +18,13 @@ internal record SelectStatement(
 	IReadOnlyList<OrderByItem>? OrderBy,
 	int? Limit,
 	int? Offset,
-	IReadOnlyList<CteDefinition>? Ctes = null
+	IReadOnlyList<CteDefinition>? Ctes = null,
+	SqlExpression? Qualify = null
 ) : SqlStatement;
 
 /// <summary>A CTE: WITH name AS (SELECT ...)</summary>
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#with_clause
-internal record CteDefinition(string Name, SelectStatement Body);
+internal record CteDefinition(string Name, SelectStatement Body, SelectStatement? RecursiveBody = null);
 
 /// <summary>A set operation: UNION ALL, EXCEPT DISTINCT, INTERSECT DISTINCT.</summary>
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
@@ -137,6 +138,21 @@ internal record WindowFunction(
 
 /// <summary>ARRAY(SELECT ...) subquery expression.</summary>
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/subqueries#array_subquery
+
+/// <summary>ROLLUP(expr, ...) in GROUP BY clause.</summary>
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#rollup
+
+/// <summary>PIVOT clause: PIVOT(agg FOR input_col IN (val1, val2, ...))</summary>
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#pivot_operator
+internal record PivotClause(
+	AggregateCall Aggregation,
+	ColumnRef InputColumn,
+	IReadOnlyList<(SqlExpression Value, string? Alias)> PivotValues
+);
+
+/// <summary>FROM source PIVOT(...)</summary>
+internal record PivotFrom(FromClause Source, PivotClause Pivot) : FromClause;
+internal record RollupExpr(IReadOnlyList<SqlExpression> Exprs) : SqlExpression;
 internal record ArraySubquery(SelectStatement Subquery) : SqlExpression;
 
 // --- Enums ---

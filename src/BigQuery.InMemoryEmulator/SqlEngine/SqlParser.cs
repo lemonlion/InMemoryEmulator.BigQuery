@@ -486,6 +486,42 @@ internal static class SqlParser
 
 	// --- JOIN clause suffix ---
 
+	// --- PIVOT clause ---
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#pivot_operator
+	private static readonly TokenListParser<SqlToken, (SqlExpression Value, string? Alias)> PivotValueParser =
+		SP.Ref(() => Expression!).Then(val =>
+			Token.EqualTo(SqlToken.As).IgnoreThen(IdentifierOrKeyword)
+				.Select(alias => (Value: val, Alias: (string?)alias))
+				.Try()
+				.Or(Constant((Value: val, Alias: (string?)null)))
+		);
+
+	// Parse: FUNC_NAME(expr) inside PIVOT — simplified aggregate parser
+	private static readonly TokenListParser<SqlToken, AggregateCall> PivotAggParser =
+		IdentifierOrKeyword.Then(name =>
+			Token.EqualTo(SqlToken.LParen)
+				.IgnoreThen(SP.Ref(() => Expression!))
+				.Then(arg => Token.EqualTo(SqlToken.RParen).Select(_ =>
+					new AggregateCall(name, arg, false)))
+		);
+
+	private static readonly TokenListParser<SqlToken, PivotClause> PivotParser =
+		Token.EqualTo(SqlToken.Pivot)
+			.IgnoreThen(Token.EqualTo(SqlToken.LParen))
+			.IgnoreThen(
+				PivotAggParser.Then(agg =>
+					Token.EqualTo(SqlToken.For).IgnoreThen(
+						IdentifierOrKeyword
+					).Then(col =>
+						Token.EqualTo(SqlToken.In)
+							.IgnoreThen(Token.EqualTo(SqlToken.LParen))
+							.IgnoreThen(PivotValueParser.ManyDelimitedBy(Token.EqualTo(SqlToken.Comma)))
+							.Then(vals => Token.EqualTo(SqlToken.RParen).Select(_ =>
+								new PivotClause(agg, new ColumnRef(null, col), vals.ToList())))
+					)
+				)
+			).Then(pivot => Token.EqualTo(SqlToken.RParen).Select(_ => pivot));
+
 	private static readonly TokenListParser<SqlToken, FromClause> FromClauseParser =
 		Token.EqualTo(SqlToken.From).IgnoreThen(
 			SingleTableRef.Then(left =>
@@ -506,29 +542,46 @@ internal static class SqlParser
 				})
 				.Try()
 				.Or(Constant(left))
+			).Then(source =>
+				PivotParser.Select(piv => (FromClause)new PivotFrom(source, piv)).Try().Or(Constant(source))
 			)
 		);
+
 
 	// --- WHERE clause ---
 
 	private static readonly TokenListParser<SqlToken, SqlExpression> WhereClause =
 		Token.EqualTo(SqlToken.Where).IgnoreThen(Expression);
 
-	// --- ORDER BY clause ---
-
 	// --- GROUP BY clause ---
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#group_by_clause
+
+	// ROLLUP(expr, ...) inside GROUP BY
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#rollup
+	private static readonly TokenListParser<SqlToken, SqlExpression> RollupParser =
+		Token.EqualTo(SqlToken.Rollup)
+			.IgnoreThen(Token.EqualTo(SqlToken.LParen))
+			.IgnoreThen(SP.Ref(() => Expression!).ManyDelimitedBy(Token.EqualTo(SqlToken.Comma)))
+			.Then(exprs => Token.EqualTo(SqlToken.RParen).Select(_ => (SqlExpression)new RollupExpr(exprs.ToList())));
+
+	private static readonly TokenListParser<SqlToken, SqlExpression> GroupByExprParser =
+		RollupParser.Try().Or(SP.Ref(() => Expression!));
 
 	private static readonly TokenListParser<SqlToken, IReadOnlyList<SqlExpression>> GroupByClause =
 		Token.EqualTo(SqlToken.Group)
 			.IgnoreThen(Token.EqualTo(SqlToken.By))
-			.IgnoreThen(SP.Ref(() => Expression!).ManyDelimitedBy(Token.EqualTo(SqlToken.Comma)))
+			.IgnoreThen(GroupByExprParser.ManyDelimitedBy(Token.EqualTo(SqlToken.Comma)))
 			.Select(items => (IReadOnlyList<SqlExpression>)items.ToList());
 
 	// --- HAVING clause ---
 
 	private static readonly TokenListParser<SqlToken, SqlExpression> HavingClause =
 		Token.EqualTo(SqlToken.Having).IgnoreThen(Expression);
+
+	// --- QUALIFY clause ---
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#qualify_clause
+	private static readonly TokenListParser<SqlToken, SqlExpression> QualifyClause =
+		Token.EqualTo(SqlToken.Qualify).IgnoreThen(Expression);
 
 	// --- ORDER BY clause ---
 
@@ -577,11 +630,14 @@ internal static class SqlParser
 			HavingClause.Select(h => (SqlExpression?)h).OptionalOrDefault().Select(having =>
 				(sel.Distinct, sel.Columns, sel.From, sel.Where, sel.GroupBy, Having: having))
 		).Then(sel =>
+			QualifyClause.Select(q => (SqlExpression?)q).OptionalOrDefault().Select(qualify =>
+				(sel.Distinct, sel.Columns, sel.From, sel.Where, sel.GroupBy, sel.Having, Qualify: qualify))
+		).Then(sel =>
 			OrderByClause.Select(o => (IReadOnlyList<OrderByItem>?)o).OptionalOrDefault().Select(orderBy =>
-				(sel.Distinct, sel.Columns, sel.From, sel.Where, sel.GroupBy, sel.Having, OrderBy: orderBy))
+				(sel.Distinct, sel.Columns, sel.From, sel.Where, sel.GroupBy, sel.Having, sel.Qualify, OrderBy: orderBy))
 		).Then(sel =>
 			LimitClause.Select(l => (int?)l).OptionalOrDefault().Select(limit =>
-				(sel.Distinct, sel.Columns, sel.From, sel.Where, sel.GroupBy, sel.Having, sel.OrderBy, Limit: limit))
+				(sel.Distinct, sel.Columns, sel.From, sel.Where, sel.GroupBy, sel.Having, sel.Qualify, sel.OrderBy, Limit: limit))
 		).Then(sel =>
 			OffsetClause.Select(o => (int?)o).OptionalOrDefault().Select(offset =>
 				new SelectStatement(
@@ -593,7 +649,8 @@ internal static class SqlParser
 					sel.Having,
 					sel.OrderBy,
 					sel.Limit,
-					offset
+					offset,
+					Qualify: sel.Qualify
 				)
 			)
 		);
@@ -604,18 +661,26 @@ internal static class SqlParser
 		IdentifierOrKeyword.Then(name =>
 			Token.EqualTo(SqlToken.As)
 				.IgnoreThen(Token.EqualTo(SqlToken.LParen))
-				.IgnoreThen(SelectStmt)
-				.Then(body => Token.EqualTo(SqlToken.RParen).Select(_ =>
-					new CteDefinition(name, body)))
+				.IgnoreThen(SelectStmt.Then(baseSel =>
+					// Handle UNION ALL for recursive CTEs
+					Token.EqualTo(SqlToken.Union)
+						.IgnoreThen(Token.EqualTo(SqlToken.All))
+						.IgnoreThen(SelectStmt)
+						.Select(recSel => new CteDefinition(name, baseSel, recSel))
+						.Try()
+						.Or(Constant(new CteDefinition(name, baseSel)))
+				))
+				.Then(cte => Token.EqualTo(SqlToken.RParen).Select(_ => cte))
 		);
 
 	// --- WITH cte1 AS (...), cte2 AS (...) SELECT ... ---
 	private static readonly TokenListParser<SqlToken, SelectStatement> WithSelectStmt =
 		Token.EqualTo(SqlToken.With)
+			.IgnoreThen(Token.EqualTo(SqlToken.Recursive).Try().Or(Constant(new Token<SqlToken>())))
 			.IgnoreThen(CteDefParser.ManyDelimitedBy(Token.EqualTo(SqlToken.Comma)))
 			.Then(ctes => SelectStmt.Select(sel =>
 				new SelectStatement(sel.Distinct, sel.Columns, sel.From, sel.Where,
-					sel.GroupBy, sel.Having, sel.OrderBy, sel.Limit, sel.Offset, ctes.ToList())));
+					sel.GroupBy, sel.Having, sel.OrderBy, sel.Limit, sel.Offset, ctes.ToList(), sel.Qualify)));
 
 	// --- Top-level statement with optional set operations ---
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators

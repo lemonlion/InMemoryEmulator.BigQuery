@@ -22,6 +22,7 @@ internal enum SqlToken
 	Union, All, Except, Intersect,
 	Insert, Into, Values, Update, Set, Delete, Merge, Using, Matched,
 	Create, Drop, Alter, Table, View, If, Replace, Column, Add, Rename, To,
+	Qualify, Pivot, Rollup, Recursive, For,
 
 	// Identifiers & literals
 	Identifier,
@@ -173,6 +174,11 @@ internal static class KeywordResolver
 		["ADD"] = SqlToken.Add,
 		["RENAME"] = SqlToken.Rename,
 		["TO"] = SqlToken.To,
+		["QUALIFY"] = SqlToken.Qualify,
+		["PIVOT"] = SqlToken.Pivot,
+		["ROLLUP"] = SqlToken.Rollup,
+		["RECURSIVE"] = SqlToken.Recursive,
+		["FOR"] = SqlToken.For,
 	};
 
 	public static TokenList<SqlToken> Resolve(TokenList<SqlToken> tokens)

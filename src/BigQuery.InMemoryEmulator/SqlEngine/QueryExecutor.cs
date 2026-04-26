@@ -57,17 +57,46 @@ _ => throw new NotSupportedException("Unsupported statement type: " + stmt.GetTy
 #region SELECT execution
 
 private InMemoryBigQueryResult ExecuteSelect(SelectStatement sel)
+=> ExecuteSelect(sel, null);
+
+private InMemoryBigQueryResult ExecuteSelect(SelectStatement sel,
+Dictionary<string, (TableSchema Schema, List<Dictionary<string, object?>> Rows)>? externalCteResults)
 {
 // Handle CTEs
-Dictionary<string, (TableSchema Schema, List<Dictionary<string, object?>> Rows)>? cteResults = null;
+Dictionary<string, (TableSchema Schema, List<Dictionary<string, object?>> Rows)>? cteResults = externalCteResults;
 if (sel.Ctes is { Count: > 0 })
 {
-cteResults = new Dictionary<string, (TableSchema, List<Dictionary<string, object?>>)>(StringComparer.OrdinalIgnoreCase);
+cteResults ??= new Dictionary<string, (TableSchema, List<Dictionary<string, object?>>)>(StringComparer.OrdinalIgnoreCase);
 foreach (var cte in sel.Ctes)
 {
-var cteResult = ExecuteSelect(cte.Body);
-var cteRows = cteResult.Rows.Select(r => RowToDict(r, cteResult.Schema)).ToList();
-cteResults[cte.Name] = (cteResult.Schema, cteRows);
+    if (cte.RecursiveBody is not null)
+    {
+        // Recursive CTE: iterate until no new rows produced
+        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#with-recursive
+        //   The base term runs first, then the recursive term iterates.
+        var baseResult = ExecuteSelect(cte.Body);
+        var allRows = baseResult.Rows.Select(r => RowToDict(r, baseResult.Schema)).ToList();
+        var currentRows = new List<Dictionary<string, object?>>(allRows);
+        var recSchema = baseResult.Schema;
+        const int maxIterations = 500;
+        for (int iter = 0; iter < maxIterations && currentRows.Count > 0; iter++)
+        {
+            // Make current rows visible as the CTE
+            cteResults[cte.Name] = (recSchema, currentRows);
+            var recResult = ExecuteSelect(cte.RecursiveBody, cteResults);
+            var newRows = recResult.Rows.Select(r => RowToDict(r, recSchema)).ToList();
+            if (newRows.Count == 0) break;
+            allRows.AddRange(newRows);
+            currentRows = newRows;
+        }
+        cteResults[cte.Name] = (recSchema, allRows);
+    }
+    else
+    {
+        var cteResult = ExecuteSelect(cte.Body);
+        var cteRows = cteResult.Rows.Select(r => RowToDict(r, cteResult.Schema)).ToList();
+        cteResults[cte.Name] = (cteResult.Schema, cteRows);
+    }
 }
 }
 
@@ -106,6 +135,27 @@ bool hasWindow = sel.Columns.Any(c => c.Expr is WindowFunction);
 
 // SELECT projection
 var (schema, tableRows) = hasWindow ? ProjectWithWindows(sel, rows) : Project(sel, rows, cteResults);
+
+// QUALIFY - filter after window functions
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#qualify_clause
+//   "The QUALIFY clause filters the results of window functions."
+if (sel.Qualify is not null)
+{
+    var qualifyRows = new List<TableRow>();
+    for (int qi = 0; qi < tableRows.Count; qi++)
+    {
+        var qDict = RowToDict(tableRows[qi], schema);
+        if (qi < rows.Count)
+            foreach (var kv in rows[qi].Fields)
+                qDict.TryAdd(kv.Key, kv.Value);
+        var qCtx = new RowContext(qDict, null);
+        var qVal = qi < rows.Count
+            ? EvaluateWithWindows(sel.Qualify, qCtx, rows[qi], rows)
+            : Evaluate(sel.Qualify, qCtx);
+        if (IsTruthy(qVal)) qualifyRows.Add(tableRows[qi]);
+    }
+    tableRows = qualifyRows;
+}
 
 // DISTINCT
 if (sel.Distinct)
@@ -156,6 +206,13 @@ return new InMemoryBigQueryResult(schema, tableRows);
 private InMemoryBigQueryResult ExecuteGroupBy(SelectStatement sel, List<RowContext> rows)
 {
 var groupExprs = sel.GroupBy ?? [];
+
+// Check for ROLLUP
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#rollup
+var rollupExpr = groupExprs.OfType<RollupExpr>().FirstOrDefault();
+if (rollupExpr is not null)
+    return ExecuteRollup(sel, rows, rollupExpr);
+
 var groups = rows.GroupBy(r =>
 string.Join("|", groupExprs.Select(g => Evaluate(g, r)?.ToString() ?? "NULL")));
 
@@ -207,6 +264,66 @@ var tableRows = resultRows.Select(d => DictToTableRow(d)).ToList();
 return new InMemoryBigQueryResult(schema, tableRows);
 }
 
+private InMemoryBigQueryResult ExecuteRollup(SelectStatement sel, List<RowContext> rows, RollupExpr rollup)
+{
+    // ROLLUP(a, b, c) generates grouping sets: (a,b,c), (a,b), (a), ()
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#rollup
+    var rollupExprs = rollup.Exprs;
+    var allResultRows = new List<Dictionary<string, object?>>();
+    TableSchema? schema = null;
+
+    // Generate prefix grouping sets: (all), (all-1), ..., ()
+    for (int level = rollupExprs.Count; level >= 0; level--)
+    {
+        var activeExprs = rollupExprs.Take(level).ToList();
+        var nullExprs = rollupExprs.Skip(level).ToList();
+
+        var groups = rows.GroupBy(r =>
+            string.Join("|", activeExprs.Select(g => Evaluate(g, r)?.ToString() ?? "NULL")));
+
+        foreach (var group in groups)
+        {
+            var groupRows = group.ToList();
+            if (sel.Having is not null)
+            {
+                var hv = EvaluateWithAggregates(sel.Having, groupRows);
+                if (!IsTruthy(hv)) continue;
+            }
+
+            var dict = new Dictionary<string, object?>();
+            var fields = new List<TableFieldSchema>();
+            foreach (var col in sel.Columns)
+            {
+                var name = col.Alias ?? DeriveColumnName(col.Expr);
+                // For nullified group-by columns, return null
+                var colRef = col.Expr is ColumnRef cr ? cr : null;
+                bool isNulled = colRef != null && nullExprs.Any(ne =>
+                    ne is ColumnRef ncr && ncr.ColumnName.Equals(colRef.ColumnName, StringComparison.OrdinalIgnoreCase));
+                dict[name] = isNulled ? null : EvaluateWithAggregates(col.Expr, groupRows);
+                if (schema is null)
+                    fields.Add(new TableFieldSchema { Name = name, Type = InferType(dict[name]) });
+            }
+            schema ??= new TableSchema { Fields = fields };
+            allResultRows.Add(dict);
+        }
+    }
+
+    schema ??= new TableSchema { Fields = sel.Columns.Select(c =>
+        new TableFieldSchema { Name = c.Alias ?? DeriveColumnName(c.Expr), Type = "STRING" }).ToList() };
+
+    if (sel.OrderBy is { Count: > 0 })
+    {
+        var ctx2 = allResultRows.Select(d => new RowContext(d, null)).ToList();
+        ctx2 = OrderBy(ctx2, sel.OrderBy);
+        allResultRows = ctx2.Select(c => c.Fields).ToList();
+    }
+
+    if (sel.Limit.HasValue)
+        allResultRows = allResultRows.Take(sel.Limit.Value).ToList();
+
+    return new InMemoryBigQueryResult(schema, allResultRows.Select(DictToTableRow).ToList());
+}
+
 #endregion
 #region FROM resolution
 
@@ -219,8 +336,63 @@ TableRef tRef => ResolveTableRef(tRef, cteResults),
 JoinClause join => ResolveJoin(join, cteResults),
 SubqueryFrom sub => ResolveSubquery(sub),
 UnnestClause unnest => ResolveUnnest(unnest),
+PivotFrom pivot => ResolvePivot(pivot, cteResults),
 _ => throw new NotSupportedException("Unsupported FROM type: " + from.GetType().Name)
 };
+}
+
+private List<RowContext> ResolvePivot(PivotFrom pivot,
+    Dictionary<string, (TableSchema Schema, List<Dictionary<string, object?>> Rows)>? cteResults)
+{
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#pivot_operator
+    var sourceRows = ResolveFrom(pivot.Source, cteResults);
+    var pc = pivot.Pivot;
+    var inputCol = pc.InputColumn.ColumnName;
+    var aggFunc = pc.Aggregation;
+
+    // Determine grouping columns = all source columns except input and aggregated column
+    // Source rows may have both qualified (alias.col) and unqualified (col) keys
+    var aggColName = aggFunc.Arg is ColumnRef acr ? acr.ColumnName : null;
+    var allCols = sourceRows.Count > 0 ? sourceRows[0].Fields.Keys.ToList() : new List<string>();
+    // Only use unqualified column names for grouping to avoid duplicates
+    var unqualCols = allCols.Where(c => !c.Contains('.')).ToList();
+    var groupCols = unqualCols.Where(c =>
+        !c.Equals(inputCol, StringComparison.OrdinalIgnoreCase) &&
+        (aggColName == null || !c.Equals(aggColName, StringComparison.OrdinalIgnoreCase))
+    ).ToList();
+
+    // Evaluate pivot values
+    var pivotValues = pc.PivotValues.Select(pv => {
+        var val = pv.Value is LiteralExpr lit ? lit.Value : null;
+        var alias = pv.Alias ?? val?.ToString() ?? "NULL";
+        return (Value: val, Alias: alias);
+    }).ToList();
+
+    // Group source rows by grouping columns
+    var groups = sourceRows.GroupBy(r =>
+        string.Join("|", groupCols.Select(c => r.Fields.TryGetValue(c, out var v) ? v?.ToString() ?? "NULL" : "NULL")));
+
+    var result = new List<RowContext>();
+    foreach (var group in groups)
+    {
+        var dict = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        var firstRow = group.First();
+        foreach (var gc in groupCols)
+            dict[gc] = firstRow.Fields.TryGetValue(gc, out var v) ? v : null;
+
+        foreach (var pv in pivotValues)
+        {
+            var matchingRows = group.Where(r =>
+                r.Fields.TryGetValue(inputCol, out var rv) && Equals(rv?.ToString(), pv.Value?.ToString())
+            ).ToList();
+            if (matchingRows.Count > 0)
+                dict[pv.Alias] = EvaluateAggregate(aggFunc, matchingRows);
+            else
+                dict[pv.Alias] = null;
+        }
+        result.Add(new RowContext(dict, null));
+    }
+    return result;
 }
 
 private List<RowContext> ResolveTableRef(TableRef tRef,
@@ -515,6 +687,7 @@ foreach (var kv in expanded) cells[kv.Key] = kv.Value;
 else
 {
 var colName = item.Alias ?? DeriveColumnName(item.Expr);
+						while (cells.ContainsKey(colName)) colName += "_";
 cells[colName] = Evaluate(item.Expr, row, cteResults: cteResults);
 }
 }
@@ -550,6 +723,7 @@ cells[colName] = EvaluateWindow(wf, row, rows);
 else
 {
 var colName = item.Alias ?? DeriveColumnName(item.Expr);
+						while (cells.ContainsKey(colName)) colName += "_";
 cells[colName] = Evaluate(item.Expr, row);
 }
 }
@@ -559,6 +733,29 @@ schemaFields.AddRange(cells.Keys.Select(k => new TableFieldSchema { Name = k, Ty
 }
 
 return (new TableSchema { Fields = schemaFields }, resultRows);
+}
+
+/// <summary>Evaluate an expression that may contain window functions (used by QUALIFY).</summary>
+private object? EvaluateWithWindows(SqlExpression expr, RowContext evalRow, RowContext windowRow, List<RowContext> allRows)
+{
+    return expr switch
+    {
+        WindowFunction wf => EvaluateWindow(wf, windowRow, allRows),
+        BinaryExpr bin => EvaluateBinaryWithWindows(bin, evalRow, windowRow, allRows),
+        UnaryExpr ue => ue.Op switch
+        {
+            UnaryOp.Not => !IsTruthy(EvaluateWithWindows(ue.Operand, evalRow, windowRow, allRows)),
+            _ => Evaluate(expr, evalRow)
+        },
+        _ => Evaluate(expr, evalRow)
+    };
+}
+
+private object? EvaluateBinaryWithWindows(BinaryExpr bin, RowContext evalRow, RowContext windowRow, List<RowContext> allRows)
+{
+    var left = bin.Left is WindowFunction lwf ? new LiteralExpr(EvaluateWindow(lwf, windowRow, allRows)) : bin.Left;
+    var right = bin.Right is WindowFunction rwf ? new LiteralExpr(EvaluateWindow(rwf, windowRow, allRows)) : bin.Right;
+    return EvaluateBinary(new BinaryExpr(left, bin.Op, right), evalRow);
 }
 
 private object? EvaluateWindow(WindowFunction wf, RowContext currentRow, List<RowContext> allRows)
