@@ -5,6 +5,8 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<Using Include="BigQuery.InMemoryEmulator" />
+		<Using Include="BigQuery.InMemoryEmulator.SqlEngine" />
 		<Using Include="BigQuery.InMemoryEmulator.Tests.Infrastructure" />
 	</ItemGroup>
 

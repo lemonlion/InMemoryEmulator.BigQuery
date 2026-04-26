@@ -1,4 +1,4 @@
-#pragma warning disable CS8602, CS8604
+#pragma warning disable CS8600, CS8602, CS8604
 
 using System.Globalization;
 using System.Text.RegularExpressions;
@@ -119,10 +119,27 @@ tableRows = tableRows
 // ORDER BY
 if (sel.OrderBy is { Count: > 0 })
 {
-var dicts = tableRows.Select(r => RowToDict(r, schema)).ToList();
+// Include source row fields so ORDER BY can reference columns not in SELECT
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#order_by_clause
+var projFieldNames = schema.Fields.Select(f => f.Name).ToHashSet();
+var dicts = tableRows.Select((r, i) =>
+{
+    var d = RowToDict(r, schema);
+    if (i < rows.Count)
+        foreach (var kv in rows[i].Fields)
+            d.TryAdd(kv.Key, kv.Value);
+    return d;
+}).ToList();
 var contexts = dicts.Select(d => new RowContext(d, null)).ToList();
 contexts = OrderBy(contexts, sel.OrderBy);
-tableRows = contexts.Select(c => DictToTableRow(c.Fields)).ToList();
+tableRows = contexts.Select(c =>
+{
+    var proj = new Dictionary<string, object?>();
+    foreach (var kv in c.Fields)
+        if (projFieldNames.Contains(kv.Key))
+            proj[kv.Key] = kv.Value;
+    return DictToTableRow(proj);
+}).ToList();
 }
 
 // OFFSET
@@ -213,7 +230,7 @@ var tableName = tRef.TableId;
 var alias = tRef.Alias ?? tableName;
 
 // INFORMATION_SCHEMA
-if (tableName.Contains("INFORMATION_SCHEMA", StringComparison.OrdinalIgnoreCase))
+if (tableName.Contains("INFORMATION_SCHEMA", StringComparison.OrdinalIgnoreCase) || tRef.DatasetId?.Equals("INFORMATION_SCHEMA", StringComparison.OrdinalIgnoreCase) == true)
 return ResolveInformationSchema(tableName, alias);
 
 // Wildcard tables
@@ -563,21 +580,15 @@ return (long)(partition.IndexOf(currentRow) + 1);
 
 if (funcName == "RANK")
 {
-var idx = partition.IndexOf(currentRow);
-int rank = 1;
-for (int i = 0; i < idx; i++)
+// RANK = position of first row with same ORDER BY values + 1
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/numbering_functions#rank
+for (int i = 0; i < partition.Count; i++)
 {
 bool same = wf.OrderBy?.All(o =>
-Equals(Evaluate(o.Expr, partition[i]), Evaluate(o.Expr, partition[idx]))) ?? true;
-if (!same) rank = i + 1;
+Equals(Evaluate(o.Expr, partition[i]), Evaluate(o.Expr, currentRow))) ?? true;
+if (same) return (long)(i + 1);
 }
-if (idx > 0)
-{
-bool same = wf.OrderBy?.All(o =>
-Equals(Evaluate(o.Expr, partition[idx - 1]), Evaluate(o.Expr, partition[idx]))) ?? true;
-if (!same) rank = idx + 1;
-}
-return (long)rank;
+return (long)(partition.IndexOf(currentRow) + 1);
 }
 
 if (funcName == "DENSE_RANK")
@@ -662,13 +673,14 @@ _ => throw new NotSupportedException("Unsupported expression: " + expr.GetType()
 private object? EvaluateColumnRef(ColumnRef col, RowContext row)
 {
 var name = col.ColumnName;
-if (row.Fields.TryGetValue(name, out var val)) return val;
-// Try with table alias prefix
+// Check qualified name FIRST when alias is specified (important for MERGE, JOIN contexts)
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#field_path
 if (col.TableAlias is not null)
 {
 var qualified = col.TableAlias + "." + name;
-if (row.Fields.TryGetValue(qualified, out val)) return val;
+if (row.Fields.TryGetValue(qualified, out var qVal)) return qVal;
 }
+if (row.Fields.TryGetValue(name, out var val)) return val;
 // Try any qualified match
 foreach (var kv in row.Fields)
 {
@@ -931,6 +943,8 @@ return name switch
 "REGEXP_CONTAINS" => EvaluateRegexpContains(args, row),
 "REGEXP_EXTRACT" => EvaluateRegexpExtract(args, row),
 "REGEXP_REPLACE" => EvaluateRegexpReplace(args, row),
+"ASCII" => Evaluate(args[0], row)?.ToString() is string sa && sa.Length > 0 ? (long)sa[0] : null,
+"CHR" or "CODE_POINTS_TO_STRING" => Evaluate(args[0], row) is object cv ? ((char)Convert.ToInt64(cv)).ToString() : null,
 "SAFE_DIVIDE" => EvaluateSafeDivide(args, row),
 "COALESCE" => args.Select(a => Evaluate(a, row)).FirstOrDefault(v => v is not null),
 "IF" => IsTruthy(Evaluate(args[0], row)) ? Evaluate(args[1], row) : Evaluate(args[2], row),
@@ -1013,6 +1027,16 @@ return name switch
 "JSON_EXTRACT_SCALAR" or "JSON_VALUE" => EvaluateJsonExtractScalar(args, row),
 
 // UDF
+// Geography functions
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions
+"ST_GEOGPOINT" or "ST_GEOGFROMTEXT" or "ST_GEOGFROMWKT" or "ST_GEOGFROMGEOJSON"
+or "ST_ASTEXT" or "ST_ASGEOJSON" or "ST_X" or "ST_Y"
+or "ST_DISTANCE" or "ST_DWITHIN" or "ST_CONTAINS" or "ST_WITHIN"
+or "ST_INTERSECTS" or "ST_DISJOINT" or "ST_EQUALS"
+or "ST_AREA" or "ST_LENGTH" or "ST_PERIMETER"
+or "ST_NUMPOINTS" or "ST_NPOINTS" or "ST_DIMENSION" or "ST_ISEMPTY" or "ST_GEOMETRYTYPE"
+or "ST_MAKELINE" or "ST_CENTROID"
+    => EvaluateGeographyFunction(name, args, row),
 _ => EvaluateUdf(name, args, row)
 };
 }
@@ -1717,6 +1741,132 @@ current = next;
 return current;
 }
 
+
+#region Geography function helpers
+
+private object? EvaluateGeographyFunction(string name, IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    // Evaluate all arguments first
+    var vals = args.Select(a => Evaluate(a, row)).ToList();
+
+    return name switch
+    {
+        "ST_GEOGPOINT" => vals[0] is null || vals[1] is null ? null
+            : new GeoPoint(Convert.ToDouble(vals[0]), Convert.ToDouble(vals[1])),
+        "ST_GEOGFROMTEXT" or "ST_GEOGFROMWKT" => vals[0] is null ? null
+            : GeoComputation.ParseWkt(Convert.ToString(vals[0])!),
+        "ST_GEOGFROMGEOJSON" => vals[0] is null ? null
+            : GeoComputation.ParseGeoJson(Convert.ToString(vals[0])!),
+        "ST_ASTEXT" => vals[0] is null ? null : ((GeoValue)vals[0]).ToWkt(),
+        "ST_ASGEOJSON" => vals[0] is null ? null : ((GeoValue)vals[0]).ToGeoJson(),
+        "ST_X" => vals[0] is null ? null : vals[0] is GeoPoint px ? (object)px.Longitude : null,
+        "ST_Y" => vals[0] is null ? null : vals[0] is GeoPoint py ? (object)py.Latitude : null,
+        "ST_DISTANCE" => vals[0] is null || vals[1] is null ? null
+            : (object?)GeoComputation.Distance((GeoValue)vals[0], (GeoValue)vals[1]),
+        "ST_DWITHIN" => vals[0] is null || vals[1] is null || vals[2] is null ? null
+            : (object)(GeoComputation.Distance((GeoValue)vals[0], (GeoValue)vals[1]) <= Convert.ToDouble(vals[2])),
+        "ST_CONTAINS" => GeoContains(vals[0], vals[1]),
+        "ST_WITHIN" => GeoContains(vals[1], vals[0]),
+        "ST_INTERSECTS" => GeoIntersects(vals[0], vals[1]),
+        "ST_DISJOINT" => GeoIntersects(vals[0], vals[1]) is bool b ? (object)!b : null,
+        "ST_EQUALS" => vals[0] is null || vals[1] is null ? null
+            : (object)(((GeoValue)vals[0]).ToWkt() == ((GeoValue)vals[1]).ToWkt()),
+        "ST_AREA" => GeoArea(vals[0]),
+        "ST_LENGTH" => GeoLength(vals[0]),
+        "ST_PERIMETER" => GeoPerimeter(vals[0]),
+        "ST_NUMPOINTS" or "ST_NPOINTS" => vals[0] is null ? null : (long)((GeoValue)vals[0]).NumPoints,
+        "ST_DIMENSION" => vals[0] is null ? null : (long)((GeoValue)vals[0]).Dimension,
+        "ST_ISEMPTY" => vals[0] is null ? null : ((GeoValue)vals[0]).IsEmpty,
+        "ST_GEOMETRYTYPE" => vals[0] is null ? null : ((GeoValue)vals[0]).GeometryType,
+        "ST_MAKELINE" => GeoMakeLine(vals),
+        "ST_CENTROID" => GeoCentroid(vals[0]),
+        _ => throw new NotSupportedException("Unknown geography function: " + name)
+    };
+}
+
+private static object? GeoContains(object? outer, object? inner)
+{
+    if (outer is null || inner is null) return null;
+    var a = (GeoValue)outer;
+    var b = (GeoValue)inner;
+    if (a is GeoPolygon poly && b is GeoPoint pt)
+        return GeoComputation.PointInPolygon(pt, poly);
+    if (a is GeoPolygon poly2 && b is GeoPolygon innerPoly)
+    {
+        foreach (var ring in innerPoly.Rings)
+            foreach (var p in ring)
+                if (!GeoComputation.PointInPolygon(new GeoPoint(p.Lon, p.Lat), poly2)) return false;
+        return true;
+    }
+    return false;
+}
+
+private static object? GeoIntersects(object? first, object? second)
+{
+    if (first is null || second is null) return null;
+    var a = (GeoValue)first;
+    var b = (GeoValue)second;
+    if (a is GeoPolygon pa && b is GeoPolygon pb)
+    {
+        foreach (var p in pa.Rings[0])
+            if (GeoComputation.PointInPolygon(new GeoPoint(p.Lon, p.Lat), pb)) return true;
+        foreach (var p in pb.Rings[0])
+            if (GeoComputation.PointInPolygon(new GeoPoint(p.Lon, p.Lat), pa)) return true;
+        return false;
+    }
+    if (a is GeoPoint pt && b is GeoPolygon poly) return GeoComputation.PointInPolygon(pt, poly);
+    if (a is GeoPolygon poly2 && b is GeoPoint pt2) return GeoComputation.PointInPolygon(pt2, poly2);
+    if (a is GeoPoint pa2 && b is GeoPoint pb2)
+        return pa2.Longitude == pb2.Longitude && pa2.Latitude == pb2.Latitude;
+    return false;
+}
+
+private static object? GeoArea(object? val)
+{
+    if (val is null) return null;
+    return val is GeoPolygon poly ? GeoComputation.Area(poly) : 0.0;
+}
+
+private static object? GeoLength(object? val)
+{
+    if (val is null) return null;
+    return val is GeoLineString ls ? GeoComputation.Length(ls) : 0.0;
+}
+
+private static object? GeoPerimeter(object? val)
+{
+    if (val is null) return null;
+    return val is GeoPolygon poly ? GeoComputation.Perimeter(poly) : 0.0;
+}
+
+private static object? GeoMakeLine(List<object?> vals)
+{
+    if (vals[0] is null || vals[1] is null) return null;
+    var pts = new List<(double Lon, double Lat)>();
+    foreach (var v in vals)
+    {
+        if (v is GeoPoint p) pts.Add((p.Longitude, p.Latitude));
+        else if (v is GeoLineString ls) pts.AddRange(ls.Points);
+    }
+    return new GeoLineString(pts);
+}
+
+private static object? GeoCentroid(object? val)
+{
+    if (val is null) return null;
+    var geo = (GeoValue)val;
+    if (geo is GeoPoint pt) return pt;
+    if (geo is GeoLineString ls)
+        return new GeoPoint(ls.Points.Average(p => p.Lon), ls.Points.Average(p => p.Lat));
+    if (geo is GeoPolygon poly)
+    {
+        var ring = poly.Rings[0];
+        return new GeoPoint(ring.Average(p => p.Lon), ring.Average(p => p.Lat));
+    }
+    return null;
+}
+
+#endregion
 private object? EvaluateUdf(string name, IReadOnlyList<SqlExpression> args, RowContext row)
 {
 // Search all datasets for UDF
@@ -1757,6 +1907,12 @@ throw new NotSupportedException("Unknown function: " + name);
 private object? EvaluateAggregate(AggregateCall agg, List<RowContext> rows)
 {
 var funcName = agg.FunctionName.ToUpperInvariant();
+
+// COUNT(*) must not evaluate the StarExpr arg - just count rows
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#count
+if (funcName == "COUNT" && agg.Arg is StarExpr)
+    return (long)rows.Count;
+
 var values = rows.Select(r => Evaluate(agg.Arg!, r)).ToList();
 
 if (agg.Distinct)
@@ -1764,7 +1920,7 @@ values = values.Where(v => v is not null).Distinct().ToList();
 
 return funcName switch
 {
-"COUNT" => agg.Arg! is StarExpr ? (long)rows.Count : (long)values.Count(v => v is not null),
+"COUNT" => (long)values.Count(v => v is not null),
 "SUM" => SumValues(values),
 "AVG" => AvgValues(values),
 "MIN" => values.Where(v => v is not null).Any()
@@ -2103,7 +2259,13 @@ switch (alter.Action)
     case DropColumnAction drop:
         var field = table.Schema.Fields.FirstOrDefault(f =>
             f.Name.Equals(drop.Name, StringComparison.OrdinalIgnoreCase));
-        if (field is not null) table.Schema.Fields.Remove(field);
+        if (field is not null)
+{
+    table.Schema.Fields.Remove(field);
+    // Also remove the column data from existing rows
+    foreach (var row in table.Rows)
+        row.Fields.Remove(drop.Name);
+}
         break;
     case RenameTableAction rename:
         var dsId = alter.DatasetId ?? parsedDs ?? _defaultDatasetId;

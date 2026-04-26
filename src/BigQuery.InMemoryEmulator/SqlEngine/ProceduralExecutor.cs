@@ -435,16 +435,17 @@ internal class ProceduralExecutor
 			funcName = fullName;
 		}
 
-		if (_store.Datasets.TryGetValue(datasetId, out var dataset))
-		{
-			if (!dataset.Routines.TryRemove(funcName, out _) && !ifExists)
-				throw new InvalidOperationException($"Not found: Function {funcName}");
-		}
-		else if (!ifExists)
-		{
-			throw new InvalidOperationException($"Not found: Dataset {datasetId}");
-		}
-		return null;
+		// Check _temp dataset first (TEMP functions shadow persistent ones)
+		var found = false;
+		if (!fullName.Contains(".") && _store.Datasets.TryGetValue("_temp", out var tempDs))
+			found = tempDs.Routines.TryRemove(funcName, out _);
+
+		if (!found && _store.Datasets.TryGetValue(datasetId, out var dataset))
+			found = dataset.Routines.TryRemove(funcName, out _);
+
+		if (!found && !ifExists)
+			throw new InvalidOperationException($"Not found: Function {funcName}");
+return null;
 	}
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#while
 	private (TableSchema Schema, List<TableRow> Rows)? ExecuteWhile(string sql)
@@ -537,6 +538,7 @@ return (r.Schema, r.Rows);
 		var stringChar = '\0';
 		var parenDepth = 0;
 		var blockDepth = 0;
+		string lastKeyword = "";
 		bool _lastWordWasEnd = false;
 
 		var words = new System.Text.StringBuilder();
@@ -578,7 +580,7 @@ return (r.Schema, r.Rows);
 			{
 				var word = words.ToString().ToUpperInvariant();
 				words.Clear();
-				if (word == "BEGIN" || word == "IF" || word == "LOOP" || word == "WHILE" || word == "REPEAT")
+				if (word == "BEGIN" || (word == "IF" && lastKeyword != "FUNCTION" && lastKeyword != "TABLE") || word == "LOOP" || word == "WHILE" || word == "REPEAT")
 				{
 					// Don't count these keywords when they follow END (e.g., END LOOP, END IF)
 					if (!_lastWordWasEnd)
@@ -594,12 +596,14 @@ return (r.Schema, r.Rows);
 				{
 					_lastWordWasEnd = false;
 				}
+				if (word.Length > 0) lastKeyword = word;
 			}
 
 			if (c == ';' && parenDepth == 0 && blockDepth == 0)
 			{
 				result.Add(current.ToString());
 				current.Clear();
+				lastKeyword = "";
 			}
 			else
 			{
