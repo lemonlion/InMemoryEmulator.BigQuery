@@ -1,0 +1,48 @@
+name: Weekly Cloud Parity
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'   # Every Monday at 06:00 UTC
+  workflow_dispatch:        # Allow manual trigger
+
+jobs:
+  cloud-full-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
+      # Run ALL tests (including CloudOnly) against real BigQuery
+      - run: dotnet test --configuration Release --filter "Target!=InMemoryOnly" --logger "trx;LogFileName=results.trx"
+        env:
+          BIGQUERY_TEST_TARGET: cloud
+          BIGQUERY_PROJECT_ID: ${{ secrets.BIGQUERY_PROJECT_ID }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: weekly-cloud-parity-results
+          path: '**/*.trx'
+
+  cloud-cleanup:
+    runs-on: ubuntu-latest
+    needs: cloud-full-parity
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
+      # Delete test datasets older than 2 hours (safety net for leaked resources)
+      - run: |
+          dotnet run --project scripts/CloudCleanup -- \
+            --project-id ${{ secrets.BIGQUERY_PROJECT_ID }} \
+            --prefix "test_" \
+            --older-than 2h
+        continue-on-error: true

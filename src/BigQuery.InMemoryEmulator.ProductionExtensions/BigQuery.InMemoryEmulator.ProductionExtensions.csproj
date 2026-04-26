@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<PackageId>BigQuery.InMemoryEmulator.ProductionExtensions</PackageId>
+		<Description>Optional production extensions for BigQuery.InMemoryEmulator.</Description>
+		<PackageTags>bigquery;google-cloud;gcp;testing;in-memory;emulator</PackageTags>
+	</PropertyGroup>
+
+</Project>

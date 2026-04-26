@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BigQuery.InMemoryEmulator.JsUdfs/BigQuery.InMemoryEmulator.JsUdfs.csproj" />
+    <Project Path="src/BigQuery.InMemoryEmulator.ProductionExtensions/BigQuery.InMemoryEmulator.ProductionExtensions.csproj" />
+    <Project Path="src/BigQuery.InMemoryEmulator/BigQuery.InMemoryEmulator.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BigQuery.InMemoryEmulator.Tests.Integration/BigQuery.InMemoryEmulator.Tests.Integration.csproj" />
+    <Project Path="tests/BigQuery.InMemoryEmulator.Tests.Performance/BigQuery.InMemoryEmulator.Tests.Performance.csproj" />
+    <Project Path="tests/BigQuery.InMemoryEmulator.Tests.Shared/BigQuery.InMemoryEmulator.Tests.Shared.csproj" />
+    <Project Path="tests/BigQuery.InMemoryEmulator.Tests.Unit/BigQuery.InMemoryEmulator.Tests.Unit.csproj" />
+  </Folder>
+</Solution>

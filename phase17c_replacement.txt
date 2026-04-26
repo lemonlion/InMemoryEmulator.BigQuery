@@ -1,0 +1,51 @@
+			// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/user-defined-functions
+			_ => EvaluateUserDefinedFunction(func, row, args)
+		};
+	}
+
+	private object? EvaluateUserDefinedFunction(FunctionCall func, RowContext row, List<object?> args)
+	{
+		InMemoryRoutine? routine = null;
+		var name = func.FunctionName;
+		if (name.Contains('.'))
+		{
+			var parts = name.Split('.', 2);
+			if (_store.Datasets.TryGetValue(parts[0], out var ds))
+				ds.Routines.TryGetValue(parts[1], out routine);
+		}
+		else
+		{
+			if (_store.Datasets.TryGetValue("_temp", out var tempDs))
+				tempDs.Routines.TryGetValue(name, out routine);
+			if (routine == null && _defaultDatasetId != null && _store.Datasets.TryGetValue(_defaultDatasetId, out var defDs))
+				defDs.Routines.TryGetValue(name, out routine);
+		}
+
+		if (routine == null || routine.RoutineType != "SCALAR_FUNCTION")
+			throw new NotSupportedException($"Unknown function: {func.FunctionName}");
+
+		var bodyExpr = routine.Body;
+		for (int i = 0; i < routine.Parameters.Count && i < args.Count; i++)
+		{
+			var paramName = routine.Parameters[i].Name;
+			var argVal = args[i];
+			var literal = argVal switch
+			{
+				null => "NULL",
+				string s => $"'{s.Replace("'", "''")}'",
+				bool b => b ? "TRUE" : "FALSE",
+				_ => argVal.ToString()!
+			};
+			bodyExpr = System.Text.RegularExpressions.Regex.Replace(bodyExpr,
+				@"\b" + System.Text.RegularExpressions.Regex.Escape(paramName) + @"\b",
+				literal);
+		}
+
+		var qe = new QueryExecutor(_store, _defaultDatasetId);
+		var result = qe.Execute($"SELECT {bodyExpr}");
+		if (result.Rows.Count > 0 && result.Rows[0].F.Count > 0)
+			return result.Rows[0].F[0].V;
+		return null;
+	}
+
+	private object? EvaluateAggregate
