@@ -1180,7 +1180,46 @@ return name switch
 "REGEXP_EXTRACT" => EvaluateRegexpExtract(args, row),
 "REGEXP_REPLACE" => EvaluateRegexpReplace(args, row),
 "ASCII" => Evaluate(args[0], row)?.ToString() is string sa && sa.Length > 0 ? (long)sa[0] : null,
-"CHR" or "CODE_POINTS_TO_STRING" => Evaluate(args[0], row) is object cv ? ((char)Convert.ToInt64(cv)).ToString() : null,
+"CHR" => Evaluate(args[0], row) is object cv ? ((char)Convert.ToInt64(cv)).ToString() : null,
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#unicode
+//   "Returns the Unicode code point for the first character in value. Returns 0 if value is empty."
+"UNICODE" => EvaluateUnicode(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#byte_length
+//   "Gets the number of BYTES in a STRING or BYTES value."
+"BYTE_LENGTH" or "OCTET_LENGTH" => EvaluateByteLength(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#initcap
+//   "Formats a STRING as proper case."
+"INITCAP" => EvaluateInitcap(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#translate
+//   "Within a value, replaces each source character with the corresponding target character."
+"TRANSLATE" => EvaluateTranslate(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#soundex
+//   "Returns a STRING that represents the Soundex code for value."
+"SOUNDEX" => EvaluateSoundex(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#regexp_extract_all
+//   "Returns an array of all substrings of value that match the regexp."
+"REGEXP_EXTRACT_ALL" => EvaluateRegexpExtractAll(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#normalize
+//   "Takes a string value and returns it as a normalized string."
+"NORMALIZE" => EvaluateNormalize(args, row, caseFold: false),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#normalize_and_casefold
+//   "Case-insensitively normalizes the characters in a STRING value."
+"NORMALIZE_AND_CASEFOLD" => EvaluateNormalize(args, row, caseFold: true),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#collate
+//   "Combines a STRING and a collation specification." In the emulator, collation is not enforced.
+"COLLATE" => Evaluate(args[0], row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#to_code_points
+//   "Converts a STRING or BYTES value into an array of INT64 code points."
+"TO_CODE_POINTS" => EvaluateToCodePoints(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#code_points_to_string
+//   "Converts an array of Unicode code points to a STRING."
+"CODE_POINTS_TO_STRING" => EvaluateCodePointsToString(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#code_points_to_bytes
+//   "Converts an array of extended ASCII code points to a BYTES value."
+"CODE_POINTS_TO_BYTES" => EvaluateCodePointsToBytes(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#safe_convert_bytes_to_string
+//   "Converts a BYTES value to a STRING value and replace any invalid UTF-8 characters with U+FFFD."
+"SAFE_CONVERT_BYTES_TO_STRING" => EvaluateSafeConvertBytesToString(args, row),
 "SAFE_DIVIDE" => EvaluateSafeDivide(args, row),
 "COALESCE" => args.Select(a => Evaluate(a, row)).FirstOrDefault(v => v is not null),
 "IF" => IsTruthy(Evaluate(args[0], row)) ? Evaluate(args[1], row) : Evaluate(args[2], row),
@@ -1209,6 +1248,38 @@ return name switch
 "DIV" => EvaluateIntDiv(args, row),
 "RAND" => new Random().NextDouble(),
 "GENERATE_UUID" => Guid.NewGuid().ToString(),
+// Trigonometric functions
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions
+"SIN" => EvaluateUnaryMathOrNull(args, row, Math.Sin),
+"COS" => EvaluateUnaryMathOrNull(args, row, Math.Cos),
+"TAN" => EvaluateUnaryMathOrNull(args, row, Math.Tan),
+"ASIN" => EvaluateUnaryMathOrNull(args, row, Math.Asin),
+"ACOS" => EvaluateUnaryMathOrNull(args, row, Math.Acos),
+"ATAN" => EvaluateUnaryMathOrNull(args, row, Math.Atan),
+"ATAN2" => EvaluateBinaryMathOrNull(args, row, Math.Atan2),
+"SINH" => EvaluateUnaryMathOrNull(args, row, Math.Sinh),
+"COSH" => EvaluateUnaryMathOrNull(args, row, Math.Cosh),
+"TANH" => EvaluateUnaryMathOrNull(args, row, Math.Tanh),
+"ASINH" => EvaluateUnaryMathOrNull(args, row, Math.Asinh),
+"ACOSH" => EvaluateUnaryMathOrNull(args, row, Math.Acosh),
+"ATANH" => EvaluateUnaryMathOrNull(args, row, Math.Atanh),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#is_inf
+//   "Returns TRUE if the value is positive or negative infinity."
+"IS_INF" => EvaluateIsInf(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#is_nan
+//   "Returns TRUE if the value is a NaN value."
+"IS_NAN" => EvaluateIsNan(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#safe_add
+"SAFE_ADD" => EvaluateSafeAdd(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#safe_subtract
+"SAFE_SUBTRACT" => EvaluateSafeSubtract(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#safe_multiply
+"SAFE_MULTIPLY" => EvaluateSafeMultiply(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#safe_negate
+"SAFE_NEGATE" => EvaluateSafeNegate(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#range_bucket
+//   "Scans through a sorted array and returns the 0-based position of a point's upper bound."
+"RANGE_BUCKET" => EvaluateRangeBucket(args, row),
 
 // Date/Time functions
 "CURRENT_TIMESTAMP" or "NOW" => DateTimeOffset.UtcNow,
@@ -1267,6 +1338,12 @@ return name switch
 "FROM_BASE64" => EvaluateFromBase64(args, row),
 "TO_HEX" => EvaluateToHex(args, row),
 "FROM_HEX" => EvaluateFromHex(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#to_base32
+//   "Converts a BYTES value to a base32-encoded STRING value."
+"TO_BASE32" => EvaluateToBase32(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#from_base32
+//   "Converts a base32-encoded STRING into BYTES format."
+"FROM_BASE32" => EvaluateFromBase32(args, row),
 
 // JSON functions
 "JSON_EXTRACT" or "JSON_QUERY" => EvaluateJsonExtract(args, row),
@@ -3593,6 +3670,365 @@ private static double[]? ToDoubleArray(object? value)
         return arr;
     }
     return null;
+}
+
+// ── String function helpers (Phase 24) ──────────────────────────────
+
+private object? EvaluateByteLength(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var val = Evaluate(args[0], row);
+    if (val is null) return null;
+    if (val is byte[] bytes) return (long)bytes.Length;
+    return (long)System.Text.Encoding.UTF8.GetByteCount(val.ToString()!);
+}
+
+private object? EvaluateUnicode(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var val = Evaluate(args[0], row)?.ToString();
+    if (val is null) return null;
+    if (val.Length == 0) return 0L;
+    return (long)char.ConvertToUtf32(val, 0);
+}
+
+private object? EvaluateInitcap(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var val = Evaluate(args[0], row)?.ToString();
+    if (val is null) return null;
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#initcap
+    //   Default delimiters: whitespace and many punctuation characters.
+    var delimiters = args.Count > 1
+        ? Evaluate(args[1], row)?.ToString() ?? ""
+        : " \t\n\r[](){}/ |\\<>!?@\"^#$&~_,.:;*%+-";
+    var result = new char[val.Length];
+    var newWord = true;
+    for (var i = 0; i < val.Length; i++)
+    {
+        if (delimiters.Contains(val[i]))
+        {
+            result[i] = val[i];
+            newWord = true;
+        }
+        else if (newWord)
+        {
+            result[i] = char.ToUpper(val[i]);
+            newWord = false;
+        }
+        else
+        {
+            result[i] = char.ToLower(val[i]);
+        }
+    }
+    return new string(result);
+}
+
+private object? EvaluateTranslate(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var expr = Evaluate(args[0], row)?.ToString();
+    var source = Evaluate(args[1], row)?.ToString();
+    var target = Evaluate(args[2], row)?.ToString();
+    if (expr is null || source is null || target is null) return null;
+    var sb = new System.Text.StringBuilder(expr.Length);
+    foreach (var c in expr)
+    {
+        var idx = source.IndexOf(c);
+        if (idx < 0) sb.Append(c);
+        else if (idx < target.Length) sb.Append(target[idx]);
+        // else: character in source but not in target → omitted
+    }
+    return sb.ToString();
+}
+
+private object? EvaluateSoundex(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#soundex
+    //   Standard American Soundex algorithm: first letter + 3 digits.
+    var val = Evaluate(args[0], row)?.ToString();
+    if (val is null) return null;
+    var letters = val.Where(c => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')).ToList();
+    if (letters.Count == 0) return "";
+    //                          ABCDEFGHIJKLMNOPQRSTUVWXYZ
+    const string soundexMap = "01230120022455012623010202";
+    var code = new char[4];
+    code[0] = char.ToUpper(letters[0]);
+    var lastDigit = soundexMap[char.ToUpper(letters[0]) - 'A'];
+    var idx = 1;
+    for (var i = 1; i < letters.Count && idx < 4; i++)
+    {
+        var upper = char.ToUpper(letters[i]);
+        var digit = soundexMap[upper - 'A'];
+        if (digit != '0' && digit != lastDigit)
+        {
+            code[idx++] = digit;
+        }
+        // H and W are transparent — they don't reset the last digit,
+        // so adjacent consonants with the same code separated only by H/W
+        // are treated as one (e.g. Ashcraft → A261, not A226).
+        if (upper != 'H' && upper != 'W')
+        {
+            lastDigit = digit;
+        }
+    }
+    while (idx < 4) code[idx++] = '0';
+    return new string(code);
+}
+
+private object? EvaluateRegexpExtractAll(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var str = Evaluate(args[0], row)?.ToString();
+    var pattern = Evaluate(args[1], row)?.ToString();
+    if (str is null || pattern is null) return null;
+    var matches = Regex.Matches(str, pattern);
+    var result = new List<object?>();
+    foreach (Match m in matches)
+    {
+        result.Add(m.Groups.Count > 1 ? m.Groups[1].Value : m.Value);
+    }
+    return result;
+}
+
+private object? EvaluateNormalize(IReadOnlyList<SqlExpression> args, RowContext row, bool caseFold)
+{
+    var val = Evaluate(args[0], row)?.ToString();
+    if (val is null) return null;
+    var form = System.Text.NormalizationForm.FormC; // default NFC
+    if (args.Count > 1)
+    {
+        var mode = Evaluate(args[1], row)?.ToString()?.ToUpperInvariant();
+        form = mode switch
+        {
+            "NFC" => System.Text.NormalizationForm.FormC,
+            "NFD" => System.Text.NormalizationForm.FormD,
+            "NFKC" => System.Text.NormalizationForm.FormKC,
+            "NFKD" => System.Text.NormalizationForm.FormKD,
+            _ => System.Text.NormalizationForm.FormC,
+        };
+    }
+    var normalized = val.Normalize(form);
+    return caseFold ? normalized.ToLowerInvariant() : normalized;
+}
+
+private object? EvaluateToCodePoints(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var val = Evaluate(args[0], row);
+    if (val is null) return null;
+    if (val is byte[] bytes)
+        return bytes.Select(b => (object?)(long)b).ToList();
+    var str = val.ToString()!;
+    var result = new List<object?>();
+    for (var i = 0; i < str.Length; i++)
+    {
+        var cp = char.ConvertToUtf32(str, i);
+        result.Add((long)cp);
+        if (char.IsHighSurrogate(str[i])) i++; // skip low surrogate
+    }
+    return result;
+}
+
+private object? EvaluateCodePointsToString(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var val = Evaluate(args[0], row);
+    if (val is null) return null;
+    // Single code point (CHR alias)
+    if (val is not List<object?> list)
+        return ((char)Convert.ToInt64(val)).ToString();
+    var sb = new System.Text.StringBuilder(list.Count);
+    foreach (var item in list)
+    {
+        if (item is null) return null;
+        var cp = Convert.ToInt32(item);
+        sb.Append(char.ConvertFromUtf32(cp));
+    }
+    return sb.ToString();
+}
+
+private object? EvaluateCodePointsToBytes(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var val = Evaluate(args[0], row);
+    if (val is null) return null;
+    if (val is not List<object?> list) return null;
+    var bytes = new byte[list.Count];
+    for (var i = 0; i < list.Count; i++)
+    {
+        if (list[i] is null) return null;
+        bytes[i] = (byte)Convert.ToInt32(list[i]);
+    }
+    return bytes;
+}
+
+private object? EvaluateSafeConvertBytesToString(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var val = Evaluate(args[0], row);
+    if (val is null) return null;
+    if (val is byte[] bytes)
+    {
+        // Replace invalid UTF-8 with U+FFFD
+        var encoding = new System.Text.UTF8Encoding(false, false);
+        return encoding.GetString(bytes);
+    }
+    return val.ToString();
+}
+
+private object? EvaluateToBase32(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#to_base32
+    var val = Evaluate(args[0], row);
+    if (val is null) return null;
+    byte[] bytes;
+    if (val is byte[] b) bytes = b;
+    else bytes = System.Text.Encoding.UTF8.GetBytes(val.ToString()!);
+    return Base32Encode(bytes);
+}
+
+private object? EvaluateFromBase32(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#from_base32
+    var val = Evaluate(args[0], row)?.ToString();
+    if (val is null) return null;
+    return Base32Decode(val);
+}
+
+private static string Base32Encode(byte[] data)
+{
+    const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    var sb = new System.Text.StringBuilder((data.Length * 8 + 4) / 5);
+    int buffer = 0, bitsLeft = 0;
+    foreach (var b in data)
+    {
+        buffer = (buffer << 8) | b;
+        bitsLeft += 8;
+        while (bitsLeft >= 5)
+        {
+            sb.Append(alphabet[(buffer >> (bitsLeft - 5)) & 0x1F]);
+            bitsLeft -= 5;
+        }
+    }
+    if (bitsLeft > 0)
+        sb.Append(alphabet[(buffer << (5 - bitsLeft)) & 0x1F]);
+    while (sb.Length % 8 != 0)
+        sb.Append('=');
+    return sb.ToString();
+}
+
+private static byte[] Base32Decode(string input)
+{
+    const string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    input = input.TrimEnd('=').ToUpperInvariant();
+    var output = new List<byte>();
+    int buffer = 0, bitsLeft = 0;
+    foreach (var c in input)
+    {
+        var val = alphabet.IndexOf(c);
+        if (val < 0) continue;
+        buffer = (buffer << 5) | val;
+        bitsLeft += 5;
+        if (bitsLeft >= 8)
+        {
+            output.Add((byte)(buffer >> (bitsLeft - 8)));
+            bitsLeft -= 8;
+        }
+    }
+    return output.ToArray();
+}
+
+// ── Math function helpers (Phase 24) ────────────────────────────────
+
+private object? EvaluateUnaryMathOrNull(IReadOnlyList<SqlExpression> args, RowContext row, Func<double, double> fn)
+{
+    var val = Evaluate(args[0], row);
+    if (val is null) return null;
+    return fn(ToDouble(val));
+}
+
+private object? EvaluateBinaryMathOrNull(IReadOnlyList<SqlExpression> args, RowContext row, Func<double, double, double> fn)
+{
+    var v1 = Evaluate(args[0], row);
+    var v2 = Evaluate(args[1], row);
+    if (v1 is null || v2 is null) return null;
+    return fn(ToDouble(v1), ToDouble(v2));
+}
+
+private object? EvaluateIsInf(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var val = Evaluate(args[0], row);
+    if (val is null) return null;
+    return double.IsInfinity(ToDouble(val));
+}
+
+private object? EvaluateIsNan(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var val = Evaluate(args[0], row);
+    if (val is null) return null;
+    return double.IsNaN(ToDouble(val));
+}
+
+private object? EvaluateSafeAdd(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var left = Evaluate(args[0], row);
+    var right = Evaluate(args[1], row);
+    if (left is null || right is null) return null;
+    if (left is long la && right is long lb)
+    {
+        try { return checked(la + lb); }
+        catch (OverflowException) { return null; }
+    }
+    return ToDouble(left) + ToDouble(right);
+}
+
+private object? EvaluateSafeSubtract(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var left = Evaluate(args[0], row);
+    var right = Evaluate(args[1], row);
+    if (left is null || right is null) return null;
+    if (left is long la && right is long lb)
+    {
+        try { return checked(la - lb); }
+        catch (OverflowException) { return null; }
+    }
+    return ToDouble(left) - ToDouble(right);
+}
+
+private object? EvaluateSafeMultiply(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var left = Evaluate(args[0], row);
+    var right = Evaluate(args[1], row);
+    if (left is null || right is null) return null;
+    if (left is long la && right is long lb)
+    {
+        try { return checked(la * lb); }
+        catch (OverflowException) { return null; }
+    }
+    return ToDouble(left) * ToDouble(right);
+}
+
+private object? EvaluateSafeNegate(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var val = Evaluate(args[0], row);
+    if (val is null) return null;
+    if (val is long l)
+    {
+        try { return checked(-l); }
+        catch (OverflowException) { return null; }
+    }
+    return -ToDouble(val);
+}
+
+private object? EvaluateRangeBucket(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#range_bucket
+    var point = Evaluate(args[0], row);
+    if (point is null) return null;
+    var arrVal = Evaluate(args[1], row);
+    if (arrVal is not List<object?> boundaries || boundaries.Count == 0) return 0L;
+    var pointD = ToDouble(point);
+    if (double.IsNaN(pointD)) return null;
+    long pos = 0;
+    foreach (var b in boundaries)
+    {
+        if (b is null) return null;
+        if (pointD >= ToDouble(b)) pos++;
+        else break;
+    }
+    return pos;
 }
 
 #endregion
