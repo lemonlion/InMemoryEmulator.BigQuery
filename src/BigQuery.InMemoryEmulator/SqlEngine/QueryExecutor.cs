@@ -1735,6 +1735,14 @@ return name switch
 "NET_IP_FROM_STRING" => EvaluateNetIpFromString(args, row),
 "NET_IP_TO_STRING" => EvaluateNetIpToString(args, row),
 "NET_IP_NET_MASK" => EvaluateNetIpNetMask(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions#netip_trunc
+"NET_IP_TRUNC" => EvaluateNetIpTrunc(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions#netipv4_from_int64
+"NET_IPV4_FROM_INT64" => EvaluateNetIpv4FromInt64(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions#netipv4_to_int64
+"NET_IPV4_TO_INT64" => EvaluateNetIpv4ToInt64(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions#netsafe_ip_from_string
+"NET_SAFE_IP_FROM_STRING" => EvaluateNetSafeIpFromString(args, row),
 
 // HLL++ approximate counting (exact in-memory implementation, normalized from HLL_COUNT.INIT → HLL_COUNT_INIT)
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/hll_count_functions
@@ -1757,6 +1765,41 @@ or "ST_AREA" or "ST_LENGTH" or "ST_PERIMETER"
 or "ST_NUMPOINTS" or "ST_NPOINTS" or "ST_DIMENSION" or "ST_ISEMPTY" or "ST_GEOMETRYTYPE"
 or "ST_MAKELINE" or "ST_CENTROID"
     => EvaluateGeographyFunction(name, args, row),
+
+// Conversion functions
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#parse_numeric
+"PARSE_NUMERIC" or "PARSE_BIGNUMERIC" => EvaluateParseNumeric(args, row),
+
+// JSON type conversion functions (extract typed value from JSON)
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions
+"BOOL" or "JSON_BOOL" => EvaluateJsonBool(args, row),
+"INT64" or "JSON_INT64" => EvaluateJsonInt64(args, row),
+"FLOAT64" or "JSON_FLOAT64" => EvaluateJsonFloat64(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#string_for_json
+"STRING" or "JSON_STRING" => EvaluateJsonString(args, row),
+
+// AEAD encryption functions (normalized from KEYS.* → KEYS_*, AEAD.* → AEAD_*)
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aead_encryption_functions
+"KEYS_NEW_KEYSET" => EvaluateKeysNewKeyset(args, row),
+"KEYS_ROTATE_KEYSET" => EvaluateKeysRotateKeyset(args, row),
+"KEYS_ADD_KEY_FROM_RAW_BYTES" => EvaluateKeysAddKeyFromRawBytes(args, row),
+"KEYS_KEYSET_FROM_JSON" => EvaluateKeysKeysetFromJson(args, row),
+"KEYS_KEYSET_TO_JSON" => EvaluateKeysKeysetToJson(args, row),
+"KEYS_KEYSET_LENGTH" => EvaluateKeysKeysetLength(args, row),
+"KEYS_KEYSET_CHAIN" => EvaluateKeysKeysetChain(args, row),
+"AEAD_ENCRYPT" => EvaluateAeadEncrypt(args, row),
+"AEAD_DECRYPT_BYTES" => EvaluateAeadDecryptBytes(args, row),
+"AEAD_DECRYPT_STRING" => EvaluateAeadDecryptString(args, row),
+"DETERMINISTIC_ENCRYPT" => EvaluateDeterministicEncrypt(args, row),
+"DETERMINISTIC_DECRYPT_BYTES" => EvaluateDeterministicDecryptBytes(args, row),
+"DETERMINISTIC_DECRYPT_STRING" => EvaluateDeterministicDecryptString(args, row),
+
+// Debugging / utility functions
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/debugging_functions#error
+"ERROR" => throw new InvalidOperationException(Evaluate(args[0], row)?.ToString() ?? "ERROR"),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/security_functions#session_user
+"SESSION_USER" => "emulator@bigquery.local",
+
 _ => EvaluateUdf(name, args, row)
 };
 }
@@ -3489,6 +3532,345 @@ for (int i = 0; i < prefix && i < output_bytes * 8; i++)
 	mask[i / 8] |= (byte)(128 >> (i % 8));
 return mask;
 }
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions#netip_trunc
+//   "Converts a BYTES IPv4 or IPv6 address to a BYTES subnet address."
+private object? EvaluateNetIpTrunc(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+if (val is not byte[] bytes) return null;
+var prefix = (int)ToLong(Evaluate(args[1], row));
+var result = new byte[bytes.Length];
+for (int i = 0; i < bytes.Length; i++)
+{
+	int bitsForByte = Math.Max(0, Math.Min(8, prefix - i * 8));
+	if (bitsForByte == 8) result[i] = bytes[i];
+	else if (bitsForByte > 0) result[i] = (byte)(bytes[i] & (0xFF << (8 - bitsForByte)));
+}
+return result;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions#netipv4_from_int64
+//   "Converts an IPv4 address from integer format to binary (BYTES) format."
+private object? EvaluateNetIpv4FromInt64(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+if (val is null) return null;
+var intVal = ToLong(val);
+// Convert to 4-byte big-endian
+var bytes = new byte[4];
+bytes[0] = (byte)((intVal >> 24) & 0xFF);
+bytes[1] = (byte)((intVal >> 16) & 0xFF);
+bytes[2] = (byte)((intVal >> 8) & 0xFF);
+bytes[3] = (byte)(intVal & 0xFF);
+return bytes;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions#netipv4_to_int64
+//   "Converts an IPv4 address from binary (BYTES) format to integer format."
+private object? EvaluateNetIpv4ToInt64(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+if (val is not byte[] bytes || bytes.Length != 4) return null;
+return (long)(((uint)bytes[0] << 24) | ((uint)bytes[1] << 16) | ((uint)bytes[2] << 8) | bytes[3]);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions#netsafe_ip_from_string
+//   "Similar to NET.IP_FROM_STRING, but returns NULL instead of producing an error."
+private object? EvaluateNetSafeIpFromString(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var ip = Evaluate(args[0], row)?.ToString();
+if (ip is null) return null;
+if (ip.Contains('/')) return null; // CIDR notation not supported
+try { return System.Net.IPAddress.Parse(ip).GetAddressBytes(); }
+catch { return null; }
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#parse_numeric
+//   "Converts a STRING to a NUMERIC value."
+private object? EvaluateParseNumeric(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row)?.ToString();
+if (val is null) return null;
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#parse_numeric
+// Strip whitespace and commas; handle leading/trailing sign
+var s = val.Trim();
+bool negative = false;
+// Check for leading sign
+if (s.StartsWith("-")) { negative = true; s = s.Substring(1).Trim(); }
+else if (s.StartsWith("+")) { s = s.Substring(1).Trim(); }
+// Check for trailing sign (after stripping leading)
+if (s.EndsWith("-")) { negative = !negative; s = s.Substring(0, s.Length - 1).Trim(); }
+else if (s.EndsWith("+")) { s = s.Substring(0, s.Length - 1).Trim(); }
+s = s.Replace(",", "").Trim();
+if (string.IsNullOrEmpty(s)) throw new InvalidOperationException("Invalid PARSE_NUMERIC input");
+var result = double.Parse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture);
+return negative ? -result : result;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#bool_for_json
+//   "Converts a JSON boolean to a SQL BOOL value."
+private object? EvaluateJsonBool(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+if (val is null) return null;
+var s = val.ToString()!.Trim();
+if (s.Equals("true", StringComparison.OrdinalIgnoreCase)) return true;
+if (s.Equals("false", StringComparison.OrdinalIgnoreCase)) return false;
+throw new InvalidOperationException($"Cannot convert JSON value to BOOL: {s}");
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#int64_for_json
+//   "Converts a JSON number to a SQL INT64 value."
+private object? EvaluateJsonInt64(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+if (val is null) return null;
+var s = val.ToString()!.Trim();
+return long.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#float64_for_json
+//   "Converts a JSON number to a SQL FLOAT64 value."
+private object? EvaluateJsonFloat64(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+if (val is null) return null;
+var s = val.ToString()!.Trim();
+return double.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#string_for_json
+//   "Converts a JSON string to a SQL STRING value."
+private object? EvaluateJsonString(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+if (val is null) return null;
+var s = val.ToString()!.Trim();
+// JSON strings are quoted with double quotes
+if (s.StartsWith("\"") && s.EndsWith("\""))
+	return s[1..^1];
+return s;
+}
+
+#region AEAD Encryption Functions
+
+// In-memory AEAD implementation using .NET AES-GCM.
+// Keyset format: JSON with key array, each key has id, type, value (base64), status.
+
+private object? EvaluateKeysNewKeyset(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var keyType = Evaluate(args[0], row)?.ToString() ?? "AEAD_AES_GCM_256";
+var keyBytes = new byte[keyType.Contains("SIV") ? 64 : 32];
+System.Security.Cryptography.RandomNumberGenerator.Fill(keyBytes);
+var keyId = System.Security.Cryptography.RandomNumberGenerator.GetInt32(1, int.MaxValue);
+var keyset = new { primaryKeyId = keyId, key = new[] {
+	new { keyData = new { keyMaterialType = "SYMMETRIC", typeUrl = KeyTypeUrl(keyType),
+		value = Convert.ToBase64String(keyBytes) }, keyId = keyId, outputPrefixType = "TINK", status = "ENABLED" }
+}};
+return System.Text.Json.JsonSerializer.Serialize(keyset);
+}
+
+private static string KeyTypeUrl(string keyType) => keyType switch
+{
+"AEAD_AES_GCM_256" => "type.googleapis.com/google.crypto.tink.AesGcmKey",
+"DETERMINISTIC_AEAD_AES_SIV_CMAC_256" => "type.googleapis.com/google.crypto.tink.AesSivKey",
+_ => "type.googleapis.com/google.crypto.tink.AesGcmKey"
+};
+
+private object? EvaluateKeysRotateKeyset(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var keysetJson = Evaluate(args[0], row)?.ToString();
+var keyType = Evaluate(args[1], row)?.ToString() ?? "AEAD_AES_GCM_256";
+if (keysetJson is null) return null;
+using var doc = System.Text.Json.JsonDocument.Parse(keysetJson);
+var keys = new List<System.Text.Json.JsonElement>();
+foreach (var k in doc.RootElement.GetProperty("key").EnumerateArray()) keys.Add(k);
+var newKeyBytes = new byte[keyType.Contains("SIV") ? 64 : 32];
+System.Security.Cryptography.RandomNumberGenerator.Fill(newKeyBytes);
+var newKeyId = System.Security.Cryptography.RandomNumberGenerator.GetInt32(1, int.MaxValue);
+var newKey = new { keyData = new { keyMaterialType = "SYMMETRIC", typeUrl = KeyTypeUrl(keyType),
+	value = Convert.ToBase64String(newKeyBytes) }, keyId = newKeyId, outputPrefixType = "TINK", status = "ENABLED" };
+// Build new keyset JSON combining old keys with new primary
+var allKeys = new List<object>();
+foreach (var k in keys) allKeys.Add(k);
+allKeys.Add(newKey);
+return System.Text.Json.JsonSerializer.Serialize(new { primaryKeyId = newKeyId, key = allKeys });
+}
+
+private object? EvaluateKeysAddKeyFromRawBytes(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var keysetJson = Evaluate(args[0], row)?.ToString();
+var keyType = Evaluate(args[1], row)?.ToString() ?? "AES_GCM";
+var rawBytes = Evaluate(args[2], row);
+if (keysetJson is null) return null;
+string rawB64;
+if (rawBytes is byte[] rb) rawB64 = Convert.ToBase64String(rb);
+else if (rawBytes is string s) rawB64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(s));
+else return null;
+using var doc = System.Text.Json.JsonDocument.Parse(keysetJson);
+var keys = new List<System.Text.Json.JsonElement>();
+int primaryId = doc.RootElement.GetProperty("primaryKeyId").GetInt32();
+foreach (var k in doc.RootElement.GetProperty("key").EnumerateArray()) keys.Add(k);
+var newKeyId = System.Security.Cryptography.RandomNumberGenerator.GetInt32(1, int.MaxValue);
+var newKey = new { keyData = new { keyMaterialType = "SYMMETRIC", typeUrl = KeyTypeUrl(keyType),
+	value = rawB64 }, keyId = newKeyId, outputPrefixType = "TINK", status = "ENABLED" };
+var allKeys = new List<object>();
+foreach (var k in keys) allKeys.Add(k);
+allKeys.Add(newKey);
+return System.Text.Json.JsonSerializer.Serialize(new { primaryKeyId = primaryId, key = allKeys });
+}
+
+private object? EvaluateKeysKeysetFromJson(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var json = Evaluate(args[0], row)?.ToString();
+if (json is null) return null;
+// Validate it's valid keyset JSON, then return as-is (our keyset format IS JSON)
+using var _ = System.Text.Json.JsonDocument.Parse(json);
+return json;
+}
+
+private object? EvaluateKeysKeysetToJson(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var keyset = Evaluate(args[0], row)?.ToString();
+if (keyset is null) return null;
+return keyset; // Already JSON in our implementation
+}
+
+private object? EvaluateKeysKeysetLength(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var keyset = Evaluate(args[0], row)?.ToString();
+if (keyset is null) return null;
+using var doc = System.Text.Json.JsonDocument.Parse(keyset);
+return (long)doc.RootElement.GetProperty("key").GetArrayLength();
+}
+
+private object? EvaluateKeysKeysetChain(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+// In-memory: no real KMS, just pass through the keyset
+var _ = Evaluate(args[0], row); // kms_resource_name (ignored)
+return Evaluate(args[1], row); // keyset passthrough
+}
+
+private (byte[] Key, byte[] Nonce)? ExtractPrimaryKey(string? keysetJson)
+{
+if (keysetJson is null) return null;
+using var doc = System.Text.Json.JsonDocument.Parse(keysetJson);
+var primaryId = doc.RootElement.GetProperty("primaryKeyId").GetInt32();
+foreach (var k in doc.RootElement.GetProperty("key").EnumerateArray())
+{
+	if (k.GetProperty("keyId").GetInt32() == primaryId)
+	{
+		var b64 = k.GetProperty("keyData").GetProperty("value").GetString();
+		if (b64 is null) return null;
+		var keyBytes = Convert.FromBase64String(b64);
+		return (keyBytes, Array.Empty<byte>());
+	}
+}
+return null;
+}
+
+private object? EvaluateAeadEncrypt(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var keyset = Evaluate(args[0], row)?.ToString();
+var plaintext = Evaluate(args[1], row);
+var aad = Evaluate(args[2], row);
+if (keyset is null || plaintext is null) return null;
+var keyInfo = ExtractPrimaryKey(keyset);
+if (keyInfo is null) return null;
+var ptBytes = plaintext is byte[] pb ? pb : System.Text.Encoding.UTF8.GetBytes(plaintext.ToString()!);
+var aadBytes = aad is byte[] ab ? ab : System.Text.Encoding.UTF8.GetBytes(aad?.ToString() ?? "");
+// AES-GCM: 12 byte nonce, 16 byte tag
+var nonce = new byte[12];
+System.Security.Cryptography.RandomNumberGenerator.Fill(nonce);
+var ciphertext = new byte[ptBytes.Length];
+var tag = new byte[16];
+using var aes = new System.Security.Cryptography.AesGcm(keyInfo.Value.Key[..32], 16);
+aes.Encrypt(nonce, ptBytes, ciphertext, tag, aadBytes);
+// Output: nonce + ciphertext + tag
+var result = new byte[nonce.Length + ciphertext.Length + tag.Length];
+nonce.CopyTo(result, 0);
+ciphertext.CopyTo(result, nonce.Length);
+tag.CopyTo(result, nonce.Length + ciphertext.Length);
+return Convert.ToBase64String(result);
+}
+
+private byte[]? AeadDecryptCore(string? keyset, object? cipherObj, object? aadObj)
+{
+if (keyset is null || cipherObj is null) return null;
+var keyInfo = ExtractPrimaryKey(keyset);
+if (keyInfo is null) return null;
+var cipherBytes = cipherObj is byte[] cb ? cb : Convert.FromBase64String(cipherObj.ToString()!);
+var aadBytes = aadObj is byte[] ab ? ab : System.Text.Encoding.UTF8.GetBytes(aadObj?.ToString() ?? "");
+// AES-GCM: first 12 = nonce, last 16 = tag, middle = ciphertext
+var nonce = cipherBytes[..12];
+var tag = cipherBytes[^16..];
+var cipher = cipherBytes[12..^16];
+var plaintext = new byte[cipher.Length];
+using var aes = new System.Security.Cryptography.AesGcm(keyInfo.Value.Key[..32], 16);
+aes.Decrypt(nonce, cipher, tag, plaintext, aadBytes);
+return plaintext;
+}
+
+private object? EvaluateAeadDecryptBytes(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var keyset = Evaluate(args[0], row)?.ToString();
+var cipher = Evaluate(args[1], row);
+var aad = Evaluate(args[2], row);
+var result = AeadDecryptCore(keyset, cipher, aad);
+return result is null ? null : Convert.ToBase64String(result);
+}
+
+private object? EvaluateAeadDecryptString(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var keyset = Evaluate(args[0], row)?.ToString();
+var cipher = Evaluate(args[1], row);
+var aad = Evaluate(args[2], row);
+var result = AeadDecryptCore(keyset, cipher, aad);
+return result is null ? null : System.Text.Encoding.UTF8.GetString(result);
+}
+
+// Deterministic AEAD: uses AES-SIV (SIV = nonce is derived from plaintext + AAD)
+// For in-memory emulation, we use HMAC-SHA256 as the SIV and AES-CBC for encryption.
+private object? EvaluateDeterministicEncrypt(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var keyset = Evaluate(args[0], row)?.ToString();
+var plaintext = Evaluate(args[1], row);
+var aad = Evaluate(args[2], row);
+if (keyset is null || plaintext is null) return null;
+var keyInfo = ExtractPrimaryKey(keyset);
+if (keyInfo is null) return null;
+var ptBytes = plaintext is byte[] pb ? pb : System.Text.Encoding.UTF8.GetBytes(plaintext.ToString()!);
+var aadBytes = aad is byte[] ab ? ab : System.Text.Encoding.UTF8.GetBytes(aad?.ToString() ?? "");
+var keyBytes = keyInfo.Value.Key;
+// Deterministic: derive nonce from HMAC of plaintext + AAD using second half of key
+using var hmac = new System.Security.Cryptography.HMACSHA256(keyBytes.Length >= 64 ? keyBytes[32..] : keyBytes);
+var sivInput = new byte[ptBytes.Length + aadBytes.Length];
+ptBytes.CopyTo(sivInput, 0);
+aadBytes.CopyTo(sivInput, ptBytes.Length);
+var siv = hmac.ComputeHash(sivInput)[..12]; // Use first 12 bytes as nonce
+var ciphertext = new byte[ptBytes.Length];
+var tag = new byte[16];
+using var aes = new System.Security.Cryptography.AesGcm(keyBytes[..32], 16);
+aes.Encrypt(siv, ptBytes, ciphertext, tag, aadBytes);
+var result = new byte[siv.Length + ciphertext.Length + tag.Length];
+siv.CopyTo(result, 0);
+ciphertext.CopyTo(result, siv.Length);
+tag.CopyTo(result, siv.Length + ciphertext.Length);
+return Convert.ToBase64String(result);
+}
+
+private object? EvaluateDeterministicDecryptBytes(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+return EvaluateAeadDecryptBytes(args, row); // Same decryption logic
+}
+
+private object? EvaluateDeterministicDecryptString(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+return EvaluateAeadDecryptString(args, row); // Same decryption logic
+}
+
+#endregion
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/hll_count_functions
 //   "In-memory exact counting — HLL++ functions are approximated as exact distinct counts."

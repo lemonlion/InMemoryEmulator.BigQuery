@@ -64,12 +64,26 @@ internal static class SqlParser
 		// RESPECT NULLS modifier — remove
 		sql = Regex.Replace(sql, @"\bRESPECT\s+NULLS\b", "", RegexOptions.IgnoreCase);
 
+		// Byte literal: b'...' or B'...' → '...' (emulator treats bytes as strings)
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#byte_literals
+		// Require the b prefix to be preceded by whitespace, comma, open paren, or start of string
+		sql = Regex.Replace(sql, @"(?<=^|[\s,=(])[bB]'", "'");
+
+		// JSON 'string' → PARSE_JSON('string')
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#json_literals
+		sql = Regex.Replace(sql, @"\bJSON\s+'([^']*)'", "PARSE_JSON('$1')", RegexOptions.IgnoreCase);
+
 		// Dotted function names: NET.HOST → NET_HOST, HLL_COUNT.EXTRACT → HLL_COUNT_EXTRACT
 		// These use dot-separated namespaces that the parser can't handle (parsed as column refs).
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/hll_count_functions
 		sql = Regex.Replace(sql, @"\bNET\.(\w+)\s*\(", "NET_$1(", RegexOptions.IgnoreCase);
 		sql = Regex.Replace(sql, @"\bHLL_COUNT\.(\w+)\s*\(", "HLL_COUNT_$1(", RegexOptions.IgnoreCase);
+
+		// KEYS.* and AEAD.* encryption function namespaces
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aead_encryption_functions
+		sql = Regex.Replace(sql, @"\bKEYS\.(\w+)\s*\(", "KEYS_$1(", RegexOptions.IgnoreCase);
+		sql = Regex.Replace(sql, @"\bAEAD\.(\w+)\s*\(", "AEAD_$1(", RegexOptions.IgnoreCase);
 
 		// Bare date part keywords → string literals when used as function arguments.
 		// Functions like DATE_DIFF(d1, d2, DAY) pass DAY as a bare keyword, which the parser

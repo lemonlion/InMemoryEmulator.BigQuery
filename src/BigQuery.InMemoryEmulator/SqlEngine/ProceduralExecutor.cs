@@ -49,6 +49,26 @@ internal class ProceduralExecutor
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language
 		var upper = sql.TrimStart();
 
+		// Strip labels: "label_name: BEGIN ..." → "BEGIN ..."
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#labels
+		var labelMatch = System.Text.RegularExpressions.Regex.Match(upper,
+			@"^(\w+)\s*:\s*(BEGIN|LOOP|WHILE|FOR|REPEAT)\b",
+			System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+		if (labelMatch.Success)
+		{
+			sql = upper.Substring(labelMatch.Groups[1].Length + 1).TrimStart().TrimStart(':').TrimStart();
+			upper = sql.TrimStart();
+			// Also strip trailing "END label_name" → "END"
+			var label = labelMatch.Groups[1].Value;
+			sql = System.Text.RegularExpressions.Regex.Replace(sql,
+				@"\bEND\s+(LOOP|WHILE|FOR)\s+" + System.Text.RegularExpressions.Regex.Escape(label) + @"\s*$",
+				"END $1", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+			sql = System.Text.RegularExpressions.Regex.Replace(sql,
+				@"\bEND\s+" + System.Text.RegularExpressions.Regex.Escape(label) + @"\s*$",
+				"END", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+			upper = sql.TrimStart();
+		}
+
 		// DECLARE var [, var2] type [DEFAULT expr]
 		if (upper.StartsWith("DECLARE ", StringComparison.OrdinalIgnoreCase))
 			return ExecuteDeclare(sql);
@@ -87,6 +107,15 @@ internal class ProceduralExecutor
 		if (upper.Equals("CONTINUE", StringComparison.OrdinalIgnoreCase) || upper.Equals("ITERATE", StringComparison.OrdinalIgnoreCase))
 			throw new ContinueException();
 
+		// Transaction stubs (no-op in emulator) — must come before BEGIN...END check
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#begin_transaction
+		if (upper.Equals("BEGIN TRANSACTION", StringComparison.OrdinalIgnoreCase) ||
+			upper.Equals("COMMIT TRANSACTION", StringComparison.OrdinalIgnoreCase) ||
+			upper.Equals("ROLLBACK TRANSACTION", StringComparison.OrdinalIgnoreCase) ||
+			upper.Equals("COMMIT", StringComparison.OrdinalIgnoreCase) ||
+			upper.Equals("ROLLBACK", StringComparison.OrdinalIgnoreCase))
+			return null;
+
 		// BEGIN ... END
 		if (upper.StartsWith("BEGIN", StringComparison.OrdinalIgnoreCase))
 			return ExecuteBeginEnd(sql);
@@ -98,6 +127,33 @@ internal class ProceduralExecutor
 		// LOOP stmts END LOOP
 		if (upper.StartsWith("LOOP", StringComparison.OrdinalIgnoreCase))
 			return ExecuteLoop(sql);
+
+		// EXECUTE IMMEDIATE
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#execute_immediate
+		if (upper.StartsWith("EXECUTE IMMEDIATE", StringComparison.OrdinalIgnoreCase))
+			return ExecuteImmediate(sql);
+
+		// FOR ... IN (query) DO stmts END FOR
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#for-in
+		if (upper.StartsWith("FOR ", StringComparison.OrdinalIgnoreCase))
+			return ExecuteForIn(sql);
+
+		// REPEAT stmts UNTIL condition END REPEAT
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#repeat
+		if (upper.StartsWith("REPEAT", StringComparison.OrdinalIgnoreCase) &&
+			!upper.StartsWith("REPEAT(", StringComparison.OrdinalIgnoreCase))
+			return ExecuteRepeat(sql);
+
+		// Procedural CASE
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#case_statement
+		if (upper.StartsWith("CASE ", StringComparison.OrdinalIgnoreCase) &&
+			upper.Contains("END CASE", StringComparison.OrdinalIgnoreCase))
+			return ExecuteCaseStatement(sql);
+
+		// CALL procedure_name(args)
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#call
+		if (upper.StartsWith("CALL ", StringComparison.OrdinalIgnoreCase))
+			return ExecuteCall(sql);
 
 		// CREATE [OR REPLACE] FUNCTION
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_function_statement
@@ -588,6 +644,230 @@ return null;
 		return lastResult;
 	}
 
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#execute_immediate
+	//   "Executes a dynamic SQL statement on the fly."
+	private (TableSchema Schema, List<TableRow> Rows)? ExecuteImmediate(string sql)
+	{
+		var body = sql.Substring("EXECUTE IMMEDIATE".Length).Trim();
+
+		// Check for INTO var
+		string? intoVar = null;
+		var intoIdx = body.IndexOf(" INTO ", StringComparison.OrdinalIgnoreCase);
+		string? usingClause = null;
+		var usingIdx = body.IndexOf(" USING ", StringComparison.OrdinalIgnoreCase);
+		if (usingIdx >= 0)
+		{
+			usingClause = body.Substring(usingIdx + " USING ".Length).Trim();
+			body = body.Substring(0, usingIdx).Trim();
+		}
+		if (intoIdx >= 0)
+		{
+			intoVar = body.Substring(intoIdx + " INTO ".Length).Trim();
+			body = body.Substring(0, intoIdx).Trim();
+		}
+
+		// Evaluate the SQL expression
+		var substituted = SubstituteVariables(body);
+		var exec = CreateQueryExecutor();
+		var (_, sqlRows) = exec.Execute($"SELECT {substituted}");
+		var dynamicSql = sqlRows.Count > 0 && sqlRows[0].F.Count > 0 ? sqlRows[0].F[0].V?.ToString() : null;
+		if (dynamicSql is null) return null;
+
+		// Execute the dynamic SQL
+		substituted = SubstituteVariables(dynamicSql);
+		substituted = QualifyTempTables(substituted);
+		var dynExec = new QueryExecutor(_store, _defaultDatasetId);
+		var result = dynExec.Execute(substituted);
+
+		// If INTO is specified, store the result in the variable
+		if (intoVar != null && result.Rows.Count > 0 && result.Rows[0].F.Count > 0)
+		{
+			var vars = intoVar.Split(',', StringSplitOptions.TrimEntries);
+			for (int i = 0; i < vars.Length && i < result.Rows[0].F.Count; i++)
+				_variables[vars[i]] = result.Rows[0].F[i].V;
+		}
+
+		return (result.Schema, result.Rows);
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#for-in
+	//   "Loops over each row produced by a SQL statement."
+	private (TableSchema Schema, List<TableRow> Rows)? ExecuteForIn(string sql)
+	{
+		var body = sql.Substring("FOR ".Length).Trim();
+		// Parse: var IN (query) DO stmts END FOR
+		var inIdx = body.IndexOf(" IN ", StringComparison.OrdinalIgnoreCase);
+		if (inIdx < 0) throw new InvalidOperationException("FOR requires IN.");
+		var varName = body.Substring(0, inIdx).Trim();
+		var rest = body.Substring(inIdx + " IN ".Length).Trim();
+
+		// Find the query in parentheses
+		if (!rest.StartsWith("(")) throw new InvalidOperationException("FOR...IN requires (query).");
+		int parenDepth = 0;
+		int queryEnd = -1;
+		for (int i = 0; i < rest.Length; i++)
+		{
+			if (rest[i] == '(') parenDepth++;
+			else if (rest[i] == ')')
+			{
+				parenDepth--;
+				if (parenDepth == 0) { queryEnd = i; break; }
+			}
+		}
+		if (queryEnd < 0) throw new InvalidOperationException("Unmatched parenthesis in FOR...IN.");
+		var query = rest.Substring(1, queryEnd - 1).Trim();
+		rest = rest.Substring(queryEnd + 1).Trim();
+
+		// Remove DO ... END FOR
+		if (rest.StartsWith("DO", StringComparison.OrdinalIgnoreCase))
+			rest = rest.Substring(2).Trim();
+		if (rest.EndsWith("END FOR", StringComparison.OrdinalIgnoreCase))
+			rest = rest.Substring(0, rest.Length - "END FOR".Length).Trim();
+
+		// Execute the query
+		var substituted = SubstituteVariables(query);
+		substituted = QualifyTempTables(substituted);
+		var exec = new QueryExecutor(_store, _defaultDatasetId);
+		var queryResult = exec.Execute(substituted);
+
+		(TableSchema Schema, List<TableRow> Rows)? lastResult = null;
+		foreach (var row in queryResult.Rows)
+		{
+			// Set variable fields: record.col1, record.col2 etc.
+			for (int i = 0; i < queryResult.Schema.Fields.Count && i < row.F.Count; i++)
+			{
+				var fieldName = queryResult.Schema.Fields[i].Name;
+				_variables[$"{varName}.{fieldName}"] = row.F[i].V;
+			}
+			// Also set bare variable name for single-column results
+			if (row.F.Count == 1)
+				_variables[varName] = row.F[0].V;
+
+			try
+			{
+				var result = ExecuteBlock(rest);
+				if (result.HasValue) lastResult = result.Value;
+			}
+			catch (BreakException) { break; }
+			catch (ContinueException) { continue; }
+		}
+		return lastResult;
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#repeat
+	//   "Executes the body until the condition is true."
+	private (TableSchema Schema, List<TableRow> Rows)? ExecuteRepeat(string sql)
+	{
+		var body = sql.Trim();
+		if (body.StartsWith("REPEAT", StringComparison.OrdinalIgnoreCase))
+			body = body.Substring("REPEAT".Length).Trim();
+		if (body.EndsWith("END REPEAT", StringComparison.OrdinalIgnoreCase))
+			body = body.Substring(0, body.Length - "END REPEAT".Length).Trim();
+
+		// Split on UNTIL
+		var untilIdx = FindTopLevelKeyword(body, "UNTIL");
+		if (untilIdx < 0) throw new InvalidOperationException("REPEAT requires UNTIL.");
+		var loopBody = body.Substring(0, untilIdx).Trim();
+		var condition = body.Substring(untilIdx + "UNTIL".Length).Trim();
+
+		(TableSchema Schema, List<TableRow> Rows)? lastResult = null;
+		int maxIter = 10000;
+		while (maxIter-- > 0)
+		{
+			try
+			{
+				var result = ExecuteBlock(loopBody);
+				if (result.HasValue) lastResult = result.Value;
+			}
+			catch (BreakException) { break; }
+			catch (ContinueException) { /* fall through to condition check */ }
+
+			// Check UNTIL condition
+			var substituted = SubstituteVariables(condition);
+			var exec = CreateQueryExecutor();
+			var (_, condRows) = exec.Execute($"SELECT {substituted}");
+			var condValue = condRows.Count > 0 && condRows[0].F.Count > 0 ? condRows[0].F[0].V : null;
+			if (IsTruthyValue(condValue)) break;
+		}
+		return lastResult;
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#case_statement
+	//   "Executes the first matching WHEN clause's statement list."
+	private (TableSchema Schema, List<TableRow> Rows)? ExecuteCaseStatement(string sql)
+	{
+		var body = sql.Trim();
+		// Remove CASE prefix
+		body = body.Substring("CASE".Length).Trim();
+		// Remove END CASE suffix
+		if (body.EndsWith("END CASE", StringComparison.OrdinalIgnoreCase))
+			body = body.Substring(0, body.Length - "END CASE".Length).Trim();
+
+		// Find first WHEN to extract the case expression
+		var firstWhenIdx = FindTopLevelKeyword(body, "WHEN");
+		if (firstWhenIdx < 0) throw new InvalidOperationException("CASE requires WHEN.");
+		var caseExpr = body.Substring(0, firstWhenIdx).Trim();
+		body = body.Substring(firstWhenIdx).Trim();
+
+		// Evaluate case expression
+		object? caseValue = null;
+		if (!string.IsNullOrEmpty(caseExpr))
+		{
+			var substituted = SubstituteVariables(caseExpr);
+			var exec = CreateQueryExecutor();
+			var (_, rows) = exec.Execute($"SELECT {substituted}");
+			caseValue = rows.Count > 0 && rows[0].F.Count > 0 ? rows[0].F[0].V : null;
+		}
+
+		// Parse WHEN...THEN...ELSE blocks
+		var remaining = body;
+		while (remaining.Length > 0)
+		{
+			if (remaining.StartsWith("WHEN ", StringComparison.OrdinalIgnoreCase))
+			{
+				remaining = remaining.Substring("WHEN ".Length).Trim();
+				var thenIdx = FindTopLevelKeyword(remaining, "THEN");
+				if (thenIdx < 0) break;
+				var whenExpr = remaining.Substring(0, thenIdx).Trim();
+				remaining = remaining.Substring(thenIdx + "THEN".Length).Trim();
+
+				// Find next WHEN or ELSE
+				var nextWhen = FindTopLevelKeyword(remaining, "WHEN");
+				var nextElse = FindTopLevelKeyword(remaining, "ELSE");
+				var blockEnd = remaining.Length;
+				if (nextWhen >= 0 && (nextElse < 0 || nextWhen < nextElse)) blockEnd = nextWhen;
+				else if (nextElse >= 0) blockEnd = nextElse;
+
+				var thenBlock = remaining.Substring(0, blockEnd).Trim();
+				remaining = remaining.Substring(blockEnd).Trim();
+
+				// Evaluate WHEN expression
+				var substituted = SubstituteVariables(whenExpr);
+				var exec = CreateQueryExecutor();
+				var (_, rows) = exec.Execute($"SELECT {substituted}");
+				var whenValue = rows.Count > 0 && rows[0].F.Count > 0 ? rows[0].F[0].V : null;
+
+				if (caseValue?.ToString() == whenValue?.ToString())
+					return ExecuteBlock(thenBlock);
+			}
+			else if (remaining.StartsWith("ELSE", StringComparison.OrdinalIgnoreCase))
+			{
+				var elseBlock = remaining.Substring("ELSE".Length).Trim();
+				return ExecuteBlock(elseBlock);
+			}
+			else break;
+		}
+		return null;
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#call
+	//   "Calls a stored procedure."
+	private (TableSchema Schema, List<TableRow> Rows)? ExecuteCall(string sql)
+	{
+		// In-memory: CALL is a no-op (procedures are stubs)
+		return null;
+	}
+
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#create_temp_table
 	private (TableSchema Schema, List<TableRow> Rows)? ExecuteCreateTempTable(string sql)
 	{
@@ -670,11 +950,17 @@ return null;
 			{
 				var word = words.ToString().ToUpperInvariant();
 				words.Clear();
-				if (word == "BEGIN" || (word == "IF" && lastKeyword != "FUNCTION" && lastKeyword != "TABLE") || word == "LOOP" || word == "WHILE" || word == "REPEAT")
+				if (word == "BEGIN" || (word == "IF" && lastKeyword != "FUNCTION" && lastKeyword != "TABLE") || word == "LOOP" || word == "WHILE" || word == "REPEAT" || word == "FOR" || (word == "CASE" && lastKeyword != "SELECT" && lastKeyword != "WHEN" && lastKeyword != "THEN" && lastKeyword != "ELSE" && lastKeyword != "SET" && lastKeyword != "AND" && lastKeyword != "OR" && lastKeyword != "AS"))
 				{
 					// Don't count these keywords when they follow END (e.g., END LOOP, END IF)
 					if (!_lastWordWasEnd)
 						blockDepth++;
+					_lastWordWasEnd = false;
+				}
+				else if (word == "TRANSACTION" && lastKeyword == "BEGIN")
+				{
+					// BEGIN TRANSACTION should not increase block depth
+					blockDepth = Math.Max(0, blockDepth - 1);
 					_lastWordWasEnd = false;
 				}
 				else if (word == "END")
