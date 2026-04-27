@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Superpower;
 using Superpower.Model;
@@ -48,6 +49,10 @@ internal static class SqlParser
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#datetime_literals
 		sql = Regex.Replace(sql, @"\bDATETIME\s+'([^']*)'", "CAST('$1' AS DATETIME)", RegexOptions.IgnoreCase);
 
+		// TIME 'string' → CAST('string' AS TIME)
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#time_literals
+		sql = Regex.Replace(sql, @"\bTIME\s+'([^']*)'", "CAST('$1' AS TIME)", RegexOptions.IgnoreCase);
+
 		// INTERVAL n PART → n, 'PART' (inside function args like TIMESTAMP_ADD)
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#interval_type
 		sql = Regex.Replace(sql, @"\bINTERVAL\s+(\d+)\s+(\w+)", "$1, '$2'", RegexOptions.IgnoreCase);
@@ -65,6 +70,14 @@ internal static class SqlParser
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/hll_count_functions
 		sql = Regex.Replace(sql, @"\bNET\.(\w+)\s*\(", "NET_$1(", RegexOptions.IgnoreCase);
 		sql = Regex.Replace(sql, @"\bHLL_COUNT\.(\w+)\s*\(", "HLL_COUNT_$1(", RegexOptions.IgnoreCase);
+
+		// Bare date part keywords → string literals when used as function arguments.
+		// Functions like DATE_DIFF(d1, d2, DAY) pass DAY as a bare keyword, which the parser
+		// treats as a column reference (evaluates to null). Convert to 'DAY'.
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions
+		sql = Regex.Replace(sql,
+			@",\s*\b(MICROSECOND|MILLISECOND|SECOND|MINUTE|HOUR|DAY|DAYOFWEEK|DAYOFYEAR|WEEK|ISOWEEK|MONTH|QUARTER|YEAR|ISOYEAR|DATE|DATETIME)\s*\)",
+			", '$1')", RegexOptions.IgnoreCase);
 
 		return sql;
 	}
@@ -586,6 +599,41 @@ internal static class SqlParser
 				)
 			).Then(pivot => Token.EqualTo(SqlToken.RParen).Select(_ => pivot));
 
+	// --- UNPIVOT clause ---
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#unpivot_operator
+	// UNPIVOT(values_col FOR name_col IN (col1, col2, ...))
+	private static readonly TokenListParser<SqlToken, UnpivotClause> UnpivotParser =
+		Token.EqualTo(SqlToken.Unpivot)
+			.IgnoreThen(Token.EqualTo(SqlToken.LParen))
+			.IgnoreThen(
+				IdentifierOrKeyword.Then(valCol =>
+					Token.EqualTo(SqlToken.For).IgnoreThen(
+						IdentifierOrKeyword
+					).Then(nameCol =>
+						Token.EqualTo(SqlToken.In)
+							.IgnoreThen(Token.EqualTo(SqlToken.LParen))
+							.IgnoreThen(IdentifierOrKeyword.ManyDelimitedBy(Token.EqualTo(SqlToken.Comma)))
+							.Then(cols => Token.EqualTo(SqlToken.RParen).Select(_ =>
+								new UnpivotClause(valCol, nameCol, cols.ToList())))
+					)
+				)
+			).Then(unpivot => Token.EqualTo(SqlToken.RParen).Select(_ => unpivot));
+
+	// --- TABLESAMPLE clause ---
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#tablesample_operator
+	// TABLESAMPLE SYSTEM (N PERCENT)
+	private static readonly TokenListParser<SqlToken, double> TablesampleParser =
+		Token.EqualTo(SqlToken.Tablesample)
+			.IgnoreThen(Identifier) // SYSTEM keyword — accept any identifier
+			.IgnoreThen(Token.EqualTo(SqlToken.LParen))
+			.IgnoreThen(Token.EqualTo(SqlToken.Number).Select(t => double.Parse(t.ToStringValue(), CultureInfo.InvariantCulture)))
+			.Then(pct =>
+				// Optionally consume PERCENT identifier
+				Identifier.Try().Or(Constant(""))
+					.IgnoreThen(Token.EqualTo(SqlToken.RParen))
+					.Select(_ => pct)
+			);
+
 	private static readonly TokenListParser<SqlToken, FromClause> FromClauseParser =
 		Token.EqualTo(SqlToken.From).IgnoreThen(
 			SingleTableRef.Then(left =>
@@ -607,7 +655,10 @@ internal static class SqlParser
 				.Try()
 				.Or(Constant(left))
 			).Then(source =>
-				PivotParser.Select(piv => (FromClause)new PivotFrom(source, piv)).Try().Or(Constant(source))
+				PivotParser.Select(piv => (FromClause)new PivotFrom(source, piv)).Try()
+				.Or(UnpivotParser.Select(up => (FromClause)new UnpivotFrom(source, up)).Try())
+				.Or(TablesampleParser.Select(pct => (FromClause)new TablesampleFrom(source, pct)).Try())
+				.Or(Constant(source))
 			)
 		);
 

@@ -152,6 +152,22 @@ internal record PivotClause(
 
 /// <summary>FROM source PIVOT(...)</summary>
 internal record PivotFrom(FromClause Source, PivotClause Pivot) : FromClause;
+
+/// <summary>UNPIVOT clause: UNPIVOT(values_col FOR name_col IN (col1, col2, ...))</summary>
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#unpivot_operator
+internal record UnpivotClause(
+	string ValuesColumn,
+	string NameColumn,
+	IReadOnlyList<string> InputColumns
+);
+
+/// <summary>FROM source UNPIVOT(...)</summary>
+internal record UnpivotFrom(FromClause Source, UnpivotClause Unpivot) : FromClause;
+
+/// <summary>FROM source TABLESAMPLE SYSTEM (percent PERCENT)</summary>
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#tablesample_operator
+internal record TablesampleFrom(FromClause Source, double Percent) : FromClause;
+
 internal record RollupExpr(IReadOnlyList<SqlExpression> Exprs) : SqlExpression;
 internal record ArraySubquery(SelectStatement Subquery) : SqlExpression;
 

@@ -337,6 +337,8 @@ JoinClause join => ResolveJoin(join, cteResults),
 SubqueryFrom sub => ResolveSubquery(sub),
 UnnestClause unnest => ResolveUnnest(unnest),
 PivotFrom pivot => ResolvePivot(pivot, cteResults),
+UnpivotFrom unpivot => ResolveUnpivot(unpivot, cteResults),
+TablesampleFrom sample => ResolveTablesample(sample, cteResults),
 _ => throw new NotSupportedException("Unsupported FROM type: " + from.GetType().Name)
 };
 }
@@ -393,6 +395,50 @@ private List<RowContext> ResolvePivot(PivotFrom pivot,
         result.Add(new RowContext(dict, null));
     }
     return result;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#unpivot_operator
+//   "The UNPIVOT operator rotates columns into rows."
+private List<RowContext> ResolveUnpivot(UnpivotFrom unpivot,
+    Dictionary<string, (TableSchema Schema, List<Dictionary<string, object?>> Rows)>? cteResults)
+{
+    var sourceRows = ResolveFrom(unpivot.Source, cteResults);
+    var uc = unpivot.Unpivot;
+    var inputCols = uc.InputColumns;
+    // Non-pivot columns = all columns except the input columns
+    var allCols = sourceRows.Count > 0 ? sourceRows[0].Fields.Keys.ToList() : new List<string>();
+    var unqualCols = allCols.Where(c => !c.Contains('.')).ToList();
+    var nonPivotCols = unqualCols.Where(c =>
+        !inputCols.Any(ic => ic.Equals(c, StringComparison.OrdinalIgnoreCase))
+    ).ToList();
+
+    var result = new List<RowContext>();
+    foreach (var row in sourceRows)
+    {
+        foreach (var col in inputCols)
+        {
+            var dict = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var npc in nonPivotCols)
+                dict[npc] = row.Fields.TryGetValue(npc, out var v) ? v : null;
+            dict[uc.ValuesColumn] = row.Fields.TryGetValue(col, out var val) ? val : null;
+            dict[uc.NameColumn] = col;
+            result.Add(new RowContext(dict, null));
+        }
+    }
+    return result;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#tablesample_operator
+//   "You can use the TABLESAMPLE operator to select a random subset of rows from a table."
+private List<RowContext> ResolveTablesample(TablesampleFrom sample,
+    Dictionary<string, (TableSchema Schema, List<Dictionary<string, object?>> Rows)>? cteResults)
+{
+    var sourceRows = ResolveFrom(sample.Source, cteResults);
+    var pct = sample.Percent;
+    if (pct >= 100.0) return sourceRows;
+    if (pct <= 0.0) return new List<RowContext>();
+    var rng = new Random();
+    return sourceRows.Where(_ => rng.NextDouble() * 100.0 < pct).ToList();
 }
 
 private List<RowContext> ResolveTableRef(TableRef tRef,
@@ -1059,6 +1105,20 @@ DateTimeOffset dto => dto.DateTime,
 string s => DateTime.Parse(s, CultureInfo.InvariantCulture),
 _ => DateTime.Parse(val.ToString()!, CultureInfo.InvariantCulture)
 },
+"DATETIME" => val switch
+{
+DateTime dt => dt,
+DateTimeOffset dto => dto.DateTime,
+string s => DateTime.Parse(s, CultureInfo.InvariantCulture),
+_ => DateTime.Parse(val.ToString()!, CultureInfo.InvariantCulture)
+},
+"TIME" => val switch
+{
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#time_literals
+TimeSpan ts => ts,
+string s => TimeSpan.Parse(s, CultureInfo.InvariantCulture),
+_ => TimeSpan.Parse(val.ToString()!, CultureInfo.InvariantCulture)
+},
 "BYTES" => val switch
 {
 byte[] b => b,
@@ -1306,6 +1366,48 @@ return name switch
 "TIMESTAMP_MILLIS" => EvaluateTimestampMillis(args, row),
 "TIMESTAMP_MICROS" => EvaluateTimestampMicros(args, row),
 "UNIX_MILLIS" => EvaluateUnixMillis(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#unix_micros
+"UNIX_MICROS" => EvaluateUnixMicros(args, row),
+
+// Date functions
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#date_from_unix_date
+"DATE_FROM_UNIX_DATE" => EvaluateDateFromUnixDate(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#unix_date
+"UNIX_DATE" => EvaluateUnixDate(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#last_day
+"LAST_DAY" => EvaluateLastDay(args, row),
+
+// Datetime functions
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/datetime_functions#datetime_add
+"DATETIME_ADD" => EvaluateDatetimeAdd(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/datetime_functions#datetime_sub
+"DATETIME_SUB" => EvaluateDatetimeSub(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/datetime_functions#datetime_diff
+"DATETIME_DIFF" => EvaluateDatetimeDiff(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/datetime_functions#datetime_trunc
+"DATETIME_TRUNC" => EvaluateDatetimeTrunc(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/datetime_functions#format_datetime
+"FORMAT_DATETIME" => EvaluateFormatDatetime(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/datetime_functions#parse_datetime
+"PARSE_DATETIME" => EvaluateParseDatetime(args, row),
+
+// Time functions
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/time_functions#current_time
+"CURRENT_TIME" => DateTime.UtcNow.TimeOfDay,
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/time_functions#time
+"TIME" => EvaluateTimeConstructor(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/time_functions#time_add
+"TIME_ADD" => EvaluateTimeAdd(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/time_functions#time_sub
+"TIME_SUB" => EvaluateTimeSub(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/time_functions#time_diff
+"TIME_DIFF" => EvaluateTimeDiff(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/time_functions#time_trunc
+"TIME_TRUNC" => EvaluateTimeTrunc(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/time_functions#format_time
+"FORMAT_TIME" => EvaluateFormatTime(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/time_functions#parse_time
+"PARSE_TIME" => EvaluateParseTime(args, row),
 
 // Array functions
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions
@@ -1920,6 +2022,280 @@ private object? EvaluateUnixMillis(IReadOnlyList<SqlExpression> args, RowContext
 {
 var ts = ToDateTimeOffset(Evaluate(args[0], row));
 return ts.ToUnixTimeMilliseconds();
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#unix_micros
+//   "Returns the number of microseconds since 1970-01-01 00:00:00 UTC."
+private object? EvaluateUnixMicros(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+	var ts = ToDateTimeOffset(Evaluate(args[0], row));
+	return (ts - DateTimeOffset.UnixEpoch).Ticks / 10;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#date_from_unix_date
+//   "Interprets int64_expression as the number of days since 1970-01-01."
+private object? EvaluateDateFromUnixDate(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+	var days = ToLong(Evaluate(args[0], row));
+	return new DateTime(1970, 1, 1).AddDays(days);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#unix_date
+//   "Returns the number of days since 1970-01-01."
+private object? EvaluateUnixDate(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+	var date = ToDateTime(Evaluate(args[0], row));
+	return (long)(date.Date - new DateTime(1970, 1, 1)).TotalDays;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#last_day
+//   "Returns the last day from a date expression."
+private object? EvaluateLastDay(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+	var val = Evaluate(args[0], row);
+	if (val is null) return null;
+	var date = ToDateTime(val);
+	var part = args.Count > 1
+		? Evaluate(args[1], row)?.ToString()?.ToUpperInvariant() ?? "MONTH"
+		: "MONTH";
+	return part switch
+	{
+		"YEAR" => new DateTime(date.Year, 12, 31),
+		"QUARTER" => new DateTime(date.Year, ((date.Month - 1) / 3 + 1) * 3, 1).AddMonths(1).AddDays(-1),
+		"MONTH" => new DateTime(date.Year, date.Month, DateTime.DaysInMonth(date.Year, date.Month)),
+		"WEEK" => date.AddDays(6 - (int)date.DayOfWeek), // week starts Sunday, last day is Saturday
+		_ => new DateTime(date.Year, date.Month, DateTime.DaysInMonth(date.Year, date.Month)),
+	};
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/datetime_functions#datetime_add
+//   "Adds int64_expression units of part to the DATETIME object."
+private object? EvaluateDatetimeAdd(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+	var date = ToDateTime(Evaluate(args[0], row));
+	var interval = ToLong(Evaluate(args[1], row));
+	var part = Evaluate(args[2], row)?.ToString()?.ToUpperInvariant() ?? "DAY";
+	return AddToPart(date, interval, part);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/datetime_functions#datetime_sub
+//   "Subtracts int64_expression units of part from the DATETIME."
+private object? EvaluateDatetimeSub(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+	var date = ToDateTime(Evaluate(args[0], row));
+	var interval = ToLong(Evaluate(args[1], row));
+	var part = Evaluate(args[2], row)?.ToString()?.ToUpperInvariant() ?? "DAY";
+	return AddToPart(date, -interval, part);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/datetime_functions#datetime_diff
+//   "Gets the number of unit boundaries between two DATETIME values."
+private object? EvaluateDatetimeDiff(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+	var dt1 = ToDateTime(Evaluate(args[0], row));
+	var dt2 = ToDateTime(Evaluate(args[1], row));
+	var part = Evaluate(args[2], row)?.ToString()?.ToUpperInvariant() ?? "DAY";
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/datetime_functions#datetime_diff
+	//   "Gets the number of unit boundaries between two DATETIME values."
+	//   Boundary counting: truncate both values to the part, then diff.
+	return part switch
+	{
+		"MICROSECOND" => (dt1 - dt2).Ticks / 10,
+		"MILLISECOND" => (long)(dt1 - dt2).TotalMilliseconds,
+		"SECOND" => (long)((new DateTime(dt1.Year, dt1.Month, dt1.Day, dt1.Hour, dt1.Minute, dt1.Second) -
+		                     new DateTime(dt2.Year, dt2.Month, dt2.Day, dt2.Hour, dt2.Minute, dt2.Second)).TotalSeconds),
+		"MINUTE" => (long)((new DateTime(dt1.Year, dt1.Month, dt1.Day, dt1.Hour, dt1.Minute, 0) -
+		                     new DateTime(dt2.Year, dt2.Month, dt2.Day, dt2.Hour, dt2.Minute, 0)).TotalMinutes),
+		"HOUR" => (long)((new DateTime(dt1.Year, dt1.Month, dt1.Day, dt1.Hour, 0, 0) -
+		                   new DateTime(dt2.Year, dt2.Month, dt2.Day, dt2.Hour, 0, 0)).TotalHours),
+		"DAY" => (long)(dt1.Date - dt2.Date).TotalDays,
+		"WEEK" => (long)((dt1.Date - dt2.Date).TotalDays / 7),
+		"MONTH" => (long)((dt1.Year - dt2.Year) * 12 + dt1.Month - dt2.Month),
+		"YEAR" => (long)(dt1.Year - dt2.Year),
+		"QUARTER" => (long)(((dt1.Year - dt2.Year) * 12 + dt1.Month - dt2.Month) / 3),
+		_ => (long)(dt1.Date - dt2.Date).TotalDays
+	};
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/datetime_functions#datetime_trunc
+//   "Truncates a DATETIME value at a particular granularity."
+private object? EvaluateDatetimeTrunc(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+	var date = ToDateTime(Evaluate(args[0], row));
+	var part = Evaluate(args[1], row)?.ToString()?.ToUpperInvariant() ?? "DAY";
+	return part switch
+	{
+		"YEAR" => new DateTime(date.Year, 1, 1),
+		"MONTH" => new DateTime(date.Year, date.Month, 1),
+		"QUARTER" => new DateTime(date.Year, ((date.Month - 1) / 3) * 3 + 1, 1),
+		"WEEK" => date.Date.AddDays(-(int)date.DayOfWeek),
+		"DAY" => date.Date,
+		"HOUR" => new DateTime(date.Year, date.Month, date.Day, date.Hour, 0, 0),
+		"MINUTE" => new DateTime(date.Year, date.Month, date.Day, date.Hour, date.Minute, 0),
+		"SECOND" => new DateTime(date.Year, date.Month, date.Day, date.Hour, date.Minute, date.Second),
+		_ => date.Date
+	};
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/datetime_functions#format_datetime
+//   "Formats a DATETIME value according to a specified format string."
+private object? EvaluateFormatDatetime(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+	var format = Evaluate(args[0], row)?.ToString() ?? "";
+	var dt = ToDateTime(Evaluate(args[1], row));
+	return FormatTimestamp(new DateTimeOffset(dt, TimeSpan.Zero), format);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/datetime_functions#parse_datetime
+//   "Converts a STRING value to a DATETIME value."
+private object? EvaluateParseDatetime(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+	var format = Evaluate(args[0], row)?.ToString() ?? "";
+	var str = Evaluate(args[1], row)?.ToString() ?? "";
+	return ParseTimestamp(str, format).DateTime;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/time_functions#time
+//   "Constructs a TIME object."
+private object? EvaluateTimeConstructor(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+	if (args.Count == 3)
+	{
+		var h = (int)ToLong(Evaluate(args[0], row));
+		var m = (int)ToLong(Evaluate(args[1], row));
+		var s = (int)ToLong(Evaluate(args[2], row));
+		return new TimeSpan(h, m, s);
+	}
+	var val = Evaluate(args[0], row);
+	return val switch
+	{
+		TimeSpan ts => ts,
+		DateTime dt => dt.TimeOfDay,
+		DateTimeOffset dto => dto.TimeOfDay,
+		string s => TimeSpan.Parse(s, CultureInfo.InvariantCulture),
+		_ => TimeSpan.Parse(val?.ToString() ?? "00:00:00", CultureInfo.InvariantCulture)
+	};
+}
+
+private static TimeSpan ToTimeSpan(object? val)
+{
+	return val switch
+	{
+		TimeSpan ts => ts,
+		DateTime dt => dt.TimeOfDay,
+		DateTimeOffset dto => dto.TimeOfDay,
+		string s => TimeSpan.Parse(s, CultureInfo.InvariantCulture),
+		_ => TimeSpan.Parse(val?.ToString() ?? "00:00:00", CultureInfo.InvariantCulture)
+	};
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/time_functions#time_add
+//   "Adds int64_expression units of part to the TIME object."
+//   "This function automatically adjusts when values fall outside of the 00:00:00 to 24:00:00 boundary."
+private object? EvaluateTimeAdd(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+	var time = ToTimeSpan(Evaluate(args[0], row));
+	var interval = ToLong(Evaluate(args[1], row));
+	var part = Evaluate(args[2], row)?.ToString()?.ToUpperInvariant() ?? "SECOND";
+	var result = AddToTimeSpan(time, interval, part);
+	return WrapTime(result);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/time_functions#time_sub
+//   "Subtracts int64_expression units of part from the TIME object."
+private object? EvaluateTimeSub(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+	var time = ToTimeSpan(Evaluate(args[0], row));
+	var interval = ToLong(Evaluate(args[1], row));
+	var part = Evaluate(args[2], row)?.ToString()?.ToUpperInvariant() ?? "SECOND";
+	var result = AddToTimeSpan(time, -interval, part);
+	return WrapTime(result);
+}
+
+private static TimeSpan AddToTimeSpan(TimeSpan ts, long interval, string part)
+{
+	return part switch
+	{
+		"MICROSECOND" => ts.Add(TimeSpan.FromTicks(interval * 10)),
+		"MILLISECOND" => ts.Add(TimeSpan.FromMilliseconds(interval)),
+		"SECOND" => ts.Add(TimeSpan.FromSeconds(interval)),
+		"MINUTE" => ts.Add(TimeSpan.FromMinutes(interval)),
+		"HOUR" => ts.Add(TimeSpan.FromHours(interval)),
+		_ => ts.Add(TimeSpan.FromSeconds(interval))
+	};
+}
+
+private static TimeSpan WrapTime(TimeSpan ts)
+{
+	var ticks = ts.Ticks % TimeSpan.TicksPerDay;
+	if (ticks < 0) ticks += TimeSpan.TicksPerDay;
+	return new TimeSpan(ticks);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/time_functions#time_diff
+//   "Gets the number of unit boundaries between two TIME values."
+private object? EvaluateTimeDiff(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+	var t1 = ToTimeSpan(Evaluate(args[0], row));
+	var t2 = ToTimeSpan(Evaluate(args[1], row));
+	var part = Evaluate(args[2], row)?.ToString()?.ToUpperInvariant() ?? "SECOND";
+	// Boundary counting: truncate both values to the part, then diff.
+	return part switch
+	{
+		"MICROSECOND" => (t1 - t2).Ticks / 10,
+		"MILLISECOND" => (long)(t1 - t2).TotalMilliseconds,
+		"SECOND" => (long)(new TimeSpan(t1.Hours, t1.Minutes, t1.Seconds) -
+		                    new TimeSpan(t2.Hours, t2.Minutes, t2.Seconds)).TotalSeconds,
+		"MINUTE" => (long)(new TimeSpan(t1.Hours, t1.Minutes, 0) -
+		                    new TimeSpan(t2.Hours, t2.Minutes, 0)).TotalMinutes,
+		"HOUR" => (long)(new TimeSpan(t1.Hours, 0, 0) -
+		                  new TimeSpan(t2.Hours, 0, 0)).TotalHours,
+		_ => (long)(new TimeSpan(t1.Hours, t1.Minutes, t1.Seconds) -
+		             new TimeSpan(t2.Hours, t2.Minutes, t2.Seconds)).TotalSeconds
+	};
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/time_functions#time_trunc
+//   "Truncates a TIME value at a particular granularity."
+private object? EvaluateTimeTrunc(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+	var time = ToTimeSpan(Evaluate(args[0], row));
+	var part = Evaluate(args[1], row)?.ToString()?.ToUpperInvariant() ?? "SECOND";
+	return part switch
+	{
+		"HOUR" => new TimeSpan(time.Hours, 0, 0),
+		"MINUTE" => new TimeSpan(time.Hours, time.Minutes, 0),
+		"SECOND" => new TimeSpan(time.Hours, time.Minutes, time.Seconds),
+		"MILLISECOND" => new TimeSpan(time.Hours, time.Minutes, time.Seconds).Add(TimeSpan.FromMilliseconds(time.Milliseconds)),
+		_ => time // MICROSECOND = no truncation
+	};
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/time_functions#format_time
+//   "Formats a TIME value according to the specified format string."
+private object? EvaluateFormatTime(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+	var format = Evaluate(args[0], row)?.ToString() ?? "";
+	var time = ToTimeSpan(Evaluate(args[1], row));
+	// Reuse FormatTimestamp with a fake date
+	var dto = new DateTimeOffset(2000, 1, 1, time.Hours, time.Minutes, time.Seconds, TimeSpan.Zero);
+	return FormatTimestamp(dto, format);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/time_functions#parse_time
+//   "Converts a STRING value to a TIME value."
+private object? EvaluateParseTime(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+	var format = Evaluate(args[0], row)?.ToString() ?? "";
+	var str = Evaluate(args[1], row)?.ToString() ?? "";
+	var netFormat = format
+		.Replace("%H", "HH").Replace("%M", "mm").Replace("%S", "ss")
+		.Replace("%T", "HH:mm:ss");
+	if (DateTime.TryParseExact(str, netFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+		return dt.TimeOfDay;
+	if (TimeSpan.TryParse(str, CultureInfo.InvariantCulture, out var ts))
+		return ts;
+	return TimeSpan.Zero;
 }
 
 private static DateTime AddToPart(DateTime date, long interval, string part)
@@ -3391,6 +3767,9 @@ DateTime dt when dt.TimeOfDay == TimeSpan.Zero => dt.ToString("yyyy-MM-dd", Cult
 //   DATETIME values are returned as "yyyy-MM-ddTHH:mm:ss.FFFFFF" strings.
 //   SDK source: BigQueryRow.DateTimeConverter uses DateTime.ParseExact with this format.
 DateTime dt => dt.ToString("yyyy-MM-dd'T'HH:mm:ss.FFFFFF", CultureInfo.InvariantCulture),
+// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tabledata/list
+//   TIME values are returned as "HH:mm:ss.FFFFFF" strings.
+TimeSpan ts => ts.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture),
 byte[] bytes => Convert.ToBase64String(bytes),
 IList<object?> list => string.Join(", ", list.Select(v => FormatValue(v)?.ToString() ?? "NULL")),
 _ => val.ToString()
@@ -3539,7 +3918,11 @@ long => "INTEGER",
 double => "FLOAT",
 bool => "BOOLEAN",
 DateTimeOffset => "TIMESTAMP",
-DateTime => "DATE",
+// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tables#TableFieldSchema
+//   DATE has no time component; DATETIME has date and time.
+DateTime dt when dt.TimeOfDay == TimeSpan.Zero => "DATE",
+DateTime => "DATETIME",
+TimeSpan => "TIME",
 byte[] => "BYTES",
 IList<object?> => "RECORD",
 _ => "STRING"
@@ -3578,6 +3961,7 @@ null => null,
 bool b => b ? "true" : "false",
 DateTimeOffset dto => dto.ToString("yyyy-MM-dd HH:mm:ss.FFFFFF zzz", CultureInfo.InvariantCulture),
 DateTime dt => dt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+TimeSpan ts => ts.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture),
 _ => val.ToString()
 };
 }
