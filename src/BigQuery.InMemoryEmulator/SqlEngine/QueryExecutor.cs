@@ -872,11 +872,122 @@ if (!same) rank++;
 return (long)rank;
 }
 
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/numbering_functions#ntile
+//   "Divides the rows into constant_integer_expression buckets based on row ordering
+//    and returns the 1-based bucket number that is assigned to each row."
+if (funcName == "NTILE")
+{
+var fnArgs = wf.Function is FunctionCall ntileFn ? ntileFn.Args : [];
+var n = (int)ToLong(Evaluate(fnArgs[0], currentRow));
+if (n <= 0) throw new InvalidOperationException("NTILE requires a positive integer");
+var idx = partition.IndexOf(currentRow);
+int totalRows = partition.Count;
+int baseSize = totalRows / n;
+int remainder = totalRows % n;
+// Buckets 1..remainder have baseSize+1 rows; remainder+1..n have baseSize rows
+int bucket = 0;
+int accumulated = 0;
+for (int b = 1; b <= n; b++)
+{
+    int bucketSize = baseSize + (b <= remainder ? 1 : 0);
+    accumulated += bucketSize;
+    if (idx < accumulated) { bucket = b; break; }
+}
+return (long)bucket;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/numbering_functions#percent_rank
+//   "Return the percentile rank of a row defined as (RK-1)/(NR-1). Returns 0 if NR=1."
+if (funcName == "PERCENT_RANK")
+{
+int nr = partition.Count;
+if (nr <= 1) return 0.0;
+// Compute RANK for current row
+long rk = 1;
+for (int i = 0; i < partition.Count; i++)
+{
+    bool same = wf.OrderBy?.All(o =>
+        Equals(Evaluate(o.Expr, partition[i]), Evaluate(o.Expr, currentRow))) ?? true;
+    if (same) { rk = i + 1; break; }
+}
+return (double)(rk - 1) / (nr - 1);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/numbering_functions#cume_dist
+//   "Return the relative rank of a row defined as NP/NR."
+if (funcName == "CUME_DIST")
+{
+int nr = partition.Count;
+// NP = number of rows that precede or are peers with the current row
+int np = 0;
+for (int i = 0; i < partition.Count; i++)
+{
+    bool same = wf.OrderBy?.All(o =>
+        Equals(Evaluate(o.Expr, partition[i]), Evaluate(o.Expr, currentRow))) ?? true;
+    // Rows that precede (come before or at same ORDER BY value)
+    if (CompareOrderByRow(partition[i], currentRow, wf.OrderBy) <= 0) np++;
+}
+return (double)np / nr;
+}
+
+// Navigation functions: FIRST_VALUE, LAST_VALUE, LAG, LEAD
+var navArgs = wf.Function is FunctionCall navFn ? navFn.Args : [];
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#first_value
+//   "Returns the value of the value_expression for the first row in the current window frame."
+if (funcName == "FIRST_VALUE")
+{
+return Evaluate(navArgs[0], partition[0]);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#last_value
+//   "Returns the value of the value_expression for the last row in the current window frame."
+if (funcName == "LAST_VALUE")
+{
+return Evaluate(navArgs[0], partition[^1]);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#lag
+//   "Returns the value of the value_expression on a preceding row."
+if (funcName == "LAG")
+{
+int offset = navArgs.Count > 1 ? (int)ToLong(Evaluate(navArgs[1], currentRow)) : 1;
+object? defaultVal = navArgs.Count > 2 ? Evaluate(navArgs[2], currentRow) : null;
+var idx = partition.IndexOf(currentRow);
+int targetIdx = idx - offset;
+return targetIdx >= 0 ? Evaluate(navArgs[0], partition[targetIdx]) : defaultVal;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#lead
+//   "Returns the value of the value_expression on a subsequent row."
+if (funcName == "LEAD")
+{
+int offset = navArgs.Count > 1 ? (int)ToLong(Evaluate(navArgs[1], currentRow)) : 1;
+object? defaultVal = navArgs.Count > 2 ? Evaluate(navArgs[2], currentRow) : null;
+var idx = partition.IndexOf(currentRow);
+int targetIdx = idx + offset;
+return targetIdx < partition.Count ? Evaluate(navArgs[0], partition[targetIdx]) : defaultVal;
+}
+
 // Window aggregate functions
 if (wf.Function is AggregateCall agg)
 return EvaluateAggregate(agg, partition);
 
 return null;
+}
+
+private int CompareOrderByRow(RowContext a, RowContext b, IReadOnlyList<OrderByItem>? orderBy)
+{
+if (orderBy is null || orderBy.Count == 0) return 0;
+foreach (var item in orderBy)
+{
+    var va = Evaluate(item.Expr, a);
+    var vb = Evaluate(item.Expr, b);
+    int cmp = CompareRaw(va, vb);
+    if (item.Descending) cmp = -cmp;
+    if (cmp != 0) return cmp;
+}
+return 0;
 }
 
 private Dictionary<string, object?> ExpandStar(RowContext row, string? tableAlias)
@@ -1419,6 +1530,17 @@ return name switch
 "ARRAY_FIRST" => EvaluateArrayFirst(args, row),
 "ARRAY_LAST" => EvaluateArrayLast(args, row),
 "ARRAY_SLICE" => EvaluateArraySlice(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#generate_date_array
+"GENERATE_DATE_ARRAY" => EvaluateGenerateDateArray(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#generate_timestamp_array
+"GENERATE_TIMESTAMP_ARRAY" => EvaluateGenerateTimestampArray(args, row),
+"ARRAY_INCLUDES" => EvaluateArrayIncludes(args, row),
+"ARRAY_INCLUDES_ALL" => EvaluateArrayIncludesAll(args, row),
+"ARRAY_INCLUDES_ANY" => EvaluateArrayIncludesAny(args, row),
+"ARRAY_MAX" => EvaluateArrayMax(args, row),
+"ARRAY_MIN" => EvaluateArrayMin(args, row),
+"ARRAY_SUM" => EvaluateArraySum(args, row),
+"ARRAY_AVG" => EvaluateArrayAvg(args, row),
 
 // Conversion functions
 "CAST" => args.Count >= 2 ? CastValue(Evaluate(args[0], row), Evaluate(args[1], row)?.ToString() ?? "STRING", false) : null,
@@ -1457,6 +1579,21 @@ return name switch
 "JSON_SET" => EvaluateJsonSet(args, row),
 "JSON_STRIP_NULLS" => EvaluateJsonStripNulls(args, row),
 "JSON_TYPE" => EvaluateJsonType(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#parse_json
+//   "Takes a JSON-formatted string and returns a JSON value."
+"PARSE_JSON" => EvaluateParseJson(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#to_json
+//   "Takes a SQL value and returns a JSON value."
+"TO_JSON" => EvaluateToJson(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_array
+//   "Creates a JSON array."
+"JSON_ARRAY" => EvaluateJsonArray(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_object
+//   "Creates a JSON object."
+"JSON_OBJECT" => EvaluateJsonObject(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_remove
+//   "Removes a JSON element at a path."
+"JSON_REMOVE" => EvaluateJsonRemove(args, row),
 
 // Regex additional functions
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions
@@ -2475,6 +2612,186 @@ if (start > end) return new List<object?>();
 return list.Skip(start).Take(end - start + 1).ToList();
 }
 
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#generate_date_array
+//   "Returns an array of dates. The start_date and end_date parameters determine the inclusive
+//    start and end of the array."
+private object? EvaluateGenerateDateArray(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var startVal = Evaluate(args[0], row);
+var endVal = Evaluate(args[1], row);
+if (startVal is null || endVal is null) return null;
+var startDate = startVal is DateTime sd ? sd : DateTime.Parse(startVal.ToString()!, System.Globalization.CultureInfo.InvariantCulture);
+var endDate = endVal is DateTime ed ? ed : DateTime.Parse(endVal.ToString()!, System.Globalization.CultureInfo.InvariantCulture);
+
+int step = 1;
+string part = "DAY";
+if (args.Count >= 3)
+{
+    step = (int)ToLong(Evaluate(args[2], row));
+}
+if (args.Count >= 4)
+{
+    part = Evaluate(args[3], row)?.ToString()?.ToUpperInvariant() ?? "DAY";
+}
+
+var result = new List<object?>();
+if (step == 0) throw new InvalidOperationException("GENERATE_DATE_ARRAY step cannot be 0");
+
+var current = startDate;
+if (step > 0)
+{
+    while (current <= endDate)
+    {
+        result.Add(current);
+        current = AddDatePart(current, step, part);
+    }
+}
+else
+{
+    while (current >= endDate)
+    {
+        result.Add(current);
+        current = AddDatePart(current, step, part);
+    }
+}
+return result;
+}
+
+private static DateTime AddDatePart(DateTime date, int amount, string part)
+{
+return part.ToUpperInvariant() switch
+{
+    "DAY" => date.AddDays(amount),
+    "WEEK" => date.AddDays(amount * 7),
+    "MONTH" => date.AddMonths(amount),
+    "QUARTER" => date.AddMonths(amount * 3),
+    "YEAR" => date.AddYears(amount),
+    _ => date.AddDays(amount)
+};
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#generate_timestamp_array
+//   "Returns an ARRAY of TIMESTAMPS separated by a given interval."
+private object? EvaluateGenerateTimestampArray(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var startVal = Evaluate(args[0], row);
+var endVal = Evaluate(args[1], row);
+if (startVal is null || endVal is null) return null;
+var startTs = startVal is DateTimeOffset so ? so : DateTimeOffset.Parse(startVal.ToString()!, System.Globalization.CultureInfo.InvariantCulture);
+var endTs = endVal is DateTimeOffset eo ? eo : DateTimeOffset.Parse(endVal.ToString()!, System.Globalization.CultureInfo.InvariantCulture);
+
+int step = args.Count >= 3 ? (int)ToLong(Evaluate(args[2], row)) : 1;
+string part = args.Count >= 4 ? Evaluate(args[3], row)?.ToString()?.ToUpperInvariant() ?? "DAY" : "DAY";
+if (step == 0) throw new InvalidOperationException("GENERATE_TIMESTAMP_ARRAY step cannot be 0");
+
+var result = new List<object?>();
+var current = startTs;
+if (step > 0)
+{
+    while (current <= endTs)
+    {
+        result.Add(current);
+        current = AddTimestampPart(current, step, part);
+    }
+}
+else
+{
+    while (current >= endTs)
+    {
+        result.Add(current);
+        current = AddTimestampPart(current, step, part);
+    }
+}
+return result;
+}
+
+private static DateTimeOffset AddTimestampPart(DateTimeOffset ts, int amount, string part)
+{
+return part.ToUpperInvariant() switch
+{
+    "MICROSECOND" => ts.AddTicks(amount * 10),
+    "MILLISECOND" => ts.AddMilliseconds(amount),
+    "SECOND" => ts.AddSeconds(amount),
+    "MINUTE" => ts.AddMinutes(amount),
+    "HOUR" => ts.AddHours(amount),
+    "DAY" => ts.AddDays(amount),
+    _ => ts.AddDays(amount)
+};
+}
+
+// ARRAY_INCLUDES returns TRUE if the array contains the target value.
+private object? EvaluateArrayIncludes(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+var target = Evaluate(args[1], row);
+if (val is null) return null;
+if (val is IList<object?> list)
+    return list.Any(v => Equals(v, target) || (v?.ToString() == target?.ToString()));
+return false;
+}
+
+// ARRAY_INCLUDES_ALL returns TRUE if every element of the second array is in the first.
+private object? EvaluateArrayIncludesAll(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+var targets = Evaluate(args[1], row);
+if (val is null || targets is null) return null;
+if (val is not IList<object?> list || targets is not IList<object?> targetList) return false;
+var strSet = list.Select(v => v?.ToString()).ToHashSet();
+return targetList.All(t => strSet.Contains(t?.ToString()));
+}
+
+// ARRAY_INCLUDES_ANY returns TRUE if any element of the second array is in the first.
+private object? EvaluateArrayIncludesAny(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+var targets = Evaluate(args[1], row);
+if (val is null || targets is null) return null;
+if (val is not IList<object?> list || targets is not IList<object?> targetList) return false;
+var strSet = list.Select(v => v?.ToString()).ToHashSet();
+return targetList.Any(t => strSet.Contains(t?.ToString()));
+}
+
+// ARRAY_MAX returns the maximum value from an array.
+private object? EvaluateArrayMax(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+if (val is null) return null;
+if (val is not IList<object?> list) return null;
+var nonNull = list.Where(v => v is not null).ToList();
+if (nonNull.Count == 0) return null;
+return nonNull.Aggregate((a, b) => CompareRaw(a!, b!) > 0 ? a : b);
+}
+
+// ARRAY_MIN returns the minimum value from an array.
+private object? EvaluateArrayMin(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+if (val is null) return null;
+if (val is not IList<object?> list) return null;
+var nonNull = list.Where(v => v is not null).ToList();
+if (nonNull.Count == 0) return null;
+return nonNull.Aggregate((a, b) => CompareRaw(a!, b!) < 0 ? a : b);
+}
+
+// ARRAY_SUM returns the sum of values in an array.
+private object? EvaluateArraySum(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+if (val is null) return null;
+if (val is not IList<object?> list) return null;
+return SumValues(list.ToList());
+}
+
+// ARRAY_AVG returns the average of values in an array.
+private object? EvaluateArrayAvg(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+if (val is null) return null;
+if (val is not IList<object?> list) return null;
+return AvgValues(list.ToList());
+}
+
 private object? EvaluateMd5(IReadOnlyList<SqlExpression> args, RowContext row)
 {
 var val = Evaluate(args[0], row)?.ToString();
@@ -2722,6 +3039,93 @@ try
 	};
 }
 catch { return null; }
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#parse_json
+//   "Takes a JSON-formatted string and returns a JSON value."
+private object? EvaluateParseJson(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row)?.ToString();
+if (val is null) return null;
+try
+{
+    // Validate it's valid JSON and return the normalized representation
+    using var doc = System.Text.Json.JsonDocument.Parse(val);
+    return doc.RootElement.GetRawText();
+}
+catch { return null; }
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#to_json
+//   "Takes a SQL value and returns a JSON value."
+private object? EvaluateToJson(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+if (val is null) return "null";
+if (val is bool b) return b ? "true" : "false";
+if (val is string s) return System.Text.Json.JsonSerializer.Serialize(s);
+if (val is IList<object?> list)
+    return "[" + string.Join(",", list.Select(v => v is null ? "null" : System.Text.Json.JsonSerializer.Serialize(v))) + "]";
+return System.Text.Json.JsonSerializer.Serialize(val);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_array
+//   "Creates a JSON array."
+private object? EvaluateJsonArray(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var elements = args.Select(a => Evaluate(a, row)).ToList();
+var parts = elements.Select(v =>
+{
+    if (v is null) return "null";
+    if (v is bool b) return b ? "true" : "false";
+    if (v is string s) return System.Text.Json.JsonSerializer.Serialize(s);
+    if (v is long or int or double or float) return v.ToString()!;
+    return System.Text.Json.JsonSerializer.Serialize(v);
+});
+return "[" + string.Join(",", parts) + "]";
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_object
+//   "Creates a JSON object."
+private object? EvaluateJsonObject(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+if (args.Count == 0) return "{}";
+var pairs = new List<string>();
+for (int i = 0; i + 1 < args.Count; i += 2)
+{
+    var key = Evaluate(args[i], row)?.ToString();
+    var val = Evaluate(args[i + 1], row);
+    if (key is null) continue;
+    string jsonKey = System.Text.Json.JsonSerializer.Serialize(key);
+    string jsonVal;
+    if (val is null) jsonVal = "null";
+    else if (val is bool b) jsonVal = b ? "true" : "false";
+    else if (val is string s) jsonVal = System.Text.Json.JsonSerializer.Serialize(s);
+    else if (val is long or int or double or float) jsonVal = val.ToString()!;
+    else jsonVal = System.Text.Json.JsonSerializer.Serialize(val);
+    pairs.Add($"{jsonKey}:{jsonVal}");
+}
+return "{" + string.Join(",", pairs) + "}";
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_remove
+//   "Removes a JSON element at a path."
+private object? EvaluateJsonRemove(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var json = Evaluate(args[0], row)?.ToString();
+if (json is null) return null;
+var path = Evaluate(args[1], row)?.ToString();
+if (path is null) return json;
+try
+{
+    var dict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, System.Text.Json.JsonElement>>(json);
+    if (dict is null) return json;
+    // Simple path: $.key → remove "key"
+    var key = path.TrimStart('$', '.');
+    dict.Remove(key);
+    return System.Text.Json.JsonSerializer.Serialize(dict);
+}
+catch { return json; }
 }
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#length
@@ -3198,12 +3602,41 @@ return funcName switch
 "APPROX_COUNT_DISTINCT" => (long)values.Where(v => v is not null).Distinct().Count(),
 "LOGICAL_AND" => values.All(v => v is true),
 "LOGICAL_OR" => values.Any(v => v is true),
+// Bitwise aggregates
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#bit_and
+//   "Performs a bitwise AND operation on expression and returns the result."
+"BIT_AND" => EvaluateBitAgg(values, (a, b) => a & b),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#bit_or
+//   "Performs a bitwise OR operation on expression and returns the result."
+"BIT_OR" => EvaluateBitAgg(values, (a, b) => a | b),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#bit_xor
+//   "Performs a bitwise XOR operation on expression and returns the result."
+"BIT_XOR" => EvaluateBitAgg(values, (a, b) => a ^ b),
 // Statistical aggregates
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/statistical_aggregate_functions
 "VAR_SAMP" or "VARIANCE" => EvaluateVariance(values, sample: true),
 "VAR_POP" => EvaluateVariance(values, sample: false),
 "STDDEV_SAMP" or "STDDEV" => EvaluateStddev(values, sample: true),
 "STDDEV_POP" => EvaluateStddev(values, sample: false),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/statistical_aggregate_functions#corr
+//   "Returns the Pearson coefficient of correlation of a set of number pairs."
+"CORR" => EvaluateCorr(agg, rows),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/statistical_aggregate_functions#covar_pop
+//   "Returns the population covariance of a set of number pairs."
+"COVAR_POP" => EvaluateCovariance(agg, rows, sample: false),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/statistical_aggregate_functions#covar_samp
+//   "Returns the sample covariance of a set of number pairs."
+"COVAR_SAMP" => EvaluateCovariance(agg, rows, sample: true),
+// Approximate aggregates
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/approximate_aggregate_functions#approx_quantiles
+//   "Returns the approximate boundaries for a group of expression values."
+"APPROX_QUANTILES" => EvaluateApproxQuantiles(agg, rows),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/approximate_aggregate_functions#approx_top_count
+//   "Returns the approximate top elements of expression as an array of STRUCTs."
+"APPROX_TOP_COUNT" => EvaluateApproxTopCount(agg, rows),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/approximate_aggregate_functions#approx_top_sum
+//   "Returns the approximate top elements of expression, based on the sum of an assigned weight."
+"APPROX_TOP_SUM" => EvaluateApproxTopSum(agg, rows),
 _ => throw new NotSupportedException("Unsupported aggregate: " + funcName)
 };
 }
@@ -3239,6 +3672,110 @@ private static object? EvaluateStddev(List<object?> values, bool sample)
 var variance = EvaluateVariance(values, sample);
 if (variance is null) return null;
 return Math.Sqrt((double)variance);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#bit_and
+private static object? EvaluateBitAgg(List<object?> values, Func<long, long, long> op)
+{
+var nums = values.Where(v => v is not null).Select(v => ToLong(v)).ToList();
+if (nums.Count == 0) return null;
+return nums.Aggregate(op);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/statistical_aggregate_functions#corr
+private object? EvaluateCorr(AggregateCall agg, List<RowContext> rows)
+{
+if (agg.ExtraArgs is not { Count: > 0 }) return null;
+var pairs = rows
+    .Select(r => (x: Evaluate(agg.Arg!, r), y: Evaluate(agg.ExtraArgs[0], r)))
+    .Where(p => p.x is not null && p.y is not null)
+    .Select(p => (x: Convert.ToDouble(p.x), y: Convert.ToDouble(p.y)))
+    .ToList();
+if (pairs.Count < 2) return null;
+var meanX = pairs.Average(p => p.x);
+var meanY = pairs.Average(p => p.y);
+var cov = pairs.Sum(p => (p.x - meanX) * (p.y - meanY));
+var stdX = Math.Sqrt(pairs.Sum(p => (p.x - meanX) * (p.x - meanX)));
+var stdY = Math.Sqrt(pairs.Sum(p => (p.y - meanY) * (p.y - meanY)));
+if (stdX == 0 || stdY == 0) return null;
+return cov / (stdX * stdY);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/statistical_aggregate_functions#covar_pop
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/statistical_aggregate_functions#covar_samp
+private object? EvaluateCovariance(AggregateCall agg, List<RowContext> rows, bool sample)
+{
+if (agg.ExtraArgs is not { Count: > 0 }) return null;
+var pairs = rows
+    .Select(r => (x: Evaluate(agg.Arg!, r), y: Evaluate(agg.ExtraArgs[0], r)))
+    .Where(p => p.x is not null && p.y is not null)
+    .Select(p => (x: Convert.ToDouble(p.x), y: Convert.ToDouble(p.y)))
+    .ToList();
+if (sample && pairs.Count < 2) return null;
+if (!sample && pairs.Count == 0) return null;
+var meanX = pairs.Average(p => p.x);
+var meanY = pairs.Average(p => p.y);
+var cov = pairs.Sum(p => (p.x - meanX) * (p.y - meanY));
+return sample ? cov / (pairs.Count - 1) : cov / pairs.Count;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/approximate_aggregate_functions#approx_quantiles
+//   "Returns the approximate boundaries for a group of expression values, where number
+//    represents the number of quantiles to create. Returns an array of number + 1 elements."
+private object? EvaluateApproxQuantiles(AggregateCall agg, List<RowContext> rows)
+{
+var n = agg.ExtraArgs is { Count: > 0 } ? (int)ToLong(Evaluate(agg.ExtraArgs[0], rows[0])) : 2;
+var values = rows.Select(r => Evaluate(agg.Arg!, r)).Where(v => v is not null).ToList();
+if (values.Count == 0) return null;
+// Sort and pick quantile boundaries
+var sorted = values.OrderBy(v => Convert.ToDouble(v)).ToList();
+var result = new List<object?>();
+for (int i = 0; i <= n; i++)
+{
+    double pos = (double)i / n * (sorted.Count - 1);
+    int idx = Math.Min((int)Math.Round(pos), sorted.Count - 1);
+    result.Add(sorted[idx]);
+}
+return result;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/approximate_aggregate_functions#approx_top_count
+//   "Returns the approximate top elements of expression as an array of STRUCTs with value and count."
+private object? EvaluateApproxTopCount(AggregateCall agg, List<RowContext> rows)
+{
+var n = agg.ExtraArgs is { Count: > 0 } ? (int)ToLong(Evaluate(agg.ExtraArgs[0], rows[0])) : 1;
+var values = rows.Select(r => Evaluate(agg.Arg!, r)).Where(v => v is not null).ToList();
+var groups = values.GroupBy(v => v?.ToString()).OrderByDescending(g => g.Count()).Take(n);
+var result = new List<object?>();
+foreach (var g in groups)
+{
+    result.Add(new Dictionary<string, object?> { ["value"] = g.First(), ["count"] = (long)g.Count() });
+}
+return result;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/approximate_aggregate_functions#approx_top_sum
+//   "Returns the approximate top elements of expression, based on sum of assigned weight."
+private object? EvaluateApproxTopSum(AggregateCall agg, List<RowContext> rows)
+{
+if (agg.ExtraArgs is not { Count: >= 2 }) return null;
+var weightExpr = agg.ExtraArgs[0];
+var n = (int)ToLong(Evaluate(agg.ExtraArgs[1], rows[0]));
+var pairs = rows
+    .Select(r => (val: Evaluate(agg.Arg!, r), weight: Evaluate(weightExpr, r)))
+    .Where(p => p.val is not null && p.weight is not null)
+    .ToList();
+var groups = pairs
+    .GroupBy(p => p.val?.ToString())
+    .Select(g => new { Value = g.First().val, Sum = g.Sum(p => Convert.ToDouble(p.weight)) })
+    .OrderByDescending(g => g.Sum)
+    .Take(n);
+var result = new List<object?>();
+foreach (var g in groups)
+{
+    result.Add(new Dictionary<string, object?> { ["value"] = g.Value, ["sum"] = g.Sum });
+}
+return result;
 }
 
 #endregion

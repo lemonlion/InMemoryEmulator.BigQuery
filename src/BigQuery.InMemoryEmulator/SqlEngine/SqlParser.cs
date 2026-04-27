@@ -224,9 +224,12 @@ internal static class SqlParser
 				if (upper is "COUNT" or "SUM" or "AVG" or "MIN" or "MAX" or "ANY_VALUE"
 					or "ARRAY_AGG" or "STRING_AGG" or "COUNTIF" or "LOGICAL_AND" or "LOGICAL_OR"
 					or "APPROX_COUNT_DISTINCT" or "BIT_AND" or "BIT_OR" or "BIT_XOR"
-					or "VAR_SAMP" or "VAR_POP" or "VARIANCE" or "STDDEV" or "STDDEV_SAMP" or "STDDEV_POP")
+					or "VAR_SAMP" or "VAR_POP" or "VARIANCE" or "STDDEV" or "STDDEV_SAMP" or "STDDEV_POP"
+					or "CORR" or "COVAR_POP" or "COVAR_SAMP"
+					or "APPROX_QUANTILES" or "APPROX_TOP_COUNT" or "APPROX_TOP_SUM")
 				{
-					return (SqlExpression)new AggregateCall(upper, args.Length > 0 ? args[0] : null, false);
+					var extraArgs = args.Length > 1 ? args.Skip(1).ToList() : null;
+					return (SqlExpression)new AggregateCall(upper, args.Length > 0 ? args[0] : null, false, extraArgs);
 				}
 				return (SqlExpression)new FunctionCall(upper, args.ToList());
 			}))

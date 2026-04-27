@@ -93,7 +93,7 @@ internal record UnaryExpr(UnaryOp Op, SqlExpression Operand) : SqlExpression;
 internal record FunctionCall(string FunctionName, IReadOnlyList<SqlExpression> Args) : SqlExpression;
 
 /// <summary>An aggregate call: COUNT(x), SUM(x), etc.</summary>
-internal record AggregateCall(string FunctionName, SqlExpression? Arg, bool Distinct) : SqlExpression;
+internal record AggregateCall(string FunctionName, SqlExpression? Arg, bool Distinct, IReadOnlyList<SqlExpression>? ExtraArgs = null) : SqlExpression;
 
 /// <summary>IS [NOT] NULL check.</summary>
 internal record IsNullExpr(SqlExpression Expr, bool IsNot) : SqlExpression;
