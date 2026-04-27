@@ -28,6 +28,13 @@ public class InMemoryTable
 	// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tables#Table.FIELDS.require_partition_filter
 	public bool RequirePartitionFilter { get; set; }
 
+	/// <summary>
+	/// If this table represents a VIEW, stores the view's SQL query AST.
+	/// When non-null, querying this table re-executes the view query instead of reading stored rows.
+	/// </summary>
+	// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tables#ViewDefinition
+	internal SqlEngine.SelectStatement? ViewQuery { get; set; }
+
 	internal List<InMemoryRow> Rows { get; } = [];
 	internal readonly object RowLock = new();
 

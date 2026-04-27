@@ -182,6 +182,271 @@ public class MissingFunctionTests
 		Assert.Equal("10", rows[0].F[0].V?.ToString());
 	}
 
+	[Fact]
+	public void ArrayFirst_NullInput_ReturnsNull()
+	{
+		var (_, rows) = CreateExecutor().Execute("SELECT ARRAY_FIRST(NULL) AS result");
+		Assert.Null(rows[0].F[0].V);
+	}
+
+	#endregion
+
+	#region JSON Array & Object Functions
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_extract_array
+	//   "Extracts a JSON array and returns it as a SQL ARRAY<JSON>."
+	[Fact]
+	public void JsonExtractArray_ReturnsArray()
+	{
+		var (_, rows) = CreateExecutor().Execute(
+			@"SELECT ARRAY_LENGTH(JSON_EXTRACT_ARRAY('{""items"":[1,2,3]}', '$.items')) AS cnt");
+		Assert.Equal("3", rows[0].F[0].V?.ToString());
+	}
+
+	[Fact]
+	public void JsonExtractArray_NullInput_ReturnsNull()
+	{
+		var (_, rows) = CreateExecutor().Execute(
+			@"SELECT JSON_EXTRACT_ARRAY(NULL, '$.items') AS arr");
+		Assert.Null(rows[0].F[0].V);
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_value_array
+	//   "Extracts a JSON array of scalar values and returns a SQL ARRAY<STRING>."
+	[Fact]
+	public void JsonValueArray_ReturnsStringArray()
+	{
+		var (_, rows) = CreateExecutor().Execute(
+			@"SELECT ARRAY_LENGTH(JSON_VALUE_ARRAY('{""tags"":[""a"",""b"",""c""]}', '$.tags')) AS cnt");
+		Assert.Equal("3", rows[0].F[0].V?.ToString());
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_keys
+	//   "Returns the keys of the outermost JSON object as a SQL ARRAY<STRING>."
+	[Fact]
+	public void JsonKeys_ReturnsKeys()
+	{
+		var (_, rows) = CreateExecutor().Execute(
+			@"SELECT ARRAY_LENGTH(JSON_KEYS('{""name"":""Alice"",""age"":30}')) AS cnt");
+		Assert.Equal("2", rows[0].F[0].V?.ToString());
+	}
+
+	[Fact]
+	public void JsonKeys_NullInput_ReturnsNull()
+	{
+		var (_, rows) = CreateExecutor().Execute("SELECT JSON_KEYS(NULL) AS keys");
+		Assert.Null(rows[0].F[0].V);
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_set
+	//   "Produces a new SQL JSON value with the specified JSON data inserted or replaced."
+	[Fact]
+	public void JsonSet_SetsNewProperty()
+	{
+		var (_, rows) = CreateExecutor().Execute(
+			@"SELECT JSON_SET('{""a"":1}', '$.b', '2') AS j");
+		var val = rows[0].F[0].V?.ToString();
+		Assert.NotNull(val);
+		Assert.Contains("b", val);
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_strip_nulls
+	//   "Removes all members that have NULL values from a JSON value."
+	[Fact]
+	public void JsonStripNulls_RemovesNulls()
+	{
+		var (_, rows) = CreateExecutor().Execute(
+			@"SELECT JSON_STRIP_NULLS('{""a"":1,""b"":null,""c"":3}') AS j");
+		var val = rows[0].F[0].V?.ToString();
+		Assert.NotNull(val);
+		Assert.DoesNotContain("null", val!);
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_type
+	//   "Returns a STRING value that represents the JSON type."
+	[Fact]
+	public void JsonType_Object()
+	{
+		var (_, rows) = CreateExecutor().Execute(@"SELECT JSON_TYPE('{""a"":1}') AS t");
+		Assert.Equal("object", rows[0].F[0].V?.ToString());
+	}
+
+	[Fact]
+	public void JsonType_Array()
+	{
+		var (_, rows) = CreateExecutor().Execute(@"SELECT JSON_TYPE('[1,2]') AS t");
+		Assert.Equal("array", rows[0].F[0].V?.ToString());
+	}
+
+	[Fact]
+	public void JsonType_Number()
+	{
+		var (_, rows) = CreateExecutor().Execute(@"SELECT JSON_TYPE('42') AS t");
+		Assert.Equal("number", rows[0].F[0].V?.ToString());
+	}
+
+	[Fact]
+	public void JsonType_Boolean()
+	{
+		var (_, rows) = CreateExecutor().Execute(@"SELECT JSON_TYPE('true') AS t");
+		Assert.Equal("boolean", rows[0].F[0].V?.ToString());
+	}
+
+	[Fact]
+	public void JsonType_Null()
+	{
+		var (_, rows) = CreateExecutor().Execute(@"SELECT JSON_TYPE('null') AS t");
+		Assert.Equal("null", rows[0].F[0].V?.ToString());
+	}
+
+	[Fact]
+	public void JsonType_NullInput_ReturnsNull()
+	{
+		var (_, rows) = CreateExecutor().Execute("SELECT JSON_TYPE(NULL) AS t");
+		Assert.Null(rows[0].F[0].V);
+	}
+
+	#endregion
+
+	#region Regex Functions
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#regexp_instr
+	//   "Returns the 1-based position of the first occurrence of a regex pattern."
+	[Fact]
+	public void RegexpInstr_FindsPosition()
+	{
+		var (_, rows) = CreateExecutor().Execute("SELECT REGEXP_INSTR('abcdef', 'cd') AS pos");
+		Assert.Equal("3", rows[0].F[0].V?.ToString());
+	}
+
+	[Fact]
+	public void RegexpInstr_NoMatch_ReturnsZero()
+	{
+		var (_, rows) = CreateExecutor().Execute("SELECT REGEXP_INSTR('abcdef', 'xyz') AS pos");
+		Assert.Equal("0", rows[0].F[0].V?.ToString());
+	}
+
+	[Fact]
+	public void RegexpInstr_NullInput_ReturnsNull()
+	{
+		var (_, rows) = CreateExecutor().Execute("SELECT REGEXP_INSTR(NULL, 'a') AS pos");
+		Assert.Null(rows[0].F[0].V);
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#regexp_substr
+	//   "Synonym for REGEXP_EXTRACT."
+	[Fact]
+	public void RegexpSubstr_ReturnsMatch()
+	{
+		var (_, rows) = CreateExecutor().Execute(@"SELECT REGEXP_SUBSTR('hello 123', '[0-9]+') AS m");
+		Assert.Equal("123", rows[0].F[0].V?.ToString());
+	}
+
+	[Fact]
+	public void RegexpSubstr_NoMatch_ReturnsNull()
+	{
+		var (_, rows) = CreateExecutor().Execute(@"SELECT REGEXP_SUBSTR('abcdef', '[0-9]+') AS m");
+		Assert.Null(rows[0].F[0].V);
+	}
+
+	#endregion
+
+	#region Bit Functions
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/bit_functions#bit_count
+	//   "Returns the number of bits that are set in the input expression."
+	[Fact]
+	public void BitCount_Seven_ReturnsThree()
+	{
+		var (_, rows) = CreateExecutor().Execute("SELECT BIT_COUNT(7) AS cnt");
+		Assert.Equal("3", rows[0].F[0].V?.ToString());
+	}
+
+	[Fact]
+	public void BitCount_Zero_ReturnsZero()
+	{
+		var (_, rows) = CreateExecutor().Execute("SELECT BIT_COUNT(0) AS cnt");
+		Assert.Equal("0", rows[0].F[0].V?.ToString());
+	}
+
+	[Fact]
+	public void BitCount_PowerOfTwo()
+	{
+		var (_, rows) = CreateExecutor().Execute("SELECT BIT_COUNT(256) AS cnt");
+		Assert.Equal("1", rows[0].F[0].V?.ToString());
+	}
+
+	[Fact]
+	public void BitCount_NullInput_ReturnsNull()
+	{
+		var (_, rows) = CreateExecutor().Execute("SELECT BIT_COUNT(NULL) AS cnt");
+		Assert.Null(rows[0].F[0].V);
+	}
+
+	#endregion
+
+	#region NET Functions
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions#nethost
+	//   "Takes a URL as a STRING and returns the host."
+	[Fact]
+	public void NetHost_ExtractsHost()
+	{
+		var (_, rows) = CreateExecutor().Execute(
+			"SELECT NET.HOST('https://www.google.com/search?q=test') AS h");
+		Assert.Equal("www.google.com", rows[0].F[0].V?.ToString());
+	}
+
+	[Fact]
+	public void NetHost_NullInput_ReturnsNull()
+	{
+		var (_, rows) = CreateExecutor().Execute("SELECT NET.HOST(NULL) AS h");
+		Assert.Null(rows[0].F[0].V);
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions#netpublic_suffix
+	//   "Takes a URL as a STRING and returns the public suffix."
+	[Fact]
+	public void NetPublicSuffix_ReturnsSuffix()
+	{
+		var (_, rows) = CreateExecutor().Execute(
+			"SELECT NET.PUBLIC_SUFFIX('https://www.google.com/page') AS s");
+		Assert.Equal("com", rows[0].F[0].V?.ToString());
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions#netreg_domain
+	//   "Takes a URL and returns the registered or registerable domain."
+	[Fact]
+	public void NetRegDomain_ReturnsDomain()
+	{
+		var (_, rows) = CreateExecutor().Execute(
+			"SELECT NET.REG_DOMAIN('https://www.google.com/page') AS d");
+		Assert.Equal("google.com", rows[0].F[0].V?.ToString());
+	}
+
+	#endregion
+
+	#region LENGTH for BYTES
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#length
+	//   "Returns the length of a BYTES value in bytes."
+	[Fact]
+	public void Length_Bytes_ReturnsByteCount()
+	{
+		var (_, rows) = CreateExecutor().Execute("SELECT LENGTH(SHA512('hello')) AS len");
+		Assert.Equal("64", rows[0].F[0].V?.ToString());
+	}
+
+	[Fact]
+	public void Length_String_ReturnsCharCount()
+	{
+		var (_, rows) = CreateExecutor().Execute("SELECT LENGTH('hello') AS len");
+		Assert.Equal("5", rows[0].F[0].V?.ToString());
+	}
+
+	#endregion
+
+	#region Array Functions (continued)
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_last
 	//   "Takes an array and returns the last element in the array."
 	[Fact]
@@ -205,6 +470,31 @@ public class MissingFunctionTests
 	{
 		var (_, rows) = CreateExecutor().Execute("SELECT ARRAY_CONCAT(NULL, [1, 2]) AS result");
 		Assert.Null(rows[0].F[0].V);
+	}
+
+	#endregion
+
+	#region Interval Functions
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/interval_functions#make_interval
+	//   "Constructs an INTERVAL value."
+	[Fact]
+	public void MakeInterval_ReturnsInterval()
+	{
+		// MAKE_INTERVAL(year, month, day, hour, minute, second)
+		var (_, rows) = CreateExecutor().Execute("SELECT MAKE_INTERVAL(1, 2, 3, 4, 5, 6) AS i");
+		var val = rows[0].F[0].V?.ToString();
+		Assert.NotNull(val);
+		Assert.Contains("1", val);
+	}
+
+	[Fact]
+	public void MakeInterval_DefaultsToZero()
+	{
+		// MAKE_INTERVAL() with no args should return 0 interval
+		var (_, rows) = CreateExecutor().Execute("SELECT MAKE_INTERVAL() AS i");
+		var val = rows[0].F[0].V?.ToString();
+		Assert.NotNull(val);
 	}
 
 	#endregion

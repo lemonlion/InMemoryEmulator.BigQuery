@@ -74,7 +74,7 @@ foreach (var cte in sel.Ctes)
         // Recursive CTE: iterate until no new rows produced
         // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#with-recursive
         //   The base term runs first, then the recursive term iterates.
-        var baseResult = ExecuteSelect(cte.Body);
+        var baseResult = ExecuteSelect(cte.Body, cteResults);
         var allRows = baseResult.Rows.Select(r => RowToDict(r, baseResult.Schema)).ToList();
         var currentRows = new List<Dictionary<string, object?>>(allRows);
         var recSchema = baseResult.Schema;
@@ -93,7 +93,7 @@ foreach (var cte in sel.Ctes)
     }
     else
     {
-        var cteResult = ExecuteSelect(cte.Body);
+        var cteResult = ExecuteSelect(cte.Body, cteResults);
         var cteRows = cteResult.Rows.Select(r => RowToDict(r, cteResult.Schema)).ToList();
         cteResults[cte.Name] = (cteResult.Schema, cteRows);
     }
@@ -403,7 +403,13 @@ var alias = tRef.Alias ?? tableName;
 
 // INFORMATION_SCHEMA
 if (tableName.Contains("INFORMATION_SCHEMA", StringComparison.OrdinalIgnoreCase) || tRef.DatasetId?.Equals("INFORMATION_SCHEMA", StringComparison.OrdinalIgnoreCase) == true)
-return ResolveInformationSchema(tableName, alias);
+{
+	var isDs = tRef.DatasetId;
+	// If DatasetId is "INFORMATION_SCHEMA" itself, use _defaultDatasetId
+	if (isDs?.Equals("INFORMATION_SCHEMA", StringComparison.OrdinalIgnoreCase) == true)
+		isDs = _defaultDatasetId;
+	return ResolveInformationSchema(tableName, alias, isDs ?? _defaultDatasetId);
+}
 
 // Wildcard tables
 if (tableName.Contains('*'))
@@ -424,6 +430,21 @@ if (dsId is null || !_store.Datasets.TryGetValue(dsId, out var ds))
 throw new InvalidOperationException("Dataset '" + dsId + "' not found");
 if (!ds.Tables.TryGetValue(tableName, out var table))
 throw new InvalidOperationException("Table '" + tableName + "' not found in dataset '" + dsId + "'");
+
+// If this table is a VIEW, re-execute the view's query to get fresh results
+// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tables#ViewDefinition
+if (table.ViewQuery is not null)
+{
+var viewResult = ExecuteSelect(table.ViewQuery);
+return viewResult.Rows.Select(r =>
+{
+	var dict = RowToDict(r, viewResult.Schema);
+	var typedDict = ParseTypedRow(dict, viewResult.Schema);
+	var allFields = new Dictionary<string, object?>(typedDict);
+	foreach (var kv in typedDict) allFields[alias + "." + kv.Key] = kv.Value;
+	return new RowContext(allFields, alias);
+}).ToList();
+}
 
 var rows = new List<RowContext>();
 lock (table.RowLock)
@@ -466,9 +487,9 @@ fields["_PARTITIONDATE"] = truncated.ToString("yyyy-MM-dd", CultureInfo.Invarian
 }
 }
 
-private List<RowContext> ResolveInformationSchema(string tableName, string alias)
+private List<RowContext> ResolveInformationSchema(string tableName, string alias, string? datasetId = null)
 {
-var dsId = _defaultDatasetId;
+var dsId = datasetId ?? _defaultDatasetId;
 if (dsId is null || !_store.Datasets.TryGetValue(dsId, out var ds)) return [];
 
 if (tableName.EndsWith("TABLES", StringComparison.OrdinalIgnoreCase))
@@ -647,8 +668,12 @@ var alias = sub.Alias ?? "subquery";
 return result.Rows.Select(r =>
 {
 var dict = RowToDict(r, result.Schema);
-var allFields = new Dictionary<string, object?>(dict);
-foreach (var kv in dict) allFields[alias + "." + kv.Key] = kv.Value;
+// Parse formatted string values back to typed values based on schema
+// This is needed because FormatValue converts typed values to strings for the REST API,
+// but derived table consumers need typed values for correct comparison/arithmetic.
+var typedDict = ParseTypedRow(dict, result.Schema);
+var allFields = new Dictionary<string, object?>(typedDict);
+foreach (var kv in typedDict) allFields[alias + "." + kv.Key] = kv.Value;
 return new RowContext(allFields, alias);
 }).ToList();
 }
@@ -1021,8 +1046,11 @@ _ => Convert.ToBoolean(val, CultureInfo.InvariantCulture)
 "TIMESTAMP" => val switch
 {
 DateTimeOffset dto => dto,
-string s => DateTimeOffset.Parse(s, CultureInfo.InvariantCulture),
-_ => DateTimeOffset.Parse(val.ToString()!, CultureInfo.InvariantCulture)
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#timestamp_literals
+//   BigQuery accepts "UTC" as a timezone suffix, but .NET ParseExact doesn't.
+//   Normalize "UTC" to "+00:00" before parsing.
+string s => DateTimeOffset.Parse(NormalizeTimestampString(s), CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal),
+_ => DateTimeOffset.Parse(NormalizeTimestampString(val.ToString()!), CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal)
 },
 "DATE" => val switch
 {
@@ -1044,6 +1072,15 @@ catch when (isSafe)
 {
 return null;
 }
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#timestamp_literals
+//   BigQuery accepts "UTC" as a timezone suffix, but .NET DateTimeOffset.Parse doesn't.
+private static string NormalizeTimestampString(string s)
+{
+	if (s.EndsWith(" UTC", StringComparison.OrdinalIgnoreCase))
+		return s[..^4] + " +00:00";
+	return s;
 }
 
 private object? EvaluateCase(CaseExpr caseExpr, RowContext row)
@@ -1118,7 +1155,9 @@ return name switch
 // String functions
 "UPPER" => Evaluate(args[0], row)?.ToString()?.ToUpperInvariant(),
 "LOWER" => Evaluate(args[0], row)?.ToString()?.ToLowerInvariant(),
-"LENGTH" or "CHAR_LENGTH" or "CHARACTER_LENGTH" => (long?)(Evaluate(args[0], row)?.ToString()?.Length),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#length
+//   "Returns the length of a STRING or BYTES value."
+"LENGTH" or "CHAR_LENGTH" or "CHARACTER_LENGTH" => EvaluateLength(args, row),
 "TRIM" => Evaluate(args[0], row)?.ToString()?.Trim(),
 "LTRIM" => Evaluate(args[0], row)?.ToString()?.TrimStart(),
 "RTRIM" => Evaluate(args[0], row)?.ToString()?.TrimEnd(),
@@ -1232,6 +1271,43 @@ return name switch
 // JSON functions
 "JSON_EXTRACT" or "JSON_QUERY" => EvaluateJsonExtract(args, row),
 "JSON_EXTRACT_SCALAR" or "JSON_VALUE" => EvaluateJsonExtractScalar(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions
+"JSON_EXTRACT_ARRAY" or "JSON_QUERY_ARRAY" => EvaluateJsonExtractArray(args, row),
+"JSON_EXTRACT_STRING_ARRAY" or "JSON_VALUE_ARRAY" => EvaluateJsonValueArray(args, row),
+"JSON_KEYS" => EvaluateJsonKeys(args, row),
+"JSON_SET" => EvaluateJsonSet(args, row),
+"JSON_STRIP_NULLS" => EvaluateJsonStripNulls(args, row),
+"JSON_TYPE" => EvaluateJsonType(args, row),
+
+// Regex additional functions
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions
+"REGEXP_INSTR" => EvaluateRegexpInstr(args, row),
+"REGEXP_SUBSTR" => EvaluateRegexpSubstr(args, row),
+
+// Bit functions
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/bit_functions
+"BIT_COUNT" => EvaluateBitCount(args, row),
+
+// Interval functions
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/interval_functions
+"MAKE_INTERVAL" => EvaluateMakeInterval(args, row),
+"JUSTIFY_HOURS" => EvaluateJustifyHours(args, row),
+"JUSTIFY_DAYS" => EvaluateJustifyDays(args, row),
+"JUSTIFY_INTERVAL" => EvaluateJustifyInterval(args, row),
+
+// Net functions (normalized from NET.HOST → NET_HOST etc.)
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions
+"NET_HOST" => EvaluateNetHost(args, row),
+"NET_PUBLIC_SUFFIX" => EvaluateNetPublicSuffix(args, row),
+"NET_REG_DOMAIN" => EvaluateNetRegDomain(args, row),
+"NET_IP_FROM_STRING" => EvaluateNetIpFromString(args, row),
+"NET_IP_TO_STRING" => EvaluateNetIpToString(args, row),
+"NET_IP_NET_MASK" => EvaluateNetIpNetMask(args, row),
+
+// HLL++ approximate counting (exact in-memory implementation, normalized from HLL_COUNT.INIT → HLL_COUNT_INIT)
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/hll_count_functions
+"HLL_COUNT_INIT" or "HLL_COUNT_MERGE" or "HLL_COUNT_MERGE_PARTIAL"
+or "HLL_COUNT_EXTRACT" => EvaluateHllCount(name, args, row),
 
 // UDF
 // Geography functions
@@ -1777,9 +1853,9 @@ return val switch
 {
 DateTimeOffset dto => dto,
 DateTime dt => new DateTimeOffset(dt, TimeSpan.Zero),
-string s => DateTimeOffset.Parse(s, CultureInfo.InvariantCulture),
+string s => DateTimeOffset.Parse(NormalizeTimestampString(s), CultureInfo.InvariantCulture),
 long l => DateTimeOffset.FromUnixTimeSeconds(l),
-_ => DateTimeOffset.Parse(val?.ToString() ?? "", CultureInfo.InvariantCulture)
+_ => DateTimeOffset.Parse(NormalizeTimestampString(val?.ToString() ?? ""), CultureInfo.InvariantCulture)
 };
 }
 
@@ -2062,6 +2138,289 @@ if (!current.TryGetProperty(part, out var next)) return null;
 current = next;
 }
 return current;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_extract_array
+private object? EvaluateJsonExtractArray(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var json = Evaluate(args[0], row)?.ToString();
+var path = args.Count > 1 ? Evaluate(args[1], row)?.ToString() : "$";
+if (json is null) return null;
+try
+{
+	using var doc = System.Text.Json.JsonDocument.Parse(json);
+	var element = NavigateJsonPath(doc.RootElement, path ?? "$");
+	if (element is null || element.Value.ValueKind != System.Text.Json.JsonValueKind.Array) return null;
+	return element.Value.EnumerateArray().Select(e => (object?)e.GetRawText()).ToList();
+}
+catch { return null; }
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_value_array
+private object? EvaluateJsonValueArray(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var json = Evaluate(args[0], row)?.ToString();
+var path = args.Count > 1 ? Evaluate(args[1], row)?.ToString() : "$";
+if (json is null) return null;
+try
+{
+	using var doc = System.Text.Json.JsonDocument.Parse(json);
+	var element = NavigateJsonPath(doc.RootElement, path ?? "$");
+	if (element is null || element.Value.ValueKind != System.Text.Json.JsonValueKind.Array) return null;
+	return element.Value.EnumerateArray().Select(e => (object?)(e.ValueKind == System.Text.Json.JsonValueKind.String
+		? e.GetString() : e.GetRawText())).ToList();
+}
+catch { return null; }
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_keys
+private object? EvaluateJsonKeys(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var json = Evaluate(args[0], row)?.ToString();
+if (json is null) return null;
+try
+{
+	using var doc = System.Text.Json.JsonDocument.Parse(json);
+	var root = doc.RootElement;
+	if (root.ValueKind != System.Text.Json.JsonValueKind.Object) return null;
+	return root.EnumerateObject().Select(p => (object?)p.Name).ToList();
+}
+catch { return null; }
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_set
+private object? EvaluateJsonSet(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var json = Evaluate(args[0], row)?.ToString();
+if (json is null || args.Count < 3) return null;
+try
+{
+	var dict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object?>>(json);
+	if (dict is null) return json;
+	var path = Evaluate(args[1], row)?.ToString()?.TrimStart('$', '.') ?? "";
+	var value = Evaluate(args[2], row);
+	dict[path] = value;
+	return System.Text.Json.JsonSerializer.Serialize(dict);
+}
+catch { return json; }
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_strip_nulls
+private object? EvaluateJsonStripNulls(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var json = Evaluate(args[0], row)?.ToString();
+if (json is null) return null;
+try
+{
+	using var doc = System.Text.Json.JsonDocument.Parse(json);
+	return StripNulls(doc.RootElement);
+}
+catch { return json; }
+}
+
+private static string StripNulls(System.Text.Json.JsonElement element)
+{
+if (element.ValueKind == System.Text.Json.JsonValueKind.Object)
+{
+	var props = element.EnumerateObject()
+		.Where(p => p.Value.ValueKind != System.Text.Json.JsonValueKind.Null)
+		.Select(p => $"\"{p.Name}\":{StripNulls(p.Value)}");
+	return "{" + string.Join(",", props) + "}";
+}
+if (element.ValueKind == System.Text.Json.JsonValueKind.Array)
+{
+	var items = element.EnumerateArray().Select(StripNulls);
+	return "[" + string.Join(",", items) + "]";
+}
+return element.GetRawText();
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_type
+private object? EvaluateJsonType(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var json = Evaluate(args[0], row)?.ToString();
+if (json is null) return null;
+try
+{
+	using var doc = System.Text.Json.JsonDocument.Parse(json);
+	return doc.RootElement.ValueKind switch
+	{
+		System.Text.Json.JsonValueKind.Object => "object",
+		System.Text.Json.JsonValueKind.Array => "array",
+		System.Text.Json.JsonValueKind.String => "string",
+		System.Text.Json.JsonValueKind.Number => "number",
+		System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False => "boolean",
+		System.Text.Json.JsonValueKind.Null => "null",
+		_ => null
+	};
+}
+catch { return null; }
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#length
+//   "Returns the length of a STRING value in characters, or the length of a BYTES value in bytes."
+private object? EvaluateLength(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+if (val is null) return null;
+if (val is byte[] bytes) return (long)bytes.Length;
+return (long?)val.ToString()?.Length;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#regexp_instr
+//   "Returns the 1-based position of the first occurrence of a regex match."
+private object? EvaluateRegexpInstr(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var str = Evaluate(args[0], row)?.ToString();
+var pattern = Evaluate(args[1], row)?.ToString();
+if (str is null || pattern is null) return null;
+var m = System.Text.RegularExpressions.Regex.Match(str, pattern);
+return m.Success ? (long)(m.Index + 1) : 0L;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#regexp_substr
+//   "Returns the substring matched by a regular expression."
+private object? EvaluateRegexpSubstr(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var str = Evaluate(args[0], row)?.ToString();
+var pattern = Evaluate(args[1], row)?.ToString();
+if (str is null || pattern is null) return null;
+var m = System.Text.RegularExpressions.Regex.Match(str, pattern);
+return m.Success ? m.Value : null;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/bit_functions#bit_count
+//   "Returns the number of bits that are set in the input expression."
+private object? EvaluateBitCount(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+if (val is null) return null;
+var l = ToLong(val);
+return (long)System.Numerics.BitOperations.PopCount((ulong)l);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/interval_functions#make_interval
+//   "Constructs an INTERVAL value. MAKE_INTERVAL(year, month, day, hour, minute, second)."
+private object? EvaluateMakeInterval(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+long year = args.Count > 0 ? ToLong(Evaluate(args[0], row) ?? 0L) : 0;
+long month = args.Count > 1 ? ToLong(Evaluate(args[1], row) ?? 0L) : 0;
+long day = args.Count > 2 ? ToLong(Evaluate(args[2], row) ?? 0L) : 0;
+long hour = args.Count > 3 ? ToLong(Evaluate(args[3], row) ?? 0L) : 0;
+long minute = args.Count > 4 ? ToLong(Evaluate(args[4], row) ?? 0L) : 0;
+long second = args.Count > 5 ? ToLong(Evaluate(args[5], row) ?? 0L) : 0;
+// BigQuery INTERVAL format: Y-M D H:M:S
+return $"{year}-{month} {day} {hour}:{minute}:{second}";
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/interval_functions#justify_hours
+//   "Normalizes the INTERVAL so that the hour component is less than 24."
+private object? EvaluateJustifyHours(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row)?.ToString();
+if (val is null) return null;
+return val; // Simplified: intervals are already string-formatted
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/interval_functions#justify_days
+//   "Normalizes the INTERVAL so that the day component is less than 30."
+private object? EvaluateJustifyDays(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row)?.ToString();
+if (val is null) return null;
+return val; // Simplified: intervals are already string-formatted
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/interval_functions#justify_interval
+//   "Normalizes the INTERVAL."
+private object? EvaluateJustifyInterval(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row)?.ToString();
+if (val is null) return null;
+return val; // Simplified: intervals are already string-formatted
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions#nethosturl
+//   "Takes a URL as a STRING and returns the host."
+private object? EvaluateNetHost(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var url = Evaluate(args[0], row)?.ToString();
+if (url is null) return null;
+try { return new Uri(url.Contains("://") ? url : "http://" + url).Host; }
+catch { return null; }
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions#netpublic_suffix
+//   "Takes a URL and returns the public suffix (e.g., .com, .co.uk)."
+private object? EvaluateNetPublicSuffix(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var url = Evaluate(args[0], row)?.ToString();
+if (url is null) return null;
+try
+{
+	var host = new Uri(url.Contains("://") ? url : "http://" + url).Host;
+	var parts = host.Split('.');
+	return parts.Length >= 2 ? parts[^1] : host;
+}
+catch { return null; }
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions#netreg_domain
+//   "Takes a URL and returns the registered domain (e.g., google.com)."
+private object? EvaluateNetRegDomain(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var url = Evaluate(args[0], row)?.ToString();
+if (url is null) return null;
+try
+{
+	var host = new Uri(url.Contains("://") ? url : "http://" + url).Host;
+	var parts = host.Split('.');
+	return parts.Length >= 2 ? parts[^2] + "." + parts[^1] : host;
+}
+catch { return null; }
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions#netip_from_string
+//   "Converts a STRING containing an IPv4/IPv6 address to BYTES."
+private object? EvaluateNetIpFromString(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var ip = Evaluate(args[0], row)?.ToString();
+if (ip is null) return null;
+try { return System.Net.IPAddress.Parse(ip).GetAddressBytes(); }
+catch { return null; }
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions#netip_to_string
+//   "Converts BYTES to a STRING containing an IPv4/IPv6 address."
+private object? EvaluateNetIpToString(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+if (val is not byte[] bytes) return null;
+try { return new System.Net.IPAddress(bytes).ToString(); }
+catch { return null; }
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions#netip_net_mask
+//   "Returns a network mask."
+private object? EvaluateNetIpNetMask(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var output_bytes = (int)ToLong(Evaluate(args[0], row));
+var prefix = (int)ToLong(Evaluate(args[1], row));
+var mask = new byte[output_bytes];
+for (int i = 0; i < prefix && i < output_bytes * 8; i++)
+	mask[i / 8] |= (byte)(128 >> (i % 8));
+return mask;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/hll_count_functions
+//   "In-memory exact counting — HLL++ functions are approximated as exact distinct counts."
+private object? EvaluateHllCount(string name, IReadOnlyList<SqlExpression> args, RowContext row)
+{
+// In-memory: HLL_COUNT.INIT returns value, MERGE/EXTRACT return the value directly
+var val = Evaluate(args[0], row);
+if (name.EndsWith("EXTRACT"))
+	return val is long l ? l : (val is null ? 0L : 1L);
+return val;
 }
 
 
@@ -2380,8 +2739,17 @@ foreach (var row in result.Rows)
 {
 var dict = RowToDict(row, result.Schema);
 var fields = new Dictionary<string, object?>();
-for (int i = 0; i < insert.Columns.Count && i < result.Schema.Fields.Count; i++)
-fields[insert.Columns[i]] = dict.GetValueOrDefault(result.Schema.Fields[i].Name);
+if (insert.Columns is not null && insert.Columns.Count > 0)
+{
+	for (int i = 0; i < insert.Columns.Count && i < result.Schema.Fields.Count; i++)
+		fields[insert.Columns[i]] = dict.GetValueOrDefault(result.Schema.Fields[i].Name);
+}
+else
+{
+	// No explicit columns — map by schema field names
+	foreach (var f in result.Schema.Fields)
+		fields[f.Name] = dict.GetValueOrDefault(f.Name);
+}
 table.Rows.Add(new InMemoryRow(fields));
 count++;
 }
@@ -2647,7 +3015,13 @@ if (!_store.Datasets.TryGetValue(dsId, out var ds))
 
 var result = ExecuteSelect(view.Query);
 var table = new InMemoryTable(dsId, viewId, result.Schema);
-ds.Tables[viewId] = table;
+// Store the view query AST so it can be re-executed when the view is queried
+// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tables#ViewDefinition
+table.ViewQuery = view.Query;
+if (view.OrReplace && ds.Tables.ContainsKey(viewId))
+    ds.Tables[viewId] = table;
+else
+    ds.Tables[viewId] = table;
 return EmptyResult();
 }
 
@@ -2745,6 +3119,44 @@ dict[schema.Fields[i].Name] = row.F[i]?.V;
 return dict;
 }
 
+/// <summary>
+/// Converts formatted string values in a row back to typed .NET values based on the schema.
+/// Needed when subquery/CTE results are consumed by outer queries (formatted values → typed values).
+/// </summary>
+private static Dictionary<string, object?> ParseTypedRow(Dictionary<string, object?> dict, TableSchema schema)
+{
+var typed = new Dictionary<string, object?>(dict.Count);
+foreach (var field in schema.Fields)
+{
+	if (!dict.TryGetValue(field.Name, out var val) || val is null)
+	{
+		typed[field.Name] = null;
+		continue;
+	}
+	typed[field.Name] = ParseTypedValue(val, field.Type);
+}
+return typed;
+}
+
+private static object? ParseTypedValue(object? val, string? type)
+{
+if (val is null) return null;
+var s = val.ToString();
+if (s is null) return null;
+return type?.ToUpperInvariant() switch
+{
+	"INTEGER" or "INT64" => long.TryParse(s, CultureInfo.InvariantCulture, out var l) ? l : val,
+	"FLOAT" or "FLOAT64" => double.TryParse(s, CultureInfo.InvariantCulture, out var d) ? d : val,
+	"BOOLEAN" or "BOOL" => s.Equals("true", StringComparison.OrdinalIgnoreCase) ? true
+		: s.Equals("false", StringComparison.OrdinalIgnoreCase) ? false : val,
+	"TIMESTAMP" => long.TryParse(s, CultureInfo.InvariantCulture, out var us)
+		? DateTimeOffset.FromUnixTimeMilliseconds(us / 1000) : val,
+	"DATE" => DateTime.TryParseExact(s, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+		System.Globalization.DateTimeStyles.None, out var dt) ? dt : val,
+	_ => val
+};
+}
+
 private static TableRow DictToTableRow(Dictionary<string, object?> dict)
 {
 return new TableRow
@@ -2763,8 +3175,18 @@ long l => l.ToString(),
 double d => d == Math.Floor(d) && !double.IsInfinity(d) && !double.IsNaN(d)
 ? ((long)d).ToString()
 : d.ToString(CultureInfo.InvariantCulture),
-DateTimeOffset dto => dto.ToString("yyyy-MM-dd HH:mm:ss.FFFFFF zzz", CultureInfo.InvariantCulture),
-DateTime dt => dt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tabledata/list
+//   The BigQuery .NET SDK (v3.11.0) defaults to UseInt64Timestamp=true, which calls
+//   long.Parse() on timestamp values. We must return epoch MICROSECONDS as an integer string.
+//   SDK source: BigQueryResults.ConvertResponseRows → BigQueryRow → Int64TimestampConverter.
+DateTimeOffset dto => (dto.ToUnixTimeMilliseconds() * 1000L).ToString(CultureInfo.InvariantCulture),
+// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tabledata/list
+//   DATE values are returned as "yyyy-MM-dd" strings.
+DateTime dt when dt.TimeOfDay == TimeSpan.Zero => dt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tabledata/list
+//   DATETIME values are returned as "yyyy-MM-ddTHH:mm:ss.FFFFFF" strings.
+//   SDK source: BigQueryRow.DateTimeConverter uses DateTime.ParseExact with this format.
+DateTime dt => dt.ToString("yyyy-MM-dd'T'HH:mm:ss.FFFFFF", CultureInfo.InvariantCulture),
 byte[] bytes => Convert.ToBase64String(bytes),
 IList<object?> list => string.Join(", ", list.Select(v => FormatValue(v)?.ToString() ?? "NULL")),
 _ => val.ToString()

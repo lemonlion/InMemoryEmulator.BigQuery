@@ -11,6 +11,7 @@ internal class ProceduralExecutor
 	private readonly InMemoryDataStore _store;
 	private readonly string? _defaultDatasetId;
 	private readonly Dictionary<string, object?> _variables = new(StringComparer.OrdinalIgnoreCase);
+	private readonly HashSet<string> _tempTableNames = new(StringComparer.OrdinalIgnoreCase);
 	#pragma warning disable CS0169
 	private long _rowCount;
 #pragma warning restore CS0169
@@ -117,24 +118,72 @@ internal class ProceduralExecutor
 			return ExecuteCreateTempTable(sql);
 
 		// Regular SQL (SELECT, DML, DDL)
-		var executor = CreateQueryExecutor();
-		var result = executor.Execute(sql);
+		var substituted = SubstituteVariables(sql);
+		substituted = QualifyTempTables(substituted);
+		var executor = new QueryExecutor(_store, _defaultDatasetId);
+		var result = executor.Execute(substituted);
 		return (result.Schema, result.Rows);
 	}
 
 	private QueryExecutor CreateQueryExecutor()
 	{
-		var executor = new QueryExecutor(_store, _defaultDatasetId);
-		// Inject variables as parameters
-		var parameters = _variables.Select(kv => new QueryParameter
-		{
-			Name = kv.Key,
-			ParameterType = new QueryParameterType { Type = InferType(kv.Value) },
-			ParameterValue = new QueryParameterValue { Value = kv.Value?.ToString() }
-		}).ToList();
-		executor.SetParameters(parameters);
-		return executor;
+		return new QueryExecutor(_store, _defaultDatasetId);
 	}
+
+	/// <summary>
+	/// Substitutes bare variable references in SQL with their literal values.
+	/// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language
+	///   "Variables declared in a script can be used in subsequent statements."
+	/// </summary>
+	private string SubstituteVariables(string sql)
+	{
+		if (_variables.Count == 0) return sql;
+		// Sort by name length descending to avoid partial replacements (e.g., "total" vs "total_sum")
+		foreach (var (name, value) in _variables.OrderByDescending(kv => kv.Key.Length))
+		{
+			var literal = FormatLiteral(value);
+			sql = System.Text.RegularExpressions.Regex.Replace(
+				sql,
+				@"(?<![`@"".\w])\b" + System.Text.RegularExpressions.Regex.Escape(name) + @"\b(?![`"".\w])",
+				literal,
+				System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+		}
+		return sql;
+	}
+
+	/// <summary>
+	/// Qualifies bare temp table references with the _temp dataset prefix using backtick syntax.
+	/// </summary>
+	private string QualifyTempTables(string sql)
+	{
+		if (_tempTableNames.Count == 0) return sql;
+		foreach (var tableName in _tempTableNames.OrderByDescending(n => n.Length))
+		{
+			sql = System.Text.RegularExpressions.Regex.Replace(
+				sql,
+				@"(?<![`.\w])\b" + System.Text.RegularExpressions.Regex.Escape(tableName) + @"\b(?![`.\w])",
+				"`_temp." + tableName + "`",
+				System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+		}
+		return sql;
+	}
+
+	private static string FormatLiteral(object? value) => value switch
+	{
+		null => "NULL",
+		true => "TRUE",
+		false => "FALSE",
+		long l => l.ToString(),
+		double d => d.ToString(System.Globalization.CultureInfo.InvariantCulture),
+		string s when long.TryParse(s, out var l) => l.ToString(),
+		string s when double.TryParse(s, System.Globalization.NumberStyles.Any,
+			System.Globalization.CultureInfo.InvariantCulture, out var d) =>
+			d.ToString(System.Globalization.CultureInfo.InvariantCulture),
+		string s when s.Equals("true", StringComparison.OrdinalIgnoreCase) => "TRUE",
+		string s when s.Equals("false", StringComparison.OrdinalIgnoreCase) => "FALSE",
+		string s => $"'{s.Replace("'", "''")}'",
+		_ => value.ToString() ?? "NULL"
+	};
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#declare
 	private (TableSchema Schema, List<TableRow> Rows)? ExecuteDeclare(string sql)
@@ -169,8 +218,9 @@ internal class ProceduralExecutor
 		object? defaultValue = null;
 		if (defaultExpr != null)
 		{
+			var substituted = SubstituteVariables(defaultExpr);
 			var exec = CreateQueryExecutor();
-			var (_, rows) = exec.Execute($"SELECT {defaultExpr}");
+			var (_, rows) = exec.Execute($"SELECT {substituted}");
 			if (rows.Count > 0 && rows[0].F.Count > 0)
 				defaultValue = rows[0].F[0].V;
 		}
@@ -192,8 +242,10 @@ internal class ProceduralExecutor
 		var varName = body.Substring(0, eqIdx).Trim();
 		var expr = body.Substring(eqIdx + 1).Trim();
 
+		var substituted = SubstituteVariables(expr);
+		substituted = QualifyTempTables(substituted);
 		var exec = CreateQueryExecutor();
-		var (_, rows) = exec.Execute($"SELECT {expr}");
+		var (_, rows) = exec.Execute($"SELECT {substituted}");
 		_variables[varName] = rows.Count > 0 && rows[0].F.Count > 0 ? rows[0].F[0].V : null;
 		return null;
 	}
@@ -208,12 +260,13 @@ internal class ProceduralExecutor
 		if (body.EndsWith("END IF", StringComparison.OrdinalIgnoreCase))
 			body = body.Substring(0, body.Length - "END IF".Length).Trim();
 
-		// Split on THEN
-		var thenIdx = body.IndexOf(" THEN ", StringComparison.OrdinalIgnoreCase);
-		if (thenIdx < 0) throw new InvalidOperationException("IF statement requires THEN.");
+		// Split on THEN — allow whitespace (including newlines) around THEN
+		var thenMatch = System.Text.RegularExpressions.Regex.Match(body,
+			@"\bTHEN\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+		if (!thenMatch.Success) throw new InvalidOperationException("IF statement requires THEN.");
 
-		var condition = body.Substring(0, thenIdx).Trim();
-		var rest = body.Substring(thenIdx + " THEN ".Length).Trim();
+		var condition = body.Substring(0, thenMatch.Index).Trim();
+		var rest = body.Substring(thenMatch.Index + thenMatch.Length).Trim();
 
 		// Check for ELSE
 		string? elseBlock = null;
@@ -225,8 +278,9 @@ internal class ProceduralExecutor
 		}
 
 		// Evaluate condition
+		var substituted = SubstituteVariables(condition);
 		var exec = CreateQueryExecutor();
-		var (_, condRows) = exec.Execute($"SELECT {condition}");
+		var (_, condRows) = exec.Execute($"SELECT {substituted}");
 		var condValue = condRows.Count > 0 && condRows[0].F.Count > 0 ? condRows[0].F[0].V : null;
 		var isTruthy = condValue is true || (condValue is long l && l != 0) || (condValue is string s && bool.TryParse(s, out var b) && b);
 
@@ -312,8 +366,10 @@ internal class ProceduralExecutor
 			body = body.Substring(0, asIdx).Trim();
 		}
 
+		var substituted = SubstituteVariables(body);
+		substituted = QualifyTempTables(substituted);
 		var exec = CreateQueryExecutor();
-		var (_, rows) = exec.Execute($"SELECT {body}");
+		var (_, rows) = exec.Execute($"SELECT {substituted}");
 		var value = rows.Count > 0 && rows[0].F.Count > 0 ? rows[0].F[0].V : null;
 		var isTruthy = value is true || (value is long l && l != 0) || (value is string s && bool.TryParse(s, out var b) && b);
 
@@ -465,8 +521,9 @@ return null;
 		int maxIter = 10000;
 		while (maxIter-- > 0)
 		{
+			var substituted = SubstituteVariables(condition);
 			var exec = CreateQueryExecutor();
-			var (_, condRows) = exec.Execute($"SELECT {condition}");
+			var (_, condRows) = exec.Execute($"SELECT {substituted}");
 			var condValue = condRows.Count > 0 && condRows[0].F.Count > 0 ? condRows[0].F[0].V : null;
 			if (!IsTruthyValue(condValue)) break;
 
@@ -512,6 +569,13 @@ return null;
 		var normalized = System.Text.RegularExpressions.Regex.Replace(
 			sql, @"^CREATE\s+TEMP(ORARY)?\s+", "CREATE ", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
+		// Extract table name for tracking
+		var nameMatch = System.Text.RegularExpressions.Regex.Match(normalized,
+			@"^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)",
+			System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+		if (nameMatch.Success)
+			_tempTableNames.Add(nameMatch.Groups[1].Value);
+
 		// Ensure _temp dataset exists
 		if (!_store.Datasets.ContainsKey("_temp"))
 			_store.Datasets["_temp"] = new InMemoryDataset("_temp");
@@ -519,7 +583,7 @@ return null;
 		// Redirect to _temp dataset
 		var exec = new QueryExecutor(_store, "_temp");
 		var r = exec.Execute(normalized);
-return (r.Schema, r.Rows);
+		return (r.Schema, r.Rows);
 	}
 
 	private static bool IsTruthyValue(object? value)

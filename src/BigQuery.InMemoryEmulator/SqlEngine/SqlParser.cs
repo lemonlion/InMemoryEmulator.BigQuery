@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Superpower;
 using Superpower.Model;
 using Superpower.Parsers;
@@ -17,9 +18,55 @@ internal static class SqlParser
 	/// <summary>Parse a SQL string into a SqlStatement.</summary>
 	public static SqlStatement ParseSql(string sql)
 	{
+		sql = NormalizeSql(sql);
 		var tokens = SqlTokenizer.Instance.Tokenize(sql);
 		var resolved = KeywordResolver.Resolve(tokens);
 		return TopLevelStatement.Parse(resolved);
+	}
+
+	/// <summary>
+	/// Normalizes BigQuery SQL syntax into forms the parser can handle.
+	/// Rewrites special constructs like EXTRACT(part FROM expr), typed literals (DATE '...'),
+	/// INTERVAL expressions, and aggregate modifiers (IGNORE NULLS).
+	/// </summary>
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/functions-and-operators
+	internal static string NormalizeSql(string sql)
+	{
+		// EXTRACT(part FROM expr) → EXTRACT('part', expr)
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#extract
+		sql = Regex.Replace(sql, @"\bEXTRACT\s*\(\s*(\w+)\s+FROM\s+", "EXTRACT('$1', ", RegexOptions.IgnoreCase);
+
+		// DATE 'string' → CAST('string' AS DATE)
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#date_literals
+		sql = Regex.Replace(sql, @"\bDATE\s+'([^']*)'", "CAST('$1' AS DATE)", RegexOptions.IgnoreCase);
+
+		// TIMESTAMP 'string' → CAST('string' AS TIMESTAMP)
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#timestamp_literals
+		sql = Regex.Replace(sql, @"\bTIMESTAMP\s+'([^']*)'", "CAST('$1' AS TIMESTAMP)", RegexOptions.IgnoreCase);
+
+		// DATETIME 'string' → CAST('string' AS DATETIME)
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#datetime_literals
+		sql = Regex.Replace(sql, @"\bDATETIME\s+'([^']*)'", "CAST('$1' AS DATETIME)", RegexOptions.IgnoreCase);
+
+		// INTERVAL n PART → n, 'PART' (inside function args like TIMESTAMP_ADD)
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#interval_type
+		sql = Regex.Replace(sql, @"\bINTERVAL\s+(\d+)\s+(\w+)", "$1, '$2'", RegexOptions.IgnoreCase);
+
+		// ARRAY_AGG(expr IGNORE NULLS) → ARRAY_AGG(expr) — remove IGNORE NULLS modifier
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#array_agg
+		sql = Regex.Replace(sql, @"\bIGNORE\s+NULLS\b", "", RegexOptions.IgnoreCase);
+
+		// RESPECT NULLS modifier — remove
+		sql = Regex.Replace(sql, @"\bRESPECT\s+NULLS\b", "", RegexOptions.IgnoreCase);
+
+		// Dotted function names: NET.HOST → NET_HOST, HLL_COUNT.EXTRACT → HLL_COUNT_EXTRACT
+		// These use dot-separated namespaces that the parser can't handle (parsed as column refs).
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/hll_count_functions
+		sql = Regex.Replace(sql, @"\bNET\.(\w+)\s*\(", "NET_$1(", RegexOptions.IgnoreCase);
+		sql = Regex.Replace(sql, @"\bHLL_COUNT\.(\w+)\s*\(", "HLL_COUNT_$1(", RegexOptions.IgnoreCase);
+
+		return sql;
 	}
 
 	/// <summary>Token list parser that returns a value without consuming input.</summary>
@@ -467,7 +514,10 @@ internal static class SqlParser
 		Token.EqualTo(SqlToken.LParen)
 			.IgnoreThen(SP.Ref(() => SelectStmt!))
 			.Then(sub => Token.EqualTo(SqlToken.RParen).IgnoreThen(
-				Token.EqualTo(SqlToken.As).IgnoreThen(IdentifierOrKeyword)
+				// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#from_clause
+				//   "Subqueries can have optional aliases: (SELECT ...) AS alias  or  (SELECT ...) alias"
+				Token.EqualTo(SqlToken.As).IgnoreThen(IdentifierOrKeyword).Try()
+					.Or(Identifier.Try())
 					.Select(a => (string?)a).OptionalOrDefault()
 			).Select(alias => (FromClause)new SubqueryFrom(sub, alias)));
 
@@ -477,6 +527,9 @@ internal static class SqlParser
 			var parts = t.ToStringValue().Trim('`').Split('.');
 			return parts.Length switch
 			{
+				// project.dataset.table — but if middle part is INFORMATION_SCHEMA, keep as dataset.IS.table
+				3 when parts[1].Equals("INFORMATION_SCHEMA", StringComparison.OrdinalIgnoreCase)
+					=> (DatasetId: (string?)parts[0], TableId: parts[1] + "." + parts[2]),
 				3 => (DatasetId: (string?)parts[1], TableId: parts[2]),
 				2 => (DatasetId: (string?)parts[0], TableId: parts[1]),
 				_ => (DatasetId: (string?)null, TableId: parts[0]),
