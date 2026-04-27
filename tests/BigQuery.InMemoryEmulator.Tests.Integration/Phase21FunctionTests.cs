@@ -472,4 +472,78 @@ public class Phase21FunctionTests : IAsyncLifetime
 		var rows = results.ToList();
 		Assert.True(rows.Count > 0);
 	}
+
+	// ======================================================================
+	// Range Functions
+	// ======================================================================
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range
+	//   "Constructs a range of DATE, DATETIME, or TIMESTAMP values."
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task Range_ConstructsRange()
+	{
+		var results = await Query("SELECT RANGE('2024-01-01', '2024-12-31') AS r");
+		var rows = results.ToList();
+		var val = rows[0]["r"]?.ToString();
+		Assert.NotNull(val);
+		Assert.Contains("2024-01-01", val);
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range_start
+	//   "Gets the lower bound of a range."
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task RangeStart_ReturnsLowerBound()
+	{
+		var results = await Query("SELECT RANGE_START(RANGE('2024-01-01', '2024-12-31')) AS s");
+		var rows = results.ToList();
+		Assert.Contains("2024-01-01", rows[0]["s"]?.ToString()!);
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range_end
+	//   "Gets the upper bound of a range."
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task RangeEnd_ReturnsUpperBound()
+	{
+		var results = await Query("SELECT RANGE_END(RANGE('2024-01-01', '2024-12-31')) AS e");
+		var rows = results.ToList();
+		Assert.Contains("2024-12-31", rows[0]["e"]?.ToString()!);
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range_contains
+	//   "Checks if a value or range is contained within another range."
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task RangeContains_ValueInRange()
+	{
+		var results = await Query(
+			"SELECT RANGE_CONTAINS(RANGE('2024-01-01', '2024-12-31'), '2024-06-15') AS c");
+		var rows = results.ToList();
+		Assert.True((bool)rows[0]["c"]);
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range_overlaps
+	//   "Checks if two ranges overlap."
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task RangeOverlaps_OverlappingRanges()
+	{
+		var results = await Query(
+			"SELECT RANGE_OVERLAPS(RANGE('2024-01-01', '2024-06-30'), RANGE('2024-03-01', '2024-12-31')) AS o");
+		var rows = results.ToList();
+		Assert.True((bool)rows[0]["o"]);
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range_overlaps
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task RangeOverlaps_NonOverlapping()
+	{
+		var results = await Query(
+			"SELECT RANGE_OVERLAPS(RANGE('2024-01-01', '2024-03-31'), RANGE('2024-06-01', '2024-12-31')) AS o");
+		var rows = results.ToList();
+		Assert.False((bool)rows[0]["o"]);
+	}
 }

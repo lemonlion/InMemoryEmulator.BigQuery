@@ -11,6 +11,12 @@ public class InMemoryDataStore
 	/// <summary>The GCP project ID this store emulates.</summary>
 	public string ProjectId { get; }
 
+	/// <summary>
+	/// Optional JavaScript UDF engine. Set this to enable LANGUAGE js support.
+	/// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/user-defined-functions#javascript-udf-structure
+	/// </summary>
+	public IJsUdfEngine? JsUdfEngine { get; set; }
+
 	internal ConcurrentDictionary<string, InMemoryDataset> Datasets { get; } = new();
 
 		public InMemoryDataStore(string projectId)

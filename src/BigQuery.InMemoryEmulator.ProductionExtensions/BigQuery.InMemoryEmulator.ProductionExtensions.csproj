@@ -2,8 +2,12 @@
 
 	<PropertyGroup>
 		<PackageId>BigQuery.InMemoryEmulator.ProductionExtensions</PackageId>
-		<Description>Optional production extensions for BigQuery.InMemoryEmulator.</Description>
-		<PackageTags>bigquery;google-cloud;gcp;testing;in-memory;emulator</PackageTags>
+		<Description>Optional production extensions for BigQuery.InMemoryEmulator. Provides IAsyncEnumerable helpers, typed row mapping, and other production-side utilities that work seamlessly with both real BigQuery and the in-memory emulator.</Description>
+		<PackageTags>bigquery;google-cloud;gcp;testing;in-memory;emulator;extensions</PackageTags>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Google.Cloud.BigQuery.V2" Version="3.11.0" />
+	</ItemGroup>
 
 </Project>

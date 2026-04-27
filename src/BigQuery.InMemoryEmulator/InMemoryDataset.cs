@@ -18,7 +18,9 @@ public class InMemoryDataset
 	public string Etag { get; internal set; }
 
 	internal ConcurrentDictionary<string, InMemoryTable> Tables { get; } = new();
-	internal ConcurrentDictionary<string, InMemoryRoutine> Routines { get; } = new();
+	// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/routines
+	//   Routine names are case-insensitive in BigQuery.
+	internal ConcurrentDictionary<string, InMemoryRoutine> Routines { get; } = new(StringComparer.OrdinalIgnoreCase);
 
 	public InMemoryDataset(string datasetId)
 	{

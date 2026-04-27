@@ -1,3 +1,4 @@
+using BigQuery.InMemoryEmulator.JsUdfs;
 using Google.Apis.Bigquery.v2.Data;
 using Xunit;
 
@@ -99,4 +100,102 @@ SELECT greet('World') AS result;
 Assert.Single(rows);
 Assert.Equal("Hello, World", rows[0].F?[0].V?.ToString());
 }
+#region JavaScript UDFs
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/user-defined-functions#javascript-udf-structure
+//   "A JavaScript UDF lets you call code written in JavaScript from a SQL query."
+
+[Fact]
+public void JsUdf_SimpleReturn()
+{
+	var (store, executor) = CreateExecutor();
+	store.UseJsUdfs();
+	var (schema, rows) = executor.Execute(@"
+		CREATE TEMP FUNCTION plusOne(x FLOAT64) RETURNS FLOAT64 LANGUAGE js AS ""return x+1;"";
+		SELECT plusOne(4) AS result;
+	");
+	Assert.Single(rows);
+	Assert.Equal("5", rows[0].F?[0].V?.ToString());
+}
+
+[Fact]
+public void JsUdf_MultipleParams()
+{
+	var (store, executor) = CreateExecutor();
+	store.UseJsUdfs();
+	var (schema, rows) = executor.Execute(@"
+		CREATE TEMP FUNCTION multiply(x FLOAT64, y FLOAT64) RETURNS FLOAT64 LANGUAGE js AS ""return x*y;"";
+		SELECT multiply(6, 7) AS result;
+	");
+	Assert.Single(rows);
+	Assert.Equal("42", rows[0].F?[0].V?.ToString());
+}
+
+[Fact]
+public void JsUdf_StringManipulation()
+{
+	var (store, executor) = CreateExecutor();
+	store.UseJsUdfs();
+	var (schema, rows) = executor.Execute(@"
+		CREATE TEMP FUNCTION shout(s STRING) RETURNS STRING LANGUAGE js AS ""return s.toUpperCase();"";
+		SELECT shout('hello') AS result;
+	");
+	Assert.Single(rows);
+	Assert.Equal("HELLO", rows[0].F?[0].V?.ToString());
+}
+
+[Fact]
+public void JsUdf_TripleQuotedBody()
+{
+	var (store, executor) = CreateExecutor();
+	store.UseJsUdfs();
+	var (schema, rows) = executor.Execute(
+		"CREATE TEMP FUNCTION addTwo(x FLOAT64) RETURNS FLOAT64 LANGUAGE js AS r\"\"\"\n  return x + 2;\n\"\"\";\n" +
+		"SELECT addTwo(10) AS result;"
+	);
+	Assert.Single(rows);
+	Assert.Equal("12", rows[0].F?[0].V?.ToString());
+}
+
+[Fact]
+public void JsUdf_NullReturn()
+{
+	var (store, executor) = CreateExecutor();
+	store.UseJsUdfs();
+	var (schema, rows) = executor.Execute(@"
+		CREATE TEMP FUNCTION retNull(x FLOAT64) RETURNS FLOAT64 LANGUAGE js AS ""return null;"";
+		SELECT retNull(1) AS result;
+	");
+	Assert.Single(rows);
+	// null is returned as empty string or null
+	Assert.True(rows[0].F?[0].V is null or "");
+}
+
+[Fact]
+public void JsUdf_WithoutEngine_ThrowsDescriptiveError()
+{
+	var (_, executor) = CreateExecutor();
+	// Do NOT register JsUdfEngine
+	var ex = Assert.Throws<NotSupportedException>(() => executor.Execute(@"
+		CREATE TEMP FUNCTION jsNoEngine(x FLOAT64) RETURNS FLOAT64 LANGUAGE js AS ""return x;"";
+		SELECT jsNoEngine(1) AS result;
+	"));
+	Assert.Contains("JavaScript", ex.Message);
+}
+
+[Fact]
+public void JsUdf_OrReplace()
+{
+	var (store, executor) = CreateExecutor();
+	store.UseJsUdfs();
+	var (schema, rows) = executor.Execute(@"
+		CREATE TEMP FUNCTION jsReplace(x FLOAT64) RETURNS FLOAT64 LANGUAGE js AS ""return x+1;"";
+		CREATE OR REPLACE TEMP FUNCTION jsReplace(x FLOAT64) RETURNS FLOAT64 LANGUAGE js AS ""return x+100;"";
+		SELECT jsReplace(1) AS result;
+	");
+	Assert.Single(rows);
+	Assert.Equal("101", rows[0].F?[0].V?.ToString());
+}
+
+#endregion
 }

@@ -414,7 +414,26 @@ internal class ProceduralExecutor
 		var orReplace = sql.Contains("OR REPLACE", StringComparison.OrdinalIgnoreCase);
 		var isTemp = sql.Contains("TEMP ", StringComparison.OrdinalIgnoreCase);
 		
-		// Parse: CREATE [OR REPLACE] [TEMP] FUNCTION [dataset.]name(params) [RETURNS type] AS (body)
+		// Try JavaScript UDF: FUNCTION name(params) [RETURNS type] LANGUAGE js AS "body"
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/user-defined-functions#javascript-udf-structure
+		var jsMatch = System.Text.RegularExpressions.Regex.Match(sql,
+			@"FUNCTION\s+(\w+(?:\.\w+)?)\s*\(([^)]*)\)\s*(?:RETURNS\s+(\w+)\s+)?LANGUAGE\s+js\s+AS\s+(?:r?""""""([\s\S]*?)""""""|""([^""]*)""|'([^']*)')\s*;?\s*$",
+			System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline);
+
+		if (jsMatch.Success)
+		{
+			var fullName = jsMatch.Groups[1].Value;
+			var paramsStr = jsMatch.Groups[2].Value;
+			var returnType = jsMatch.Groups[3].Success ? jsMatch.Groups[3].Value : null;
+			// Body from triple-quoted, double-quoted, or single-quoted string
+			var body = jsMatch.Groups[4].Success ? jsMatch.Groups[4].Value :
+				jsMatch.Groups[5].Success ? jsMatch.Groups[5].Value :
+				jsMatch.Groups[6].Value;
+
+			return StoreRoutine(fullName, paramsStr, returnType, body.Trim(), "JAVASCRIPT", isTemp, orReplace);
+		}
+
+		// Parse SQL UDF: CREATE [OR REPLACE] [TEMP] FUNCTION [dataset.]name(params) [RETURNS type] AS (body)
 		var match = System.Text.RegularExpressions.Regex.Match(sql,
 			@"FUNCTION\s+(\w+(?:\.\w+)?)\s*\(([^)]*)\)\s*(?:RETURNS\s+(\w+)\s+)?AS\s*\((.+)\)\s*$",
 			System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline);
@@ -422,11 +441,18 @@ internal class ProceduralExecutor
 		if (!match.Success)
 			throw new InvalidOperationException("Cannot parse CREATE FUNCTION statement.");
 
-		var fullName = match.Groups[1].Value;
-		var paramsStr = match.Groups[2].Value;
-		var returnType = match.Groups[3].Success ? match.Groups[3].Value : null;
-		var body = match.Groups[4].Value.Trim();
+		var sqlFullName = match.Groups[1].Value;
+		var sqlParamsStr = match.Groups[2].Value;
+		var sqlReturnType = match.Groups[3].Success ? match.Groups[3].Value : null;
+		var sqlBody = match.Groups[4].Value.Trim();
 
+		return StoreRoutine(sqlFullName, sqlParamsStr, sqlReturnType, sqlBody, "SQL", isTemp, orReplace);
+	}
+
+	private (TableSchema Schema, List<TableRow> Rows)? StoreRoutine(
+		string fullName, string paramsStr, string? returnType, string body,
+		string language, bool isTemp, bool orReplace)
+	{
 		string datasetId;
 		string funcName;
 		if (fullName.Contains('.'))
@@ -461,7 +487,7 @@ internal class ProceduralExecutor
 		if (dataset.Routines.ContainsKey(funcName) && !orReplace)
 			throw new InvalidOperationException($"Already Exists: Function {funcName}");
 
-		var routine = new InMemoryRoutine(datasetId, funcName, "SCALAR_FUNCTION", "SQL", body, parameters, returnType);
+		var routine = new InMemoryRoutine(datasetId, funcName, "SCALAR_FUNCTION", language, body, parameters, returnType);
 		dataset.Routines[funcName] = routine;
 		return null;
 	}

@@ -498,4 +498,81 @@ public class MissingFunctionTests
 	}
 
 	#endregion
+
+	#region Range Functions
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range
+	//   "Constructs a range of DATE, DATETIME, or TIMESTAMP values."
+	[Fact]
+	public void Range_ConstructsRange()
+	{
+		var (_, rows) = CreateExecutor().Execute(
+			"SELECT RANGE('2024-01-01', '2024-12-31') AS r");
+		var val = rows[0].F[0].V?.ToString();
+		Assert.NotNull(val);
+		Assert.Contains("2024-01-01", val);
+		Assert.Contains("2024-12-31", val);
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range_start
+	//   "Gets the lower bound of a range."
+	[Fact]
+	public void RangeStart_ReturnsLowerBound()
+	{
+		var (_, rows) = CreateExecutor().Execute(
+			"SELECT RANGE_START(RANGE('2024-01-01', '2024-12-31')) AS s");
+		var val = rows[0].F[0].V?.ToString();
+		Assert.NotNull(val);
+		Assert.Contains("2024-01-01", val);
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range_end
+	//   "Gets the upper bound of a range."
+	[Fact]
+	public void RangeEnd_ReturnsUpperBound()
+	{
+		var (_, rows) = CreateExecutor().Execute(
+			"SELECT RANGE_END(RANGE('2024-01-01', '2024-12-31')) AS e");
+		var val = rows[0].F[0].V?.ToString();
+		Assert.NotNull(val);
+		Assert.Contains("2024-12-31", val);
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range_contains
+	//   "Checks if a value or range is contained within another range."
+	[Fact]
+	public void RangeContains_ValueInRange_ReturnsTrue()
+	{
+		var (_, rows) = CreateExecutor().Execute(
+			"SELECT RANGE_CONTAINS(RANGE('2024-01-01', '2024-12-31'), '2024-06-15') AS c");
+		Assert.Equal("true", rows[0].F[0].V?.ToString());
+	}
+
+	[Fact]
+	public void RangeContains_ValueOutOfRange_ReturnsFalse()
+	{
+		var (_, rows) = CreateExecutor().Execute(
+			"SELECT RANGE_CONTAINS(RANGE('2024-01-01', '2024-12-31'), '2025-01-01') AS c");
+		Assert.Equal("false", rows[0].F[0].V?.ToString());
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range_overlaps
+	//   "Checks if two ranges overlap."
+	[Fact]
+	public void RangeOverlaps_Overlapping_ReturnsTrue()
+	{
+		var (_, rows) = CreateExecutor().Execute(
+			"SELECT RANGE_OVERLAPS(RANGE('2024-01-01', '2024-06-30'), RANGE('2024-03-01', '2024-12-31')) AS o");
+		Assert.Equal("true", rows[0].F[0].V?.ToString());
+	}
+
+	[Fact]
+	public void RangeOverlaps_NonOverlapping_ReturnsFalse()
+	{
+		var (_, rows) = CreateExecutor().Execute(
+			"SELECT RANGE_OVERLAPS(RANGE('2024-01-01', '2024-03-31'), RANGE('2024-06-01', '2024-12-31')) AS o");
+		Assert.Equal("false", rows[0].F[0].V?.ToString());
+	}
+
+	#endregion
 }

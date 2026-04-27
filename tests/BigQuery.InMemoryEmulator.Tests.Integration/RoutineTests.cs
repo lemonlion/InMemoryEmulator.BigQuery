@@ -104,3 +104,78 @@ public class RoutineTests : IAsyncLifetime
 		Assert.Equal(105L, Convert.ToInt64(rows[0]["result"]));
 	}
 }
+
+/// <summary>
+/// Integration tests for JavaScript UDFs via the Jint engine.
+/// These are InMemoryOnly because real BigQuery uses its own JS engine.
+/// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/user-defined-functions#javascript-udf-structure
+/// </summary>
+[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+public class JsUdfRoutineTests : IDisposable
+{
+	private readonly InMemoryBigQueryResult _result;
+
+	public JsUdfRoutineTests()
+	{
+		_result = InMemoryBigQuery.Create("test-project", "test_ds");
+		_result.Store.JsUdfEngine = new BigQuery.InMemoryEmulator.JsUdfs.JintJsUdfEngine();
+	}
+
+	public void Dispose() => _result.Dispose();
+
+	[Fact]
+	public async Task JsUdf_SimpleArithmetic()
+	{
+		var results = await _result.Client.ExecuteQueryAsync(
+			@"CREATE TEMP FUNCTION plusOne(x FLOAT64) RETURNS FLOAT64 LANGUAGE js AS ""return x+1;"";
+			SELECT plusOne(4) AS result;",
+			parameters: null);
+		var rows = results.ToList();
+		Assert.Equal(5.0, Convert.ToDouble(rows[0]["result"]));
+	}
+
+	[Fact]
+	public async Task JsUdf_MultipleParameters()
+	{
+		var results = await _result.Client.ExecuteQueryAsync(
+			@"CREATE TEMP FUNCTION multiply(x FLOAT64, y FLOAT64) RETURNS FLOAT64 LANGUAGE js AS ""return x*y;"";
+			SELECT multiply(6, 7) AS result;",
+			parameters: null);
+		var rows = results.ToList();
+		Assert.Equal(42.0, Convert.ToDouble(rows[0]["result"]));
+	}
+
+	[Fact]
+	public async Task JsUdf_StringManipulation()
+	{
+		var results = await _result.Client.ExecuteQueryAsync(
+			@"CREATE TEMP FUNCTION shout(s STRING) RETURNS STRING LANGUAGE js AS ""return s.toUpperCase();"";
+			SELECT shout('hello world') AS result;",
+			parameters: null);
+		var rows = results.ToList();
+		Assert.Equal("HELLO WORLD", (string)rows[0]["result"]);
+	}
+
+	[Fact]
+	public async Task JsUdf_NullHandling()
+	{
+		var results = await _result.Client.ExecuteQueryAsync(
+			@"CREATE TEMP FUNCTION retNull(x FLOAT64) RETURNS FLOAT64 LANGUAGE js AS ""return null;"";
+			SELECT retNull(42) AS result;",
+			parameters: null);
+		var rows = results.ToList();
+		Assert.True(rows[0]["result"] is null or DBNull or "");
+	}
+
+	[Fact]
+	public async Task JsUdf_OrReplace()
+	{
+		var results = await _result.Client.ExecuteQueryAsync(
+			@"CREATE TEMP FUNCTION myJs(x FLOAT64) RETURNS FLOAT64 LANGUAGE js AS ""return x+1;"";
+			CREATE OR REPLACE TEMP FUNCTION myJs(x FLOAT64) RETURNS FLOAT64 LANGUAGE js AS ""return x+100;"";
+			SELECT myJs(5) AS result;",
+			parameters: null);
+		var rows = results.ToList();
+		Assert.Equal(105.0, Convert.ToDouble(rows[0]["result"]));
+	}
+}

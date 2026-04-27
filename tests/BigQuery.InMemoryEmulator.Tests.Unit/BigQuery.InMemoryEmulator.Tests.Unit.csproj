@@ -24,6 +24,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\BigQuery.InMemoryEmulator.Tests.Shared\BigQuery.InMemoryEmulator.Tests.Shared.csproj" />
+		<ProjectReference Include="..\..\src\BigQuery.InMemoryEmulator.JsUdfs\BigQuery.InMemoryEmulator.JsUdfs.csproj" />
 	</ItemGroup>
 
 </Project>

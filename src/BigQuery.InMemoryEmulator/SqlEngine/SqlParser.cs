@@ -85,7 +85,8 @@ internal static class SqlParser
 		.Or(Token.EqualTo(SqlToken.Left).Select(t => t.ToStringValue()))
 		.Or(Token.EqualTo(SqlToken.Right).Select(t => t.ToStringValue()))
 		.Or(Token.EqualTo(SqlToken.Exists).Select(t => t.ToStringValue()))
-		.Or(Token.EqualTo(SqlToken.Replace).Select(t => t.ToStringValue()));
+		.Or(Token.EqualTo(SqlToken.Replace).Select(t => t.ToStringValue()))
+		.Or(Token.EqualTo(SqlToken.Range).Select(t => t.ToStringValue()));
 
 	// Accept keywords as identifiers in alias/column positions (e.g. SELECT name, id)
 	private static readonly TokenListParser<SqlToken, string> IdentifierOrKeyword =
