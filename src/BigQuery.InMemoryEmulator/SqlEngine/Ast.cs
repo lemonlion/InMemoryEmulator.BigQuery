@@ -349,3 +349,7 @@ internal record AssertStatement(SqlExpression Condition, string? Description) : 
 /// <summary>Variable reference in expressions (e.g., my_var or @@row_count)</summary>
 internal record VariableRef(string Name) : SqlExpression;
 
+/// <summary>Lambda expression: param -> body (used in ARRAY_FILTER, ARRAY_TRANSFORM).</summary>
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_filter
+internal record LambdaExpr(string ParamName, SqlExpression Body) : SqlExpression;
+

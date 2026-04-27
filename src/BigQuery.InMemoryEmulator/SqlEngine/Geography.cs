@@ -410,4 +410,98 @@ internal static class GeoComputation
 		}
 		return rings;
 	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_asbinary
+	//   "Returns the WKB representation of an input GEOGRAPHY."
+	/// <summary>Convert a GeoValue to WKB (Well-Known Binary) format.</summary>
+	public static byte[] ToWkb(GeoValue geo)
+	{
+		using var ms = new System.IO.MemoryStream();
+		using var bw = new System.IO.BinaryWriter(ms);
+		WriteWkb(bw, geo);
+		return ms.ToArray();
+	}
+
+	private static void WriteWkb(System.IO.BinaryWriter bw, GeoValue geo)
+	{
+		bw.Write((byte)1); // Little-endian
+		switch (geo)
+		{
+			case GeoPoint pt:
+				bw.Write(1); // wkbPoint
+				bw.Write(pt.Longitude);
+				bw.Write(pt.Latitude);
+				break;
+			case GeoLineString ls:
+				bw.Write(2); // wkbLineString
+				bw.Write(ls.Points.Count);
+				foreach (var p in ls.Points)
+				{
+					bw.Write(p.Lon);
+					bw.Write(p.Lat);
+				}
+				break;
+			case GeoPolygon poly:
+				bw.Write(3); // wkbPolygon
+				bw.Write(poly.Rings.Count);
+				foreach (var ring in poly.Rings)
+				{
+					bw.Write(ring.Count);
+					foreach (var p in ring)
+					{
+						bw.Write(p.Lon);
+						bw.Write(p.Lat);
+					}
+				}
+				break;
+			default:
+				bw.Write(7); // wkbGeometryCollection
+				bw.Write(0); // empty
+				break;
+		}
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_geogfromwkb
+	//   "Converts a hexadecimal-text STRING or BYTES value to a GEOGRAPHY value."
+	/// <summary>Parse WKB (Well-Known Binary) bytes into a GeoValue.</summary>
+	public static GeoValue ParseWkb(byte[] wkb)
+	{
+		if (wkb is null || wkb.Length == 0) return GeoEmpty.Instance;
+		using var ms = new System.IO.MemoryStream(wkb);
+		using var br = new System.IO.BinaryReader(ms);
+		return ReadWkb(br);
+	}
+
+	private static GeoValue ReadWkb(System.IO.BinaryReader br)
+	{
+		var byteOrder = br.ReadByte(); // 0 = big-endian, 1 = little-endian
+		var type = br.ReadInt32();
+		switch (type)
+		{
+			case 1: // Point
+				var x = br.ReadDouble();
+				var y = br.ReadDouble();
+				return new GeoPoint(x, y);
+			case 2: // LineString
+				var numPoints = br.ReadInt32();
+				var points = new List<(double, double)>();
+				for (int i = 0; i < numPoints; i++)
+					points.Add((br.ReadDouble(), br.ReadDouble()));
+				return new GeoLineString(points);
+			case 3: // Polygon
+				var numRings = br.ReadInt32();
+				var rings = new List<IReadOnlyList<(double, double)>>();
+				for (int r = 0; r < numRings; r++)
+				{
+					var count = br.ReadInt32();
+					var ringPts = new List<(double, double)>();
+					for (int i = 0; i < count; i++)
+						ringPts.Add((br.ReadDouble(), br.ReadDouble()));
+					rings.Add(ringPts);
+				}
+				return new GeoPolygon(rings);
+			default:
+				return GeoEmpty.Instance;
+		}
+	}
 }

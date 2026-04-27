@@ -1152,6 +1152,7 @@ ArraySubquery arraySub => EvaluateArraySubquery(arraySub),
 WindowFunction wf => throw new InvalidOperationException("Window function in non-window context"),
 StarExpr => throw new InvalidOperationException("Star expression in non-projection context"),
 VariableRef v => _parameters?.FirstOrDefault(p => p.Name == v.Name)?.ParameterValue?.Value,
+LambdaExpr => throw new InvalidOperationException("Lambda expression in non-lambda context"),
 _ => throw new NotSupportedException("Unsupported expression: " + expr.GetType().Name)
 };
 }
@@ -1648,6 +1649,12 @@ return name switch
 "ARRAY_MIN" => EvaluateArrayMin(args, row),
 "ARRAY_SUM" => EvaluateArraySum(args, row),
 "ARRAY_AVG" => EvaluateArrayAvg(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_is_distinct
+"ARRAY_IS_DISTINCT" => EvaluateArrayIsDistinct(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_filter
+"ARRAY_FILTER" => EvaluateArrayFilter(fn.Args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_transform
+"ARRAY_TRANSFORM" => EvaluateArrayTransform(fn.Args, row),
 
 // Conversion functions
 "CAST" => args.Count >= 2 ? CastValue(Evaluate(args[0], row), Evaluate(args[1], row)?.ToString() ?? "STRING", false) : null,
@@ -1701,6 +1708,21 @@ return name switch
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_remove
 //   "Removes a JSON element at a path."
 "JSON_REMOVE" => EvaluateJsonRemove(args, row),
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#lax_bool
+"LAX_BOOL" => EvaluateLaxBool(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#lax_int64
+"LAX_INT64" => EvaluateLaxInt64(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#lax_float64
+"LAX_FLOAT64" => EvaluateLaxFloat64(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#lax_string
+"LAX_STRING" => EvaluateLaxString(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_array_append
+"JSON_ARRAY_APPEND" => EvaluateJsonArrayAppend(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_array_insert
+"JSON_ARRAY_INSERT" => EvaluateJsonArrayInsert(args, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_contains
+"JSON_CONTAINS" => EvaluateJsonContains(args, row),
 
 // Regex additional functions
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions
@@ -1764,6 +1786,12 @@ or "ST_INTERSECTS" or "ST_DISJOINT" or "ST_EQUALS"
 or "ST_AREA" or "ST_LENGTH" or "ST_PERIMETER"
 or "ST_NUMPOINTS" or "ST_NPOINTS" or "ST_DIMENSION" or "ST_ISEMPTY" or "ST_GEOMETRYTYPE"
 or "ST_MAKELINE" or "ST_CENTROID"
+or "ST_ASBINARY" or "ST_GEOGFROMWKB"
+or "ST_ISCOLLECTION" or "ST_BOUNDARY"
+or "ST_COVEREDBY" or "ST_COVERS" or "ST_TOUCHES"
+or "ST_CLOSESTPOINT" or "ST_CONVEXHULL"
+or "ST_DIFFERENCE" or "ST_INTERSECTION" or "ST_UNION"
+or "ST_BUFFER" or "ST_SIMPLIFY" or "ST_DUMP"
     => EvaluateGeographyFunction(name, args, row),
 
 // Conversion functions
@@ -2942,6 +2970,61 @@ if (val is not IList<object?> list) return null;
 return AvgValues(list.ToList());
 }
 
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_is_distinct
+//   "Returns TRUE if the array contains no repeated elements."
+private object? EvaluateArrayIsDistinct(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var val = Evaluate(args[0], row);
+    if (val is null) return null;
+    if (val is not IList<object?> list) return null;
+    var seen = new HashSet<string>();
+    foreach (var item in list)
+    {
+        var key = item is null ? "\0NULL\0" : ConvertToString(item) ?? "\0NULL\0";
+        if (!seen.Add(key)) return false;
+    }
+    return true;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_filter
+//   "Returns an array containing elements from the input array for which lambda returns TRUE."
+private object? EvaluateArrayFilter(IReadOnlyList<SqlExpression> rawArgs, RowContext row)
+{
+    var arrVal = Evaluate(rawArgs[0], row);
+    if (arrVal is null) return null;
+    if (arrVal is not IList<object?> list) return null;
+    if (rawArgs.Count < 2 || rawArgs[1] is not LambdaExpr lambda)
+        throw new InvalidOperationException("ARRAY_FILTER requires a lambda expression as second argument");
+    var result = new List<object?>();
+    foreach (var item in list)
+    {
+        var fields = new Dictionary<string, object?>(row.Fields) { [lambda.ParamName] = item };
+        var lambdaRow = new RowContext(fields, row.Alias);
+        var cond = Evaluate(lambda.Body, lambdaRow);
+        if (IsTruthy(cond)) result.Add(item);
+    }
+    return result;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_transform
+//   "Returns an array with the results of applying the lambda to each element."
+private object? EvaluateArrayTransform(IReadOnlyList<SqlExpression> rawArgs, RowContext row)
+{
+    var arrVal = Evaluate(rawArgs[0], row);
+    if (arrVal is null) return null;
+    if (arrVal is not IList<object?> list) return null;
+    if (rawArgs.Count < 2 || rawArgs[1] is not LambdaExpr lambda)
+        throw new InvalidOperationException("ARRAY_TRANSFORM requires a lambda expression as second argument");
+    var result = new List<object?>();
+    foreach (var item in list)
+    {
+        var fields = new Dictionary<string, object?>(row.Fields) { [lambda.ParamName] = item };
+        var lambdaRow = new RowContext(fields, row.Alias);
+        result.Add(Evaluate(lambda.Body, lambdaRow));
+    }
+    return result;
+}
+
 private object? EvaluateMd5(IReadOnlyList<SqlExpression> args, RowContext row)
 {
 var val = Evaluate(args[0], row)?.ToString();
@@ -3653,6 +3736,270 @@ if (s.StartsWith("\"") && s.EndsWith("\""))
 return s;
 }
 
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#lax_bool
+//   "Attempts to convert a JSON value to a SQL BOOL value."
+private object? EvaluateLaxBool(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var val = Evaluate(args[0], row);
+    if (val is null) return null;
+    var s = val.ToString()!.Trim();
+    // Try parsing as JSON
+    try
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(s);
+        var root = doc.RootElement;
+        return root.ValueKind switch
+        {
+            System.Text.Json.JsonValueKind.True => (object?)true,
+            System.Text.Json.JsonValueKind.False => (object?)false,
+            System.Text.Json.JsonValueKind.String => root.GetString()?.ToLowerInvariant() switch
+            {
+                "true" => (object?)true,
+                "false" => (object?)false,
+                _ => null
+            },
+            System.Text.Json.JsonValueKind.Number => root.GetDouble() == 0 ? (object?)false : (object?)true,
+            _ => null
+        };
+    }
+    catch
+    {
+        // Not valid JSON — try as raw value
+        if (s.Equals("true", StringComparison.OrdinalIgnoreCase)) return true;
+        if (s.Equals("false", StringComparison.OrdinalIgnoreCase)) return false;
+        if (val is bool b) return b;
+        if (val is long l) return l != 0;
+        if (val is double d) return d != 0;
+        return null;
+    }
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#lax_int64
+//   "Attempts to convert a JSON value to a SQL INT64 value."
+private object? EvaluateLaxInt64(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var val = Evaluate(args[0], row);
+    if (val is null) return null;
+    var s = val.ToString()!.Trim();
+    try
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(s);
+        var root = doc.RootElement;
+        return root.ValueKind switch
+        {
+            System.Text.Json.JsonValueKind.Number => (object?)(long)Math.Round(root.GetDouble()),
+            System.Text.Json.JsonValueKind.True => (object?)1L,
+            System.Text.Json.JsonValueKind.False => (object?)0L,
+            System.Text.Json.JsonValueKind.String => long.TryParse(root.GetString(), System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? (object?)parsed : null,
+            _ => null
+        };
+    }
+    catch
+    {
+        if (val is long l) return l;
+        if (val is double dv) return (long)Math.Round(dv);
+        if (val is bool bv) return bv ? 1L : 0L;
+        if (long.TryParse(s, System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var p)) return p;
+        return null;
+    }
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#lax_float64
+//   "Attempts to convert a JSON value to a SQL FLOAT64 value."
+private object? EvaluateLaxFloat64(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var val = Evaluate(args[0], row);
+    if (val is null) return null;
+    var s = val.ToString()!.Trim();
+    try
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(s);
+        var root = doc.RootElement;
+        return root.ValueKind switch
+        {
+            System.Text.Json.JsonValueKind.Number => (object?)root.GetDouble(),
+            System.Text.Json.JsonValueKind.String => double.TryParse(root.GetString(), System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? (object?)parsed : null,
+            _ => null
+        };
+    }
+    catch
+    {
+        if (val is double dv) return dv;
+        if (val is long lv) return (double)lv;
+        if (double.TryParse(s, System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var p)) return p;
+        return null;
+    }
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#lax_string
+//   "Attempts to convert a JSON value to a SQL STRING value."
+private object? EvaluateLaxString(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var val = Evaluate(args[0], row);
+    if (val is null) return null;
+    var s = val.ToString()!.Trim();
+    try
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(s);
+        var root = doc.RootElement;
+        return root.ValueKind switch
+        {
+            System.Text.Json.JsonValueKind.String => root.GetString(),
+            System.Text.Json.JsonValueKind.True => "true",
+            System.Text.Json.JsonValueKind.False => "false",
+            System.Text.Json.JsonValueKind.Number => root.GetRawText(),
+            _ => null
+        };
+    }
+    catch
+    {
+        if (val is bool bv) return bv ? "true" : "false";
+        if (val is string sv) return sv;
+        return ConvertToString(val);
+    }
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_array_append
+//   "Appends an element to the end of a JSON array."
+private object? EvaluateJsonArrayAppend(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var jsonVal = Evaluate(args[0], row);
+    if (jsonVal is null) return null;
+    var jsonStr = jsonVal.ToString()!;
+    var path = args.Count > 1 ? Evaluate(args[1], row)?.ToString() : null;
+    var appendVal = Evaluate(args[args.Count > 2 ? 2 : 1], row);
+
+    using var doc = System.Text.Json.JsonDocument.Parse(jsonStr);
+    using var ms = new System.IO.MemoryStream();
+    using (var writer = new System.Text.Json.Utf8JsonWriter(ms))
+    {
+        if (path is null || path == "$")
+        {
+            // Append to root array
+            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Array)
+                return jsonStr;
+            writer.WriteStartArray();
+            foreach (var el in doc.RootElement.EnumerateArray())
+                el.WriteTo(writer);
+            WriteJsonValue(writer, appendVal);
+            writer.WriteEndArray();
+        }
+        else
+        {
+            doc.RootElement.WriteTo(writer);
+        }
+    }
+    return System.Text.Encoding.UTF8.GetString(ms.ToArray());
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_array_insert
+//   "Inserts an element at the specified position in a JSON array."
+private object? EvaluateJsonArrayInsert(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var jsonVal = Evaluate(args[0], row);
+    if (jsonVal is null) return null;
+    var jsonStr = jsonVal.ToString()!;
+    var path = Evaluate(args[1], row)?.ToString() ?? "$[0]";
+    var insertVal = Evaluate(args[2], row);
+
+    // Parse the index from the path like "$[2]"
+    var idxMatch = System.Text.RegularExpressions.Regex.Match(path, @"\[(\d+)\]");
+    if (!idxMatch.Success) return jsonStr;
+    var idx = int.Parse(idxMatch.Groups[1].Value);
+
+    using var doc = System.Text.Json.JsonDocument.Parse(jsonStr);
+    if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Array)
+        return jsonStr;
+
+    using var ms = new System.IO.MemoryStream();
+    using (var writer = new System.Text.Json.Utf8JsonWriter(ms))
+    {
+        writer.WriteStartArray();
+        var i = 0;
+        foreach (var el in doc.RootElement.EnumerateArray())
+        {
+            if (i == idx) WriteJsonValue(writer, insertVal);
+            el.WriteTo(writer);
+            i++;
+        }
+        if (idx >= i) WriteJsonValue(writer, insertVal);
+        writer.WriteEndArray();
+    }
+    return System.Text.Encoding.UTF8.GetString(ms.ToArray());
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_contains
+//   "Returns TRUE if a JSON value contains a specific JSON value."
+private object? EvaluateJsonContains(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var jsonVal = Evaluate(args[0], row);
+    if (jsonVal is null) return null;
+    var searchVal = Evaluate(args[1], row);
+    if (searchVal is null) return null;
+    var jsonStr = jsonVal.ToString()!;
+    var searchStr = searchVal.ToString()!;
+
+    try
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(jsonStr);
+        using var searchDoc = System.Text.Json.JsonDocument.Parse(searchStr);
+        return JsonContainsValue(doc.RootElement, searchDoc.RootElement);
+    }
+    catch
+    {
+        return false;
+    }
+}
+
+private static bool JsonContainsValue(System.Text.Json.JsonElement container, System.Text.Json.JsonElement target)
+{
+    if (JsonElementEquals(container, target)) return true;
+    if (container.ValueKind == System.Text.Json.JsonValueKind.Array)
+    {
+        foreach (var el in container.EnumerateArray())
+            if (JsonContainsValue(el, target)) return true;
+    }
+    else if (container.ValueKind == System.Text.Json.JsonValueKind.Object)
+    {
+        foreach (var prop in container.EnumerateObject())
+            if (JsonContainsValue(prop.Value, target)) return true;
+    }
+    return false;
+}
+
+private static bool JsonElementEquals(System.Text.Json.JsonElement a, System.Text.Json.JsonElement b)
+{
+    if (a.ValueKind != b.ValueKind) return false;
+    return a.GetRawText() == b.GetRawText();
+}
+
+private static void WriteJsonValue(System.Text.Json.Utf8JsonWriter writer, object? val)
+{
+    switch (val)
+    {
+        case null: writer.WriteNullValue(); break;
+        case bool b: writer.WriteBooleanValue(b); break;
+        case long l: writer.WriteNumberValue(l); break;
+        case int i: writer.WriteNumberValue(i); break;
+        case double d: writer.WriteNumberValue(d); break;
+        case string s:
+            // If it looks like JSON, write raw
+            if ((s.StartsWith("{") || s.StartsWith("[") || s.StartsWith("\"")) &&
+                s.Length > 1)
+            {
+                try { writer.WriteRawValue(s); break; }
+                catch { /* fall through to string */ }
+            }
+            writer.WriteStringValue(s);
+            break;
+        default: writer.WriteStringValue(val.ToString()); break;
+    }
+}
+
 #region AEAD Encryption Functions
 
 // In-memory AEAD implementation using .NET AES-GCM.
@@ -3922,6 +4269,36 @@ private object? EvaluateGeographyFunction(string name, IReadOnlyList<SqlExpressi
         "ST_GEOMETRYTYPE" => vals[0] is null ? null : ((GeoValue)vals[0]).GeometryType,
         "ST_MAKELINE" => GeoMakeLine(vals),
         "ST_CENTROID" => GeoCentroid(vals[0]),
+        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_asbinary
+        "ST_ASBINARY" => vals[0] is null ? null : GeoComputation.ToWkb((GeoValue)vals[0]),
+        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_geogfromwkb
+        "ST_GEOGFROMWKB" => vals[0] is null ? null : GeoComputation.ParseWkb((byte[])vals[0]),
+        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_iscollection
+        "ST_ISCOLLECTION" => vals[0] is null ? null : (object)false,
+        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_boundary
+        "ST_BOUNDARY" => GeoBoundary(vals[0]),
+        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_coveredby
+        "ST_COVEREDBY" => GeoContains(vals[1], vals[0]),
+        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_covers
+        "ST_COVERS" => GeoContains(vals[0], vals[1]),
+        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_touches
+        "ST_TOUCHES" => GeoTouches(vals[0], vals[1]),
+        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_closestpoint
+        "ST_CLOSESTPOINT" => GeoClosestPoint(vals[0], vals[1]),
+        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_convexhull
+        "ST_CONVEXHULL" => GeoConvexHull(vals[0]),
+        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_difference
+        "ST_DIFFERENCE" => GeoDifference(vals[0], vals[1]),
+        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_intersection
+        "ST_INTERSECTION" => GeoIntersection(vals[0], vals[1]),
+        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_union
+        "ST_UNION" => GeoUnion(vals[0], vals[1]),
+        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_buffer
+        "ST_BUFFER" => GeoBuffer(vals[0], vals.Count > 1 ? vals[1] : null),
+        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_simplify
+        "ST_SIMPLIFY" => GeoSimplify(vals[0], vals.Count > 1 ? vals[1] : null),
+        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_dump
+        "ST_DUMP" => GeoDump(vals[0]),
         _ => throw new NotSupportedException("Unknown geography function: " + name)
     };
 }
@@ -4006,6 +4383,363 @@ private static object? GeoCentroid(object? val)
         return new GeoPoint(ring.Average(p => p.Lon), ring.Average(p => p.Lat));
     }
     return null;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_boundary
+//   "Returns the boundary of a geography."
+private static object? GeoBoundary(object? val)
+{
+    if (val is null) return null;
+    var geo = (GeoValue)val;
+    if (geo is GeoPoint) return new GeoEmpty();
+    if (geo is GeoLineString ls)
+    {
+        if (ls.Points.Count < 2) return new GeoEmpty();
+        var first = ls.Points[0];
+        var last = ls.Points[^1];
+        // If closed ring, boundary is empty
+        if (first.Lon == last.Lon && first.Lat == last.Lat) return new GeoEmpty();
+        // Return multipoint with endpoints (approximated as linestring with 2 points)
+        return new GeoLineString(new[] { first, last }.ToList());
+    }
+    if (geo is GeoPolygon poly)
+    {
+        // Boundary of a polygon is its exterior ring
+        return new GeoLineString(poly.Rings[0]);
+    }
+    return new GeoEmpty();
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_touches
+//   "Returns TRUE if two geographies touch but do not intersect in their interiors."
+private static object? GeoTouches(object? first, object? second)
+{
+    if (first is null || second is null) return null;
+    var a = (GeoValue)first;
+    var b = (GeoValue)second;
+    // Simple approximation: touches if they share boundary points but interiors don't overlap
+    if (a is GeoPoint pa && b is GeoPolygon pb)
+    {
+        // Point touches polygon if it's on the boundary but not inside
+        var inside = GeoComputation.PointInPolygon(pa, pb);
+        if (inside) return false;
+        // Check if point is on the boundary (very close to any edge)
+        return PointNearBoundary(pa, pb);
+    }
+    if (a is GeoPolygon pa2 && b is GeoPoint pb2)
+        return GeoTouches(second, first);
+    return false;
+}
+
+private static bool PointNearBoundary(GeoPoint pt, GeoPolygon poly)
+{
+    var ring = poly.Rings[0];
+    for (int i = 0; i < ring.Count - 1; i++)
+    {
+        var p1 = ring[i];
+        var p2 = ring[i + 1];
+        var dist = PointToSegmentDistance(pt.Longitude, pt.Latitude, p1.Lon, p1.Lat, p2.Lon, p2.Lat);
+        if (dist < 1e-9) return true;
+    }
+    return false;
+}
+
+private static double PointToSegmentDistance(double px, double py, double x1, double y1, double x2, double y2)
+{
+    var dx = x2 - x1;
+    var dy = y2 - y1;
+    if (dx == 0 && dy == 0)
+        return Math.Sqrt((px - x1) * (px - x1) + (py - y1) * (py - y1));
+    var t = Math.Max(0, Math.Min(1, ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)));
+    var projX = x1 + t * dx;
+    var projY = y1 + t * dy;
+    return Math.Sqrt((px - projX) * (px - projX) + (py - projY) * (py - projY));
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_closestpoint
+//   "Returns the point on a geography that is closest to another geography."
+private static object? GeoClosestPoint(object? first, object? second)
+{
+    if (first is null || second is null) return null;
+    var a = (GeoValue)first;
+    var b = (GeoValue)second;
+    // Get all points from a, find closest to b
+    var targetPt = b is GeoPoint bp ? bp : (GeoValue)GeoCentroid(b)! is GeoPoint cp ? cp : new GeoPoint(0, 0);
+    if (a is GeoPoint ap) return ap;
+    if (a is GeoLineString ls)
+    {
+        GeoPoint? closest = null;
+        var minDist = double.MaxValue;
+        foreach (var p in ls.Points)
+        {
+            var pt = new GeoPoint(p.Lon, p.Lat);
+            var d = GeoComputation.Distance(pt, targetPt) ?? double.MaxValue;
+            if (d < minDist) { minDist = d; closest = pt; }
+        }
+        return closest;
+    }
+    if (a is GeoPolygon poly)
+    {
+        GeoPoint? closest = null;
+        var minDist = double.MaxValue;
+        foreach (var p in poly.Rings[0])
+        {
+            var pt = new GeoPoint(p.Lon, p.Lat);
+            var d = GeoComputation.Distance(pt, targetPt) ?? double.MaxValue;
+            if (d < minDist) { minDist = d; closest = pt; }
+        }
+        return closest;
+    }
+    return null;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_convexhull
+//   "Returns the convex hull of the input geography."
+private static object? GeoConvexHull(object? val)
+{
+    if (val is null) return null;
+    var geo = (GeoValue)val;
+    if (geo is GeoPoint) return geo;
+    var points = new List<(double Lon, double Lat)>();
+    if (geo is GeoLineString ls) points.AddRange(ls.Points);
+    else if (geo is GeoPolygon poly)
+        foreach (var ring in poly.Rings)
+            points.AddRange(ring);
+    if (points.Count < 3) return geo;
+    // Graham scan
+    var hull = ComputeConvexHull(points);
+    if (hull.Count >= 3)
+    {
+        // Close the ring
+        if (hull[0] != hull[^1]) hull.Add(hull[0]);
+        return new GeoPolygon(new[] { hull }.ToList());
+    }
+    return geo;
+}
+
+private static List<(double Lon, double Lat)> ComputeConvexHull(List<(double Lon, double Lat)> points)
+{
+    var sorted = points.OrderBy(p => p.Lon).ThenBy(p => p.Lat).ToList();
+    var lower = new List<(double Lon, double Lat)>();
+    foreach (var p in sorted)
+    {
+        while (lower.Count >= 2 && Cross(lower[^2], lower[^1], p) <= 0)
+            lower.RemoveAt(lower.Count - 1);
+        lower.Add(p);
+    }
+    var upper = new List<(double Lon, double Lat)>();
+    foreach (var p in sorted.AsEnumerable().Reverse())
+    {
+        while (upper.Count >= 2 && Cross(upper[^2], upper[^1], p) <= 0)
+            upper.RemoveAt(upper.Count - 1);
+        upper.Add(p);
+    }
+    lower.RemoveAt(lower.Count - 1);
+    upper.RemoveAt(upper.Count - 1);
+    lower.AddRange(upper);
+    return lower;
+}
+
+private static double Cross((double Lon, double Lat) o, (double Lon, double Lat) a, (double Lon, double Lat) b) =>
+    (a.Lon - o.Lon) * (b.Lat - o.Lat) - (a.Lat - o.Lat) * (b.Lon - o.Lon);
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_difference
+//   "Returns a geography representing the point-set difference of two geographies."
+private static object? GeoDifference(object? first, object? second)
+{
+    if (first is null || second is null) return null;
+    var a = (GeoValue)first;
+    var b = (GeoValue)second;
+    // Same geometry → empty
+    if (a.ToWkt() == b.ToWkt()) return new GeoEmpty();
+    // Simple approximation: for polygons, return points of a not inside b
+    if (a is GeoPolygon pa && b is GeoPolygon pb)
+    {
+        var filtered = pa.Rings[0].Where(p => !GeoComputation.PointInPolygon(new GeoPoint(p.Lon, p.Lat), pb)).ToList();
+        if (filtered.Count < 3) return new GeoEmpty();
+        if (filtered[0] != filtered[^1]) filtered.Add(filtered[0]);
+        return new GeoPolygon(new[] { filtered }.ToList());
+    }
+    if (a is GeoPoint pt && b is GeoPolygon polyB)
+        return GeoComputation.PointInPolygon(pt, polyB) ? new GeoEmpty() : (object)a;
+    return a;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_intersection
+//   "Returns a geography representing the point-set intersection of two geographies."
+private static object? GeoIntersection(object? first, object? second)
+{
+    if (first is null || second is null) return null;
+    var a = (GeoValue)first;
+    var b = (GeoValue)second;
+    // Point-point intersection
+    if (a is GeoPoint ptA && b is GeoPoint ptB)
+        return ptA.Longitude == ptB.Longitude && ptA.Latitude == ptB.Latitude ? (object)a : new GeoEmpty();
+    if (a is GeoPolygon pa && b is GeoPolygon pb)
+    {
+        var filtered = pa.Rings[0].Where(p => GeoComputation.PointInPolygon(new GeoPoint(p.Lon, p.Lat), pb)).ToList();
+        if (filtered.Count < 3) return new GeoEmpty();
+        if (filtered[0] != filtered[^1]) filtered.Add(filtered[0]);
+        return new GeoPolygon(new[] { filtered }.ToList());
+    }
+    if (a is GeoPoint pt && b is GeoPolygon polyB)
+        return GeoComputation.PointInPolygon(pt, polyB) ? (object)a : new GeoEmpty();
+    if (a is GeoPolygon polyA && b is GeoPoint pt2)
+        return GeoComputation.PointInPolygon(pt2, polyA) ? (object)b : new GeoEmpty();
+    return new GeoEmpty();
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_union
+//   "Returns a geography representing the point-set union of two geographies."
+private static object? GeoUnion(object? first, object? second)
+{
+    if (first is null || second is null) return null;
+    var a = (GeoValue)first;
+    var b = (GeoValue)second;
+    // Same point returns point
+    if (a is GeoPoint pa2 && b is GeoPoint pb2)
+    {
+        if (pa2.Longitude == pb2.Longitude && pa2.Latitude == pb2.Latitude) return a;
+        return new GeoLineString(new List<(double, double)> {
+            (pa2.Longitude, pa2.Latitude),
+            (pb2.Longitude, pb2.Latitude)
+        });
+    }
+    // Simple approximation: merge polygon rings
+    if (a is GeoPolygon pa && b is GeoPolygon pb)
+    {
+        var allPoints = new List<(double Lon, double Lat)>();
+        allPoints.AddRange(pa.Rings[0]);
+        allPoints.AddRange(pb.Rings[0]);
+        var hull = ComputeConvexHull(allPoints);
+        if (hull.Count >= 3)
+        {
+            if (hull[0] != hull[^1]) hull.Add(hull[0]);
+            return new GeoPolygon(new[] { hull }.ToList());
+        }
+    }
+    return a;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_buffer
+//   "Returns a geography that represents the buffer around the input geography."
+private static object? GeoBuffer(object? val, object? distanceVal)
+{
+    if (val is null) return null;
+    var geo = (GeoValue)val;
+    var distance = distanceVal is null ? 0.0 : Convert.ToDouble(distanceVal);
+    if (distance == 0) return geo;
+    if (geo is GeoPoint pt)
+    {
+        // Approximate a circle polygon around the point
+        const int segments = 32;
+        const double earthRadius = 6371008.8;
+        var latRad = pt.Latitude * Math.PI / 180;
+        var lonRad = pt.Longitude * Math.PI / 180;
+        var angularDist = distance / earthRadius;
+        var ring = new List<(double Lon, double Lat)>();
+        for (int i = 0; i <= segments; i++)
+        {
+            var bearing = 2 * Math.PI * i / segments;
+            var lat2 = Math.Asin(Math.Sin(latRad) * Math.Cos(angularDist) +
+                                  Math.Cos(latRad) * Math.Sin(angularDist) * Math.Cos(bearing));
+            var lon2 = lonRad + Math.Atan2(Math.Sin(bearing) * Math.Sin(angularDist) * Math.Cos(latRad),
+                                            Math.Cos(angularDist) - Math.Sin(latRad) * Math.Sin(lat2));
+            ring.Add((lon2 * 180 / Math.PI, lat2 * 180 / Math.PI));
+        }
+        return new GeoPolygon(new[] { ring }.ToList());
+    }
+    // For other types, return the input as approximation
+    return geo;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_simplify
+//   "Returns a simplified version of a geography using the Douglas-Peucker algorithm."
+private static object? GeoSimplify(object? val, object? toleranceVal)
+{
+    if (val is null) return null;
+    var geo = (GeoValue)val;
+    var tolerance = toleranceVal is null ? 0.0 : Convert.ToDouble(toleranceVal);
+    if (tolerance <= 0) return geo;
+    if (geo is GeoLineString ls)
+    {
+        var simplified = DouglasPeucker(ls.Points, tolerance / 111320.0); // meters to approx degrees
+        return new GeoLineString(simplified);
+    }
+    if (geo is GeoPolygon poly)
+    {
+        var simplified = DouglasPeucker(poly.Rings[0], tolerance / 111320.0);
+        if (simplified.Count < 4) return geo;
+        return new GeoPolygon(new[] { simplified }.ToList());
+    }
+    return geo;
+}
+
+private static List<(double Lon, double Lat)> DouglasPeucker(IReadOnlyList<(double Lon, double Lat)> points, double epsilon)
+{
+    if (points.Count < 3) return points.ToList();
+    var maxDist = 0.0;
+    var maxIdx = 0;
+    for (int i = 1; i < points.Count - 1; i++)
+    {
+        var d = PointToLineDistance(points[i], points[0], points[^1]);
+        if (d > maxDist) { maxDist = d; maxIdx = i; }
+    }
+    if (maxDist > epsilon)
+    {
+        var left = DouglasPeucker(points.Take(maxIdx + 1).ToList(), epsilon);
+        var right = DouglasPeucker(points.Skip(maxIdx).ToList(), epsilon);
+        left.RemoveAt(left.Count - 1);
+        left.AddRange(right);
+        return left;
+    }
+    return new List<(double Lon, double Lat)> { points[0], points[^1] };
+}
+
+private static double PointToLineDistance((double Lon, double Lat) p, (double Lon, double Lat) a, (double Lon, double Lat) b)
+{
+    var dx = b.Lon - a.Lon;
+    var dy = b.Lat - a.Lat;
+    var lenSq = dx * dx + dy * dy;
+    if (lenSq == 0) return Math.Sqrt((p.Lon - a.Lon) * (p.Lon - a.Lon) + (p.Lat - a.Lat) * (p.Lat - a.Lat));
+    var t = ((p.Lon - a.Lon) * dx + (p.Lat - a.Lat) * dy) / lenSq;
+    t = Math.Max(0, Math.Min(1, t));
+    var projX = a.Lon + t * dx;
+    var projY = a.Lat + t * dy;
+    return Math.Sqrt((p.Lon - projX) * (p.Lon - projX) + (p.Lat - projY) * (p.Lat - projY));
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_dump
+//   "Returns an array of geographies that comprise the input geography."
+private static object? GeoDump(object? val)
+{
+    if (val is null) return null;
+    var geo = (GeoValue)val;
+    // For simple types, return an array with one element
+    return new List<object?> { geo };
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_centroid_agg
+//   "Returns the centroid of all input GEOGRAPHY values."
+private object? EvaluateStCentroidAgg(List<object?> values)
+{
+    var geos = values.Where(v => v is GeoValue).Cast<GeoValue>().ToList();
+    if (geos.Count == 0) return null;
+    var centroids = geos.Select(g => GeoCentroid(g)).OfType<GeoPoint>().ToList();
+    if (centroids.Count == 0) return null;
+    return new GeoPoint(centroids.Average(p => p.Longitude), centroids.Average(p => p.Latitude));
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_union_agg
+//   "Returns a GEOGRAPHY that represents the point set union of all input geographies."
+private object? EvaluateStUnionAgg(List<object?> values)
+{
+    var geos = values.Where(v => v is GeoValue).ToList();
+    if (geos.Count == 0) return null;
+    object? result = geos[0];
+    for (int i = 1; i < geos.Count; i++)
+        result = GeoUnion(result, geos[i]);
+    return result;
 }
 
 #endregion
@@ -4131,6 +4865,12 @@ return funcName switch
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/approximate_aggregate_functions#approx_top_sum
 //   "Returns the approximate top elements of expression, based on the sum of an assigned weight."
 "APPROX_TOP_SUM" => EvaluateApproxTopSum(agg, rows),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_centroid_agg
+//   "Returns the centroid of all input GEOGRAPHY values."
+"ST_CENTROID_AGG" => EvaluateStCentroidAgg(values),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_union_agg
+//   "Returns a GEOGRAPHY that represents the point set union of all input geographies."
+"ST_UNION_AGG" => EvaluateStUnionAgg(values),
 _ => throw new NotSupportedException("Unsupported aggregate: " + funcName)
 };
 }

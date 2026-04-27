@@ -279,7 +279,8 @@ internal static class SqlParser
 					or "APPROX_COUNT_DISTINCT" or "BIT_AND" or "BIT_OR" or "BIT_XOR"
 					or "VAR_SAMP" or "VAR_POP" or "VARIANCE" or "STDDEV" or "STDDEV_SAMP" or "STDDEV_POP"
 					or "CORR" or "COVAR_POP" or "COVAR_SAMP"
-					or "APPROX_QUANTILES" or "APPROX_TOP_COUNT" or "APPROX_TOP_SUM")
+					or "APPROX_QUANTILES" or "APPROX_TOP_COUNT" or "APPROX_TOP_SUM"
+					or "ST_CENTROID_AGG" or "ST_UNION_AGG")
 				{
 					var extraArgs = args.Length > 1 ? args.Skip(1).ToList() : null;
 					return (SqlExpression)new AggregateCall(upper, args.Length > 0 ? args[0] : null, false, extraArgs);
@@ -369,6 +370,15 @@ internal static class SqlParser
 			SP.Ref(() => Atom!)
 		).Select(e => (SqlExpression)new UnaryExpr(UnaryOp.Negate, e));
 
+	// --- Lambda expression: param -> body (used in ARRAY_FILTER, ARRAY_TRANSFORM) ---
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_filter
+	private static readonly TokenListParser<SqlToken, SqlExpression> LambdaExprParser =
+		Identifier.Then(paramName =>
+			Token.EqualTo(SqlToken.Arrow).IgnoreThen(
+				SP.Ref(() => Expression!))
+				.Select(body => (SqlExpression)new LambdaExpr(paramName, body))
+		);
+
 	// --- Atom: base expression ---
 	private static readonly TokenListParser<SqlToken, SqlExpression> Atom =
 		CountDistinct.Try()
@@ -376,6 +386,7 @@ internal static class SqlParser
 		.Or(CaseExprParser.Try())
 		.Or(ExistsExprParser.Try())
 		.Or(ArrayLiteral.Try())
+		.Or(LambdaExprParser.Try())
 		.Or(ColumnOrFunctionRef.Try())
 		.Or(NumberLiteral)
 		.Or(StringLiteral)

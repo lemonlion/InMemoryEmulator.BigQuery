@@ -39,6 +39,7 @@ internal enum SqlToken
 	Eq, Neq, Lt, Gt, Lte, Gte,
 	Plus, Minus, Slash, Percent,
 	Pipe,            // ||
+	Arrow,           // -> (lambda)
 }
 
 internal static class SqlTokenizer
@@ -52,6 +53,7 @@ internal static class SqlTokenizer
 		.Match(Span.EqualTo("<="), SqlToken.Lte)
 		.Match(Span.EqualTo(">="), SqlToken.Gte)
 		.Match(Span.EqualTo("||"), SqlToken.Pipe)
+		.Match(Span.EqualTo("->"), SqlToken.Arrow)
 		// Single-char operators
 		.Match(Character.EqualTo('='), SqlToken.Eq)
 		.Match(Character.EqualTo('<'), SqlToken.Lt)
