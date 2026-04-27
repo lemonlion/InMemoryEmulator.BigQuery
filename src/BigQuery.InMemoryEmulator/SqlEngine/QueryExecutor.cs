@@ -1318,7 +1318,12 @@ return name switch
 "HLL_COUNT_INIT" or "HLL_COUNT_MERGE" or "HLL_COUNT_MERGE_PARTIAL"
 or "HLL_COUNT_EXTRACT" => EvaluateHllCount(name, args, row),
 
-// UDF
+// Vector / distance functions
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#cosine_distance
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#euclidean_distance
+"COSINE_DISTANCE" or "EUCLIDEAN_DISTANCE"
+    => EvaluateVectorDistanceFunction(name, args, row),
+
 // Geography functions
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions
 "ST_GEOGPOINT" or "ST_GEOGFROMTEXT" or "ST_GEOGFROMWKT" or "ST_GEOGFROMGEOJSON"
@@ -3498,6 +3503,96 @@ DateTimeOffset dto => dto.ToString("yyyy-MM-dd HH:mm:ss.FFFFFF zzz", CultureInfo
 DateTime dt => dt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
 _ => val.ToString()
 };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Vector distance helpers
+// ═══════════════════════════════════════════════════════════════════════════
+
+private object? EvaluateVectorDistanceFunction(string name, IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var v1 = Evaluate(args[0], row);
+    var v2 = Evaluate(args[1], row);
+
+    if (v1 is null || v2 is null) return null;
+
+    var vec1 = ToDoubleArray(v1);
+    var vec2 = ToDoubleArray(v2);
+
+    if (vec1 is null || vec2 is null || vec1.Length != vec2.Length || vec1.Length == 0)
+        return null;
+
+    var result = name switch
+    {
+        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#cosine_distance
+        //   "Computes the cosine distance between two vectors."
+        //   cosine_distance = 1 - (dot(a,b) / (|a| * |b|))
+        "COSINE_DISTANCE" => CosineDistance(vec1, vec2),
+        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#euclidean_distance
+        //   "Computes the Euclidean distance between two vectors."
+        //   euclidean_distance = sqrt(sum((a[i] - b[i])^2))
+        "EUCLIDEAN_DISTANCE" => (object)EuclideanDistance(vec1, vec2),
+        _ => null,
+    };
+
+    // Guard against Infinity/NaN
+    if (result is double d && (double.IsInfinity(d) || double.IsNaN(d)))
+        return null;
+
+    return result;
+}
+
+private static object? CosineDistance(double[] a, double[] b)
+{
+    double dot = 0, magA = 0, magB = 0;
+    for (var i = 0; i < a.Length; i++)
+    {
+        dot += a[i] * b[i];
+        magA += a[i] * a[i];
+        magB += b[i] * b[i];
+    }
+    var denominator = Math.Sqrt(magA) * Math.Sqrt(magB);
+    // Zero vector → return null (real BigQuery produces an error)
+    if (denominator == 0) return null;
+    return 1.0 - (dot / denominator);
+}
+
+private static double EuclideanDistance(double[] a, double[] b)
+{
+    double sum = 0;
+    for (var i = 0; i < a.Length; i++)
+    {
+        var diff = a[i] - b[i];
+        sum += diff * diff;
+    }
+    return Math.Sqrt(sum);
+}
+
+private static double[]? ToDoubleArray(object? value)
+{
+    if (value is null) return null;
+    if (value is double[] dArr) return dArr;
+    if (value is List<object?> list)
+    {
+        var arr = new double[list.Count];
+        for (var i = 0; i < list.Count; i++)
+        {
+            if (list[i] is null) return null;
+            arr[i] = Convert.ToDouble(list[i]);
+        }
+        return arr;
+    }
+    if (value is IEnumerable<object> enumerable)
+    {
+        var items = enumerable.ToList();
+        var arr = new double[items.Count];
+        for (var i = 0; i < items.Count; i++)
+        {
+            arr[i] = Convert.ToDouble(items[i]);
+        }
+        return arr;
+    }
+    return null;
 }
 
 #endregion
