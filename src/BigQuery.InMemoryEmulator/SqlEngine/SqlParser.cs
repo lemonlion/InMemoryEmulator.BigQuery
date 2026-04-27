@@ -136,6 +136,14 @@ internal static class SqlParser
 		Token.EqualTo(SqlToken.Parameter)
 			.Select(t => (SqlExpression)new ParameterRef(t.ToStringValue().TrimStart('@')));
 
+	// --- Array literal: [expr, ...] ---
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#array_literals
+	private static readonly TokenListParser<SqlToken, SqlExpression> ArrayLiteral =
+		Token.EqualTo(SqlToken.LBracket).IgnoreThen(
+			SP.Ref(() => Expression!).ManyDelimitedBy(Token.EqualTo(SqlToken.Comma)))
+		.Then(elems => Token.EqualTo(SqlToken.RBracket)
+			.Select(_ => (SqlExpression)new FunctionCall("ARRAY", elems.ToList())));
+
 	// --- Star expression ---
 
 	private static readonly TokenListParser<SqlToken, SqlExpression> Star =
@@ -154,7 +162,8 @@ internal static class SqlParser
 				var upper = name.ToUpperInvariant();
 				if (upper is "COUNT" or "SUM" or "AVG" or "MIN" or "MAX" or "ANY_VALUE"
 					or "ARRAY_AGG" or "STRING_AGG" or "COUNTIF" or "LOGICAL_AND" or "LOGICAL_OR"
-					or "APPROX_COUNT_DISTINCT" or "BIT_AND" or "BIT_OR" or "BIT_XOR")
+					or "APPROX_COUNT_DISTINCT" or "BIT_AND" or "BIT_OR" or "BIT_XOR"
+					or "VAR_SAMP" or "VAR_POP" or "VARIANCE" or "STDDEV" or "STDDEV_SAMP" or "STDDEV_POP")
 				{
 					return (SqlExpression)new AggregateCall(upper, args.Length > 0 ? args[0] : null, false);
 				}
@@ -249,6 +258,7 @@ internal static class SqlParser
 		.Or(CastExprParser.Try())
 		.Or(CaseExprParser.Try())
 		.Or(ExistsExprParser.Try())
+		.Or(ArrayLiteral.Try())
 		.Or(ColumnOrFunctionRef.Try())
 		.Or(NumberLiteral)
 		.Or(StringLiteral)

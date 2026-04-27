@@ -35,7 +35,7 @@ public class FakeBigQueryHandler : HttpMessageHandler
 		RegexOptions.Compiled);
 
 	private static readonly Regex JobRoute = new(
-		@"/bigquery/v2/projects/(?<project>[^/]+)/jobs(?:/(?<job>[^/?]+))?",
+		@"/bigquery/v2/projects/(?<project>[^/]+)/jobs(?:/(?<job>[^/?]+)(?:/(?<action>[^/?]+))?)?",
 		RegexOptions.Compiled);
 
 	private static readonly Regex DatasetRoute = new(
@@ -712,6 +712,11 @@ public class FakeBigQueryHandler : HttpMessageHandler
 		var jobId = match.Groups["job"].Value;
 		var hasJobId = !string.IsNullOrEmpty(jobId);
 
+		var action = match.Groups["action"].Value;
+
+		if (method == HttpMethod.Post && hasJobId && action == "cancel")
+			return HandleCancelJob(jobId);
+
 		if (method == HttpMethod.Post && !hasJobId)
 			return await HandleInsertJob(request);
 
@@ -741,7 +746,24 @@ public class FakeBigQueryHandler : HttpMessageHandler
 			DefaultDatasetId = defaultDatasetId,
 			Parameters = body.QueryParameters,
 			StatementType = "SELECT",
+			Labels = body.Labels,
 		};
+
+		// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query
+		//   "dryRun: If set to true, BigQuery doesn't run the job."
+		if (body.DryRun == true)
+		{
+			job.IsDryRun = true;
+			Jobs[job.JobId] = job;
+			var dryResponse = new QueryResponse
+			{
+				Kind = "bigquery#queryResponse",
+				JobReference = new JobReference { ProjectId = _store.ProjectId, JobId = job.JobId },
+				JobComplete = true,
+				TotalBytesProcessed = 0,
+			};
+			return BuildJsonResponse(dryResponse);
+		}
 
 		try
 		{
@@ -812,13 +834,46 @@ public class FakeBigQueryHandler : HttpMessageHandler
 			DefaultDatasetId = defaultDatasetId,
 			Parameters = queryConfig.QueryParameters,
 			StatementType = "SELECT",
+			Labels = body?.Configuration?.Labels,
 		};
+
+		// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs#JobConfiguration
+		//   "dryRun: If set, don't actually run this job."
+		if (body?.Configuration?.DryRun == true)
+		{
+			job.IsDryRun = true;
+			// Validate the query even for dry runs — real BigQuery rejects invalid SQL
+			try
+			{
+				var executor = new QueryExecutor(_store, defaultDatasetId);
+				executor.SetParameters(queryConfig.QueryParameters);
+				var (schema, _) = executor.Execute(queryConfig.Query);
+				job.ResultSchema = schema;
+			}
+			catch (Exception ex)
+			{
+				return BuildErrorResponse(HttpStatusCode.BadRequest, "invalidQuery", ex.Message);
+			}
+			Jobs[job.JobId] = job;
+			return BuildJsonResponse(job.ToJobResource());
+		}
 
 		try
 		{
-			var executor = new QueryExecutor(_store, defaultDatasetId);
-			executor.SetParameters(queryConfig.QueryParameters);
-			var (schema, rows) = executor.Execute(queryConfig.Query);
+			// Support multi-statement scripts
+			TableSchema schema;
+			List<TableRow> rows;
+			if (queryConfig.Query.Contains(';'))
+			{
+				var procExecutor = new SqlEngine.ProceduralExecutor(_store, defaultDatasetId);
+				(schema, rows) = procExecutor.Execute(queryConfig.Query);
+			}
+			else
+			{
+				var executor = new QueryExecutor(_store, defaultDatasetId);
+				executor.SetParameters(queryConfig.QueryParameters);
+				(schema, rows) = executor.Execute(queryConfig.Query);
+			}
 
 			job.ResultSchema = schema;
 			job.ResultRows = rows;
@@ -846,6 +901,25 @@ public class FakeBigQueryHandler : HttpMessageHandler
 				$"Not found: Job {_store.ProjectId}:{jobId}");
 
 		return BuildJsonResponse(job.ToJobResource());
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/cancel
+	//   "Requests that a job be cancelled."
+	private HttpResponseMessage HandleCancelJob(string jobId)
+	{
+		if (!Jobs.TryGetValue(jobId, out var job))
+			return BuildErrorResponse(HttpStatusCode.NotFound, "notFound",
+				$"Not found: Job {_store.ProjectId}:{jobId}");
+
+		// In-memory jobs complete instantly so cancel is a no-op
+		// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/cancel
+		//   Response: { "kind": "bigquery#jobCancelResponse", "job": { ... } }
+		var response = new Google.Apis.Bigquery.v2.Data.JobCancelResponse
+		{
+			Kind = "bigquery#jobCancelResponse",
+			Job = job.ToJobResource(),
+		};
+		return BuildJsonResponse(response);
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/list

@@ -23,6 +23,7 @@ internal class InMemoryJob
 	public long TotalBytesProcessed { get; set; }
 	public long NumDmlAffectedRows { get; set; }
 	public IDictionary<string, string>? Labels { get; set; }
+	public bool IsDryRun { get; set; }
 
 	public TableSchema? ResultSchema { get; set; }
 	public List<TableRow>? ResultRows { get; set; }
@@ -47,7 +48,9 @@ internal class InMemoryJob
 		JobReference = new JobReference { ProjectId = ProjectId, JobId = JobId },
 		Configuration = new JobConfiguration
 		{
-			Query = new JobConfigurationQuery { Query = Query, UseLegacySql = false }
+			Query = new JobConfigurationQuery { Query = Query, UseLegacySql = false },
+			Labels = Labels as Dictionary<string, string> ?? Labels?.ToDictionary(kv => kv.Key, kv => kv.Value),
+			DryRun = IsDryRun ? true : null
 		},
 		Status = new JobStatus { State = State },
 		Statistics = new JobStatistics
@@ -60,6 +63,8 @@ internal class InMemoryJob
 				TotalBytesProcessed = TotalBytesProcessed,
 				TotalBytesBilled = 0,
 				CacheHit = false,
+				StatementType = StatementType,
+				NumDmlAffectedRows = NumDmlAffectedRows > 0 ? NumDmlAffectedRows : null,
 			}
 		}
 	};

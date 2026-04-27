@@ -1198,9 +1198,15 @@ return name switch
 "UNIX_MILLIS" => EvaluateUnixMillis(args, row),
 
 // Array functions
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions
 "ARRAY_LENGTH" => EvaluateArrayLength(args, row),
 "ARRAY_TO_STRING" => EvaluateArrayToString(args, row),
 "GENERATE_ARRAY" => EvaluateGenerateArray(args, row),
+"ARRAY_CONCAT" => EvaluateArrayConcat(args, row),
+"ARRAY_REVERSE" => EvaluateArrayReverse(args, row),
+"ARRAY_FIRST" => EvaluateArrayFirst(args, row),
+"ARRAY_LAST" => EvaluateArrayLast(args, row),
+"ARRAY_SLICE" => EvaluateArraySlice(args, row),
 
 // Conversion functions
 "CAST" => args.Count >= 2 ? CastValue(Evaluate(args[0], row), Evaluate(args[1], row)?.ToString() ?? "STRING", false) : null,
@@ -1212,8 +1218,12 @@ return name switch
 "ARRAY" => args.Select(a => Evaluate(a, row)).ToList(),
 
 // Hash/Encoding
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/hash_functions
 "MD5" => EvaluateMd5(args, row),
+"SHA1" => EvaluateSha1(args, row),
 "SHA256" => EvaluateSha256(args, row),
+"SHA512" => EvaluateSha512(args, row),
+"FARM_FINGERPRINT" => EvaluateFarmFingerprint(args, row),
 "TO_BASE64" => EvaluateToBase64(args, row),
 "FROM_BASE64" => EvaluateFromBase64(args, row),
 "TO_HEX" => EvaluateToHex(args, row),
@@ -1841,6 +1851,87 @@ else if (step < 0) for (var i = start; i >= end; i += step) result.Add(i);
 return result;
 }
 
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_concat
+//   "Concatenates one or more arrays with the same element type into a single array."
+//   "Returns NULL if any input argument is NULL."
+private object? EvaluateArrayConcat(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var result = new List<object?>();
+foreach (var arg in args)
+{
+    var val = Evaluate(arg, row);
+    if (val is null) return null;
+    if (val is IList<object?> list) result.AddRange(list);
+    else if (val is IEnumerable<object?> en) result.AddRange(en);
+    else result.Add(val);
+}
+return result;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_reverse
+//   "Returns the input ARRAY with elements in reverse order."
+private object? EvaluateArrayReverse(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+if (val is null) return null;
+if (val is IList<object?> list) return list.Reverse().ToList();
+return null;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_first
+//   "Takes an array and returns the first element in the array."
+private object? EvaluateArrayFirst(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+if (val is null) return null;
+if (val is IList<object?> list)
+{
+    if (list.Count == 0) throw new InvalidOperationException("ARRAY_FIRST on empty array");
+    return list[0];
+}
+return null;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_last
+//   "Takes an array and returns the last element in the array."
+private object? EvaluateArrayLast(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+if (val is null) return null;
+if (val is IList<object?> list)
+{
+    if (list.Count == 0) throw new InvalidOperationException("ARRAY_LAST on empty array");
+    return list[list.Count - 1];
+}
+return null;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_slice
+//   "Returns an array containing zero or more consecutive elements from the input array."
+private object? EvaluateArraySlice(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row);
+var startOffsetRaw = Evaluate(args[1], row);
+var endOffsetRaw = Evaluate(args[2], row);
+if (val is null || startOffsetRaw is null || endOffsetRaw is null) return null;
+if (val is not IList<object?> list) return null;
+if (list.Count == 0) return new List<object?>();
+
+int startOffset = (int)ToLong(startOffsetRaw);
+int endOffset = (int)ToLong(endOffsetRaw);
+
+// Resolve negative offsets and clamp
+int ResolveOffset(int offset) =>
+    offset >= 0
+        ? Math.Min(offset, list.Count - 1)
+        : Math.Max(0, list.Count + offset);
+
+int start = ResolveOffset(startOffset);
+int end = ResolveOffset(endOffset);
+if (start > end) return new List<object?>();
+return list.Skip(start).Take(end - start + 1).ToList();
+}
+
 private object? EvaluateMd5(IReadOnlyList<SqlExpression> args, RowContext row)
 {
 var val = Evaluate(args[0], row)?.ToString();
@@ -1855,6 +1946,41 @@ var val = Evaluate(args[0], row)?.ToString();
 if (val is null) return null;
 var bytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(val));
 return bytes;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/hash_functions#sha1
+//   "Computes the hash of the input using the SHA-1 algorithm. Returns 20 bytes."
+private object? EvaluateSha1(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row)?.ToString();
+if (val is null) return null;
+return System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(val));
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/hash_functions#sha512
+//   "Computes the hash of the input using the SHA-512 algorithm. Returns 64 bytes."
+private object? EvaluateSha512(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row)?.ToString();
+if (val is null) return null;
+return System.Security.Cryptography.SHA512.HashData(System.Text.Encoding.UTF8.GetBytes(val));
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/hash_functions#farm_fingerprint
+//   "Computes the fingerprint using the FarmHash Fingerprint64 algorithm. Returns INT64."
+private object? EvaluateFarmFingerprint(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var val = Evaluate(args[0], row)?.ToString();
+if (val is null) return null;
+// Approximate FarmHash Fingerprint64 using a stable hash (FNV-1a 64-bit)
+// This is not exact FarmHash but provides deterministic INT64 output.
+ulong hash = 14695981039346656037;
+foreach (var b in System.Text.Encoding.UTF8.GetBytes(val))
+{
+    hash ^= b;
+    hash *= 1099511628211;
+}
+return unchecked((long)hash);
 }
 
 private object? EvaluateToBase64(IReadOnlyList<SqlExpression> args, RowContext row)
@@ -2133,6 +2259,12 @@ return funcName switch
 "APPROX_COUNT_DISTINCT" => (long)values.Where(v => v is not null).Distinct().Count(),
 "LOGICAL_AND" => values.All(v => v is true),
 "LOGICAL_OR" => values.Any(v => v is true),
+// Statistical aggregates
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/statistical_aggregate_functions
+"VAR_SAMP" or "VARIANCE" => EvaluateVariance(values, sample: true),
+"VAR_POP" => EvaluateVariance(values, sample: false),
+"STDDEV_SAMP" or "STDDEV" => EvaluateStddev(values, sample: true),
+"STDDEV_POP" => EvaluateStddev(values, sample: false),
 _ => throw new NotSupportedException("Unsupported aggregate: " + funcName)
 };
 }
@@ -2142,6 +2274,32 @@ private object? EvaluateStringAgg(AggregateCall agg, List<RowContext> rows)
 var values = rows.Select(r => Evaluate(agg.Arg!, r)?.ToString())
 .Where(v => v is not null).ToList();
 return string.Join(",", values);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/statistical_aggregate_functions#var_samp
+//   "Returns the sample (unbiased) variance of the values."
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/statistical_aggregate_functions#var_pop
+//   "Returns the population (biased) variance of the values."
+private static object? EvaluateVariance(List<object?> values, bool sample)
+{
+var nums = values.Where(v => v is not null).Select(v => Convert.ToDouble(v)).ToList();
+if (sample && nums.Count < 2) return null;
+if (!sample && nums.Count == 0) return null;
+if (!sample && nums.Count == 1) return 0.0;
+var mean = nums.Average();
+var sumSqDiff = nums.Sum(x => (x - mean) * (x - mean));
+return sample ? sumSqDiff / (nums.Count - 1) : sumSqDiff / nums.Count;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/statistical_aggregate_functions#stddev_samp
+//   "Returns the sample (unbiased) standard deviation of the values."
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/statistical_aggregate_functions#stddev_pop
+//   "Returns the population (biased) standard deviation of the values."
+private static object? EvaluateStddev(List<object?> values, bool sample)
+{
+var variance = EvaluateVariance(values, sample);
+if (variance is null) return null;
+return Math.Sqrt((double)variance);
 }
 
 #endregion

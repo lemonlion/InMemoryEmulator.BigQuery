@@ -33,6 +33,7 @@ internal enum SqlToken
 
 	// Operators
 	Star, Comma, Dot, LParen, RParen,
+	LBracket, RBracket,  // [ ]
 	Eq, Neq, Lt, Gt, Lte, Gte,
 	Plus, Minus, Slash, Percent,
 	Pipe,            // ||
@@ -58,6 +59,8 @@ internal static class SqlTokenizer
 		.Match(Character.EqualTo('.'), SqlToken.Dot)
 		.Match(Character.EqualTo('('), SqlToken.LParen)
 		.Match(Character.EqualTo(')'), SqlToken.RParen)
+		.Match(Character.EqualTo('['), SqlToken.LBracket)
+		.Match(Character.EqualTo(']'), SqlToken.RBracket)
 		.Match(Character.EqualTo('+'), SqlToken.Plus)
 		.Match(Character.EqualTo('-'), SqlToken.Minus)
 		.Match(Character.EqualTo('/'), SqlToken.Slash)
