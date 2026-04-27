@@ -101,6 +101,33 @@ internal static class SqlParser
 		.Or(Token.EqualTo(SqlToken.Replace).Select(t => t.ToStringValue()))
 		.Or(Token.EqualTo(SqlToken.Range).Select(t => t.ToStringValue()));
 
+	/// <summary>Helper: matches an Identifier token whose text equals the given value (case-insensitive).</summary>
+	private static TokenListParser<SqlToken, Token<SqlToken>> IdentifierMatching(string value) =>
+		Token.EqualTo(SqlToken.Identifier).Where(t =>
+			t.ToStringValue().Equals(value, StringComparison.OrdinalIgnoreCase));
+
+	/// <summary>Helper: consumes all tokens until a matching RParen is found, returning their text.</summary>
+	private static readonly TokenListParser<SqlToken, string> ConsumeUntilCloseParen =
+		input =>
+		{
+			var sb = new System.Text.StringBuilder();
+			var position = input;
+			int depth = 0;
+			while (!position.IsAtEnd)
+			{
+				var token = position.ConsumeToken();
+				if (!token.HasValue) break;
+				if (token.Value.Kind == SqlToken.RParen && depth == 0)
+					return TokenListParserResult.Value(sb.ToString().Trim(), input, position);
+				if (token.Value.Kind == SqlToken.LParen) depth++;
+				if (token.Value.Kind == SqlToken.RParen) depth--;
+				if (sb.Length > 0) sb.Append(' ');
+				sb.Append(token.Value.ToStringValue());
+				position = token.Remainder;
+			}
+			return TokenListParserResult.Value(sb.ToString().Trim(), input, position);
+		};
+
 	// Accept keywords as identifiers in alias/column positions (e.g. SELECT name, id)
 	private static readonly TokenListParser<SqlToken, string> IdentifierOrKeyword =
 		Identifier
@@ -167,7 +194,19 @@ internal static class SqlParser
 		.Or(Token.EqualTo(SqlToken.All).Select(t => t.ToStringValue()))
 		.Or(Token.EqualTo(SqlToken.Except).Select(t => t.ToStringValue()))
 		.Or(Token.EqualTo(SqlToken.Intersect).Select(t => t.ToStringValue()))
-		.Or(Token.EqualTo(SqlToken.Exists).Select(t => t.ToStringValue()));
+		.Or(Token.EqualTo(SqlToken.Exists).Select(t => t.ToStringValue()))
+		.Or(Token.EqualTo(SqlToken.Truncate).Select(t => t.ToStringValue()))
+		.Or(Token.EqualTo(SqlToken.Schema).Select(t => t.ToStringValue()))
+		.Or(Token.EqualTo(SqlToken.Snapshot).Select(t => t.ToStringValue()))
+		.Or(Token.EqualTo(SqlToken.Clone).Select(t => t.ToStringValue()))
+		.Or(Token.EqualTo(SqlToken.External).Select(t => t.ToStringValue()))
+		.Or(Token.EqualTo(SqlToken.Procedure).Select(t => t.ToStringValue()))
+		.Or(Token.EqualTo(SqlToken.Materialized).Select(t => t.ToStringValue()))
+		.Or(Token.EqualTo(SqlToken.Function).Select(t => t.ToStringValue()))
+		.Or(Token.EqualTo(SqlToken.Policy).Select(t => t.ToStringValue()))
+		.Or(Token.EqualTo(SqlToken.Index).Select(t => t.ToStringValue()))
+		.Or(Token.EqualTo(SqlToken.Grant).Select(t => t.ToStringValue()))
+		.Or(Token.EqualTo(SqlToken.Options).Select(t => t.ToStringValue()));
 
 	// --- Literals ---
 
@@ -222,7 +261,7 @@ internal static class SqlParser
 				// Check if it's an aggregate function
 				var upper = name.ToUpperInvariant();
 				if (upper is "COUNT" or "SUM" or "AVG" or "MIN" or "MAX" or "ANY_VALUE"
-					or "ARRAY_AGG" or "STRING_AGG" or "COUNTIF" or "LOGICAL_AND" or "LOGICAL_OR"
+					or "ARRAY_AGG" or "ARRAY_CONCAT_AGG" or "STRING_AGG" or "COUNTIF" or "LOGICAL_AND" or "LOGICAL_OR"
 					or "APPROX_COUNT_DISTINCT" or "BIT_AND" or "BIT_OR" or "BIT_XOR"
 					or "VAR_SAMP" or "VAR_POP" or "VARIANCE" or "STDDEV" or "STDDEV_SAMP" or "STDDEV_POP"
 					or "CORR" or "COVAR_POP" or "COVAR_SAMP"
@@ -992,7 +1031,16 @@ internal static class SqlParser
 		.Or(InsertSelectStmt.Try())
 		.Or(UpdateStmt.Try())
 		.Or(DeleteStmt.Try())
-		.Or(MergeStmt.Try());
+		.Or(MergeStmt.Try())
+		.Or(SP.Ref(() => TruncateTableStmt!).Try());
+
+	// TRUNCATE TABLE name
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#truncate_table_statement
+	//   "Deletes all rows from the named table."
+	private static readonly TokenListParser<SqlToken, SqlStatement> TruncateTableStmt =
+		Token.EqualTo(SqlToken.Truncate).IgnoreThen(Token.EqualTo(SqlToken.Table))
+			.IgnoreThen(SP.Ref(() => TableNameParser!))
+			.Select(tbl => (SqlStatement)new TruncateTableStatement(tbl.TableName, tbl.DatasetId));
 
 	// --- DDL Parsers ---
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language
@@ -1011,7 +1059,7 @@ internal static class SqlParser
 		IdentifierOrKeyword.Then(name =>
 			IdentifierOrKeyword.Select(type => (name, type.ToUpperInvariant())));
 
-	// CREATE [OR REPLACE] TABLE [IF NOT EXISTS] name (col TYPE, ...)
+	// CREATE [OR REPLACE] TABLE [IF NOT EXISTS] name (col TYPE, ...) | AS SELECT | LIKE src | COPY src | CLONE src
 	private static readonly TokenListParser<SqlToken, SqlStatement> CreateTableStmt =
 		Token.EqualTo(SqlToken.Create)
 			.IgnoreThen(
@@ -1025,10 +1073,29 @@ internal static class SqlParser
 							.Select(_ => true).OptionalOrDefault(false)
 					).Then(ifNotExists =>
 						TableNameParser.Then(tbl =>
-							// (col TYPE, ...) or AS SELECT
+							// AS SELECT
 							Token.EqualTo(SqlToken.As).IgnoreThen(SelectStmt)
 								.Select(q => (SqlStatement)new CreateTableAsSelectStatement(tbl.TableName, tbl.DatasetId, q, orReplace))
 								.Try()
+							// LIKE source
+							// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_like
+							.Or(Token.EqualTo(SqlToken.Like)
+								.IgnoreThen(TableNameParser)
+								.Select(src => (SqlStatement)new CreateTableLikeStatement(tbl.TableName, tbl.DatasetId, src.TableName, src.DatasetId))
+								.Try())
+							// COPY source
+							// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_copy
+							.Or(IdentifierMatching("COPY")
+								.IgnoreThen(TableNameParser)
+								.Select(src => (SqlStatement)new CreateTableCopyStatement(tbl.TableName, tbl.DatasetId, src.TableName, src.DatasetId))
+								.Try())
+							// CLONE source
+							// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_clone
+							.Or(Token.EqualTo(SqlToken.Clone)
+								.IgnoreThen(TableNameParser)
+								.Select(src => (SqlStatement)new CreateTableCopyStatement(tbl.TableName, tbl.DatasetId, src.TableName, src.DatasetId))
+								.Try())
+							// (col TYPE, ...)
 							.Or(Token.EqualTo(SqlToken.LParen)
 								.IgnoreThen(ColumnDefParser.ManyDelimitedBy(Token.EqualTo(SqlToken.Comma)))
 								.Then(cols => Token.EqualTo(SqlToken.RParen)
@@ -1047,7 +1114,7 @@ internal static class SqlParser
 				TableNameParser.Select(tbl =>
 					(SqlStatement)new DropTableStatement(tbl.TableName, tbl.DatasetId, ifExists)));
 
-	// ALTER TABLE name ADD COLUMN col TYPE / DROP COLUMN col / RENAME TO name
+	// ALTER TABLE name ADD COLUMN col TYPE / DROP COLUMN col / RENAME TO name / ALTER COLUMN ... / SET OPTIONS (...)
 	private static readonly TokenListParser<SqlToken, SqlStatement> AlterTableStmt =
 		Token.EqualTo(SqlToken.Alter).IgnoreThen(Token.EqualTo(SqlToken.Table))
 			.IgnoreThen(TableNameParser)
@@ -1067,7 +1134,53 @@ internal static class SqlParser
 				// RENAME TO name
 				.Or(Token.EqualTo(SqlToken.Rename).IgnoreThen(Token.EqualTo(SqlToken.To))
 					.IgnoreThen(IdentifierOrKeyword)
-					.Select(newName => (SqlStatement)new AlterTableStatement(tbl.TableName, tbl.DatasetId, new RenameTableAction(newName))))
+					.Select(newName => (SqlStatement)new AlterTableStatement(tbl.TableName, tbl.DatasetId, new RenameTableAction(newName)))
+					.Try())
+				// ALTER COLUMN col SET DATA TYPE type
+				// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_column_set_data_type
+				.Or(Token.EqualTo(SqlToken.Alter).IgnoreThen(Token.EqualTo(SqlToken.Column))
+					.IgnoreThen(IdentifierOrKeyword)
+					.Then(col =>
+						// SET DATA TYPE type
+						Token.EqualTo(SqlToken.Set)
+							.IgnoreThen(IdentifierMatching("DATA"))
+							.IgnoreThen(IdentifierMatching("TYPE"))
+							.IgnoreThen(IdentifierOrKeyword)
+							.Select(newType => (SqlStatement)new AlterTableStatement(tbl.TableName, tbl.DatasetId, new AlterColumnSetDataTypeAction(col, newType.ToUpperInvariant())))
+							.Try()
+						// SET DEFAULT expr (we capture a single-token expression for simplicity)
+						// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_column_set_default
+						.Or(Token.EqualTo(SqlToken.Set).IgnoreThen(IdentifierMatching("DEFAULT"))
+							.IgnoreThen(SP.Ref(() => Expression!))
+							.Select(expr => {
+								var defaultStr = expr switch
+								{
+									LiteralExpr { Value: string s } => $"'{s}'",
+									LiteralExpr lit => lit.Value?.ToString() ?? "NULL",
+									_ => expr.ToString() ?? "NULL"
+								};
+								return (SqlStatement)new AlterTableStatement(tbl.TableName, tbl.DatasetId, new AlterColumnSetDefaultAction(col, defaultStr));
+							})
+							.Try())
+						// DROP DEFAULT
+						// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_column_drop_default
+						.Or(Token.EqualTo(SqlToken.Drop).IgnoreThen(IdentifierMatching("DEFAULT"))
+							.Select(_ => (SqlStatement)new AlterTableStatement(tbl.TableName, tbl.DatasetId, new AlterColumnDropDefaultAction(col)))
+							.Try())
+						// DROP NOT NULL
+						// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_column_drop_not_null
+						.Or(Token.EqualTo(SqlToken.Drop).IgnoreThen(Token.EqualTo(SqlToken.Not))
+							.IgnoreThen(Token.EqualTo(SqlToken.Null))
+							.Select(_ => (SqlStatement)new AlterTableStatement(tbl.TableName, tbl.DatasetId, new AlterColumnDropNotNullAction(col))))
+					)
+					.Try())
+				// SET OPTIONS (...)
+				// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_table_set_options
+				.Or(Token.EqualTo(SqlToken.Set).IgnoreThen(Token.EqualTo(SqlToken.Options))
+					.IgnoreThen(Token.EqualTo(SqlToken.LParen))
+					.IgnoreThen(ConsumeUntilCloseParen)
+					.Then(text => Token.EqualTo(SqlToken.RParen)
+						.Select(_ => (SqlStatement)new AlterTableStatement(tbl.TableName, tbl.DatasetId, new SetOptionsAction(text)))))
 			);
 
 	// CREATE [OR REPLACE] VIEW name AS SELECT ...
@@ -1092,10 +1205,101 @@ internal static class SqlParser
 				TableNameParser.Select(tbl =>
 					(SqlStatement)new DropViewStatement(tbl.TableName, tbl.DatasetId, ifExists)));
 
+	// CREATE SCHEMA [IF NOT EXISTS] name
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_schema_statement
+	private static readonly TokenListParser<SqlToken, SqlStatement> CreateSchemaStmt =
+		Token.EqualTo(SqlToken.Create).IgnoreThen(Token.EqualTo(SqlToken.Schema))
+			.IgnoreThen(
+				Token.EqualTo(SqlToken.If).IgnoreThen(Token.EqualTo(SqlToken.Not))
+					.IgnoreThen(Token.EqualTo(SqlToken.Exists))
+					.Select(_ => true).OptionalOrDefault(false)
+			).Then(ifNotExists =>
+				IdentifierOrKeyword.Select(name =>
+					(SqlStatement)new CreateSchemaStatement(name, ifNotExists)));
+
+	// DROP SCHEMA [IF EXISTS] name
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_schema_statement
+	private static readonly TokenListParser<SqlToken, SqlStatement> DropSchemaStmt =
+		Token.EqualTo(SqlToken.Drop).IgnoreThen(Token.EqualTo(SqlToken.Schema))
+			.IgnoreThen(
+				Token.EqualTo(SqlToken.If).IgnoreThen(Token.EqualTo(SqlToken.Exists))
+					.Select(_ => true).OptionalOrDefault(false)
+			).Then(ifExists =>
+				IdentifierOrKeyword.Select(name =>
+					(SqlStatement)new DropSchemaStatement(name, ifExists)));
+
+	// CREATE SNAPSHOT TABLE name CLONE source
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_snapshot_table
+	private static readonly TokenListParser<SqlToken, SqlStatement> CreateSnapshotTableStmt =
+		Token.EqualTo(SqlToken.Create).IgnoreThen(Token.EqualTo(SqlToken.Snapshot))
+			.IgnoreThen(Token.EqualTo(SqlToken.Table))
+			.IgnoreThen(TableNameParser)
+			.Then(tbl =>
+				Token.EqualTo(SqlToken.Clone).IgnoreThen(TableNameParser)
+					.Select(src => (SqlStatement)new CreateTableCopyStatement(tbl.TableName, tbl.DatasetId, src.TableName, src.DatasetId)));
+
+	// CREATE EXTERNAL TABLE name (cols) — stub: creates a regular table
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_external_table
+	private static readonly TokenListParser<SqlToken, SqlStatement> CreateExternalTableStmt =
+		Token.EqualTo(SqlToken.Create).IgnoreThen(Token.EqualTo(SqlToken.External))
+			.IgnoreThen(Token.EqualTo(SqlToken.Table))
+			.IgnoreThen(
+				Token.EqualTo(SqlToken.If).IgnoreThen(Token.EqualTo(SqlToken.Not))
+					.IgnoreThen(Token.EqualTo(SqlToken.Exists))
+					.Select(_ => true).OptionalOrDefault(false)
+			).IgnoreThen(TableNameParser)
+			.Then(tbl =>
+				Token.EqualTo(SqlToken.LParen)
+					.IgnoreThen(ColumnDefParser.ManyDelimitedBy(Token.EqualTo(SqlToken.Comma)))
+					.Then(cols => Token.EqualTo(SqlToken.RParen)
+						.Select(_ => (SqlStatement)new CreateTableStatement(tbl.TableName, tbl.DatasetId, cols.ToList(), false, false))));
+
+	// DROP EXTERNAL TABLE [IF EXISTS] name — treated like regular DROP TABLE
+	private static readonly TokenListParser<SqlToken, SqlStatement> DropExternalTableStmt =
+		Token.EqualTo(SqlToken.Drop).IgnoreThen(Token.EqualTo(SqlToken.External))
+			.IgnoreThen(Token.EqualTo(SqlToken.Table))
+			.IgnoreThen(
+				Token.EqualTo(SqlToken.If).IgnoreThen(Token.EqualTo(SqlToken.Exists))
+					.Select(_ => true).OptionalOrDefault(false)
+			).Then(ifExists =>
+				TableNameParser.Select(tbl =>
+					(SqlStatement)new DropTableStatement(tbl.TableName, tbl.DatasetId, ifExists)));
+
+	// CREATE MATERIALIZED VIEW name AS SELECT ... — treat as regular view
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_materialized_view
+	private static readonly TokenListParser<SqlToken, SqlStatement> CreateMaterializedViewStmt =
+		Token.EqualTo(SqlToken.Create)
+			.IgnoreThen(
+				Token.EqualTo(SqlToken.Or).IgnoreThen(Token.EqualTo(SqlToken.Replace))
+					.Select(_ => true).OptionalOrDefault(false)
+			).Then(orReplace =>
+				Token.EqualTo(SqlToken.Materialized).IgnoreThen(Token.EqualTo(SqlToken.View))
+					.IgnoreThen(TableNameParser)
+					.Then(tbl => Token.EqualTo(SqlToken.As).IgnoreThen(SelectStmt)
+						.Select(q => (SqlStatement)new CreateViewStatement(tbl.TableName, tbl.DatasetId, q, orReplace))));
+
+	// DROP MATERIALIZED VIEW [IF EXISTS] name
+	private static readonly TokenListParser<SqlToken, SqlStatement> DropMaterializedViewStmt =
+		Token.EqualTo(SqlToken.Drop).IgnoreThen(Token.EqualTo(SqlToken.Materialized))
+			.IgnoreThen(Token.EqualTo(SqlToken.View))
+			.IgnoreThen(
+				Token.EqualTo(SqlToken.If).IgnoreThen(Token.EqualTo(SqlToken.Exists))
+					.Select(_ => true).OptionalOrDefault(false)
+			).Then(ifExists =>
+				TableNameParser.Select(tbl =>
+					(SqlStatement)new DropViewStatement(tbl.TableName, tbl.DatasetId, ifExists)));
+
 	// --- DDL dispatcher ---
 	private static readonly TokenListParser<SqlToken, SqlStatement> DdlStatement =
-		CreateViewStmt.Try()
+		CreateSnapshotTableStmt.Try()
+		.Or(CreateExternalTableStmt.Try())
+		.Or(CreateMaterializedViewStmt.Try())
+		.Or(CreateSchemaStmt.Try())
+		.Or(CreateViewStmt.Try())
 		.Or(CreateTableStmt.Try())
+		.Or(DropExternalTableStmt.Try())
+		.Or(DropMaterializedViewStmt.Try())
+		.Or(DropSchemaStmt.Try())
 		.Or(DropTableStmt.Try())
 		.Or(DropViewStmt.Try())
 		.Or(AlterTableStmt.Try());

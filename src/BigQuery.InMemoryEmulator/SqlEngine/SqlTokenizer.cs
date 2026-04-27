@@ -23,6 +23,8 @@ internal enum SqlToken
 	Insert, Into, Values, Update, Set, Delete, Merge, Using, Matched,
 	Create, Drop, Alter, Table, View, If, Replace, Column, Add, Rename, To,
 	Qualify, Pivot, Unpivot, Tablesample, Rollup, Recursive, For,
+	Truncate, Schema, Snapshot, Clone, External, Procedure, Materialized,
+	Function, Policy, Index, Grant, Options,
 
 	// Identifiers & literals
 	Identifier,
@@ -184,6 +186,18 @@ internal static class KeywordResolver
 		["ROLLUP"] = SqlToken.Rollup,
 		["RECURSIVE"] = SqlToken.Recursive,
 		["FOR"] = SqlToken.For,
+		["TRUNCATE"] = SqlToken.Truncate,
+		["SCHEMA"] = SqlToken.Schema,
+		["SNAPSHOT"] = SqlToken.Snapshot,
+		["CLONE"] = SqlToken.Clone,
+		["EXTERNAL"] = SqlToken.External,
+		["PROCEDURE"] = SqlToken.Procedure,
+		["MATERIALIZED"] = SqlToken.Materialized,
+		["FUNCTION"] = SqlToken.Function,
+		["POLICY"] = SqlToken.Policy,
+		["INDEX"] = SqlToken.Index,
+		["GRANT"] = SqlToken.Grant,
+		["OPTIONS"] = SqlToken.Options,
 	};
 
 	public static TokenList<SqlToken> Resolve(TokenList<SqlToken> tokens)

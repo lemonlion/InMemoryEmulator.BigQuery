@@ -275,6 +275,17 @@ internal abstract record AlterTableAction;
 internal record AddColumnAction(string Name, string Type) : AlterTableAction;
 internal record DropColumnAction(string Name) : AlterTableAction;
 internal record RenameTableAction(string NewName) : AlterTableAction;
+// Phase 27: ALTER COLUMN variants
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_column_set_data_type
+internal record AlterColumnSetDataTypeAction(string ColumnName, string NewType) : AlterTableAction;
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_column_set_default
+internal record AlterColumnSetDefaultAction(string ColumnName, string DefaultExpression) : AlterTableAction;
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_column_drop_default
+internal record AlterColumnDropDefaultAction(string ColumnName) : AlterTableAction;
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_column_drop_not_null
+internal record AlterColumnDropNotNullAction(string ColumnName) : AlterTableAction;
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_table_set_options
+internal record SetOptionsAction(string OptionsText) : AlterTableAction;
 
 /// <summary>CREATE [OR REPLACE] VIEW name AS SELECT ...</summary>
 internal record CreateViewStatement(
@@ -290,6 +301,23 @@ internal record DropViewStatement(
 	string? DatasetId,
 	bool IfExists
 ) : SqlStatement;
+
+// Phase 27: TRUNCATE TABLE
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#truncate_table_statement
+internal record TruncateTableStatement(string TableName, string? DatasetId) : SqlStatement;
+
+// Phase 27: CREATE TABLE LIKE / COPY / CLONE / SNAPSHOT
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language
+internal record CreateTableLikeStatement(string TableName, string? DatasetId, string SourceTable, string? SourceDatasetId) : SqlStatement;
+internal record CreateTableCopyStatement(string TableName, string? DatasetId, string SourceTable, string? SourceDatasetId) : SqlStatement;
+
+// Phase 27: CREATE/DROP SCHEMA
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_schema_statement
+internal record CreateSchemaStatement(string SchemaName, bool IfNotExists) : SqlStatement;
+internal record DropSchemaStatement(string SchemaName, bool IfExists) : SqlStatement;
+
+// Phase 27: Stub DDL statements (parsed but minimally executed)
+internal record NoOpDdlStatement(string Description) : SqlStatement;
 
 // --- Procedural Language AST Nodes (Phase 15) ---
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language

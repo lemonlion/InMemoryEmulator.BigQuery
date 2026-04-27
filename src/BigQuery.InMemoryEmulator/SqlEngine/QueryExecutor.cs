@@ -30,8 +30,34 @@ _parameters = parameters;
 
 public InMemoryBigQueryResult Execute(string sql)
 {
+// Phase 27: Detect stub DDL patterns before parsing — these have complex syntax
+// that the parser doesn't handle, but we support them as no-ops for Go emulator parity.
+if (IsStubDdl(sql))
+	return EmptyResult();
+
 var stmt = SqlParser.ParseSql(sql);
 return ExecuteStatement(stmt);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language
+// Stub patterns that parse-and-ignore for Go emulator parity.
+private static readonly System.Text.RegularExpressions.Regex[] StubDdlPatterns =
+[
+	new(@"^\s*CREATE\s+(OR\s+REPLACE\s+)?PROCEDURE\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled),
+	new(@"^\s*DROP\s+PROCEDURE\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled),
+	new(@"^\s*CREATE\s+(OR\s+REPLACE\s+)?TABLE\s+FUNCTION\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled),
+	new(@"^\s*DROP\s+TABLE\s+FUNCTION\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled),
+	new(@"^\s*CREATE\s+(OR\s+REPLACE\s+)?ROW\s+ACCESS\s+POLICY\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled),
+	new(@"^\s*DROP\s+(ALL\s+)?ROW\s+ACCESS\s+POLIC(Y|IES)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled),
+	new(@"^\s*CREATE\s+SEARCH\s+INDEX\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled),
+	new(@"^\s*DROP\s+SEARCH\s+INDEX\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled),
+];
+
+private static bool IsStubDdl(string sql)
+{
+	foreach (var pattern in StubDdlPatterns)
+		if (pattern.IsMatch(sql)) return true;
+	return false;
 }
 
 private InMemoryBigQueryResult ExecuteStatement(SqlStatement stmt)
@@ -51,6 +77,12 @@ DropTableStatement dt => ExecuteDropTable(dt),
 AlterTableStatement alt => ExecuteAlterTable(alt),
 CreateViewStatement cv => ExecuteCreateView(cv),
 DropViewStatement dv => ExecuteDropView(dv),
+TruncateTableStatement trunc => ExecuteTruncateTable(trunc),
+CreateTableLikeStatement like => ExecuteCreateTableLike(like),
+CreateTableCopyStatement copy => ExecuteCreateTableCopy(copy),
+CreateSchemaStatement cs => ExecuteCreateSchema(cs),
+DropSchemaStatement ds => ExecuteDropSchema(ds),
+NoOpDdlStatement _ => EmptyResult(),
 _ => throw new NotSupportedException("Unsupported statement type: " + stmt.GetType().Name)
 };
 }
@@ -212,6 +244,27 @@ var groupExprs = sel.GroupBy ?? [];
 var rollupExpr = groupExprs.OfType<RollupExpr>().FirstOrDefault();
 if (rollupExpr is not null)
     return ExecuteRollup(sel, rows, rollupExpr);
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#group_by_clause
+//   When there's no explicit GROUP BY but the SELECT contains aggregates
+//   (implicit aggregation), the entire table is one group — even if empty.
+//   SELECT COUNT(*) FROM empty_table returns 1 row (count=0).
+if (groupExprs.Count == 0 && rows.Count == 0)
+{
+    // Implicit aggregation over empty set → produce one result row
+    var dict2 = new Dictionary<string, object?>();
+    var fields2 = new List<TableFieldSchema>();
+    var emptyGroupRows = new List<RowContext>();
+    foreach (var col in sel.Columns)
+    {
+        var name = col.Alias ?? DeriveColumnName(col.Expr);
+        var value = EvaluateWithAggregates(col.Expr, emptyGroupRows);
+        dict2[name] = value;
+        fields2.Add(new TableFieldSchema { Name = name, Type = InferType(value) });
+    }
+    var emptySchema = new TableSchema { Fields = fields2 };
+    return new InMemoryBigQueryResult(emptySchema, new List<TableRow> { DictToTableRow(dict2) });
+}
 
 var groups = rows.GroupBy(r =>
 string.Join("|", groupExprs.Select(g => Evaluate(g, r)?.ToString() ?? "NULL")));
@@ -967,6 +1020,60 @@ object? defaultVal = navArgs.Count > 2 ? Evaluate(navArgs[2], currentRow) : null
 var idx = partition.IndexOf(currentRow);
 int targetIdx = idx + offset;
 return targetIdx < partition.Count ? Evaluate(navArgs[0], partition[targetIdx]) : defaultVal;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#nth_value
+//   "Returns the value of value_expression at the Nth row of the current window frame."
+if (funcName == "NTH_VALUE")
+{
+int n = navArgs.Count > 1 ? (int)ToLong(Evaluate(navArgs[1], currentRow)) : 1;
+if (n <= 0) throw new InvalidOperationException("NTH_VALUE requires a positive integer for N");
+// Apply window frame: for ORDER BY without explicit frame, default is RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+var idx = partition.IndexOf(currentRow);
+var framedPartition = wf.OrderBy is { Count: > 0 } ? partition.Take(idx + 1).ToList() : partition;
+return n <= framedPartition.Count ? Evaluate(navArgs[0], framedPartition[n - 1]) : null;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#percentile_cont
+//   "Computes the specified percentile value for the value_expression, with linear interpolation."
+if (funcName == "PERCENTILE_CONT")
+{
+var percentile = Convert.ToDouble(Evaluate(navArgs[1], currentRow));
+var sortedValues = partition
+	.Select(r => Evaluate(navArgs[0], r))
+	.Where(v => v is not null)
+	.Select(v => Convert.ToDouble(v))
+	.OrderBy(v => v)
+	.ToList();
+if (sortedValues.Count == 0) return null;
+if (sortedValues.Count == 1) return sortedValues[0];
+var rank = percentile * (sortedValues.Count - 1);
+int lower = (int)Math.Floor(rank);
+int upper = (int)Math.Ceiling(rank);
+if (lower == upper) return sortedValues[lower];
+var frac = rank - lower;
+return sortedValues[lower] + frac * (sortedValues[upper] - sortedValues[lower]);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#percentile_disc
+//   "Computes the specified percentile value for a discrete value_expression."
+if (funcName == "PERCENTILE_DISC")
+{
+var percentile = Convert.ToDouble(Evaluate(navArgs[1], currentRow));
+var sortedValues = partition
+	.Select(r => Evaluate(navArgs[0], r))
+	.Where(v => v is not null)
+	.OrderBy(v => v, Comparer<object?>.Create((a, b) => CompareRaw(a!, b!)))
+	.ToList();
+if (sortedValues.Count == 0) return null;
+if (percentile <= 0) return sortedValues[0];
+// Return first value whose CUME_DIST >= percentile
+for (int i = 0; i < sortedValues.Count; i++)
+{
+	double cumeDist = (double)(i + 1) / sortedValues.Count;
+	if (cumeDist >= percentile) return sortedValues[i];
+}
+return sortedValues[^1];
 }
 
 // Window aggregate functions
@@ -3598,6 +3705,11 @@ return funcName switch
 "ANY_VALUE" => values.FirstOrDefault(v => v is not null),
 "STRING_AGG" => EvaluateStringAgg(agg, rows),
 "ARRAY_AGG" => values.Where(v => v is not null).ToList(),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#array_concat_agg
+//   "Concatenates elements from expression of type ARRAY, returning a single ARRAY as a result."
+"ARRAY_CONCAT_AGG" => values.Where(v => v is not null)
+	.SelectMany(v => v is IList<object?> list ? list : (v is System.Collections.IEnumerable e ? e.Cast<object?>() : [v]))
+	.ToList(),
 "COUNTIF" => (long)rows.Count(r => IsTruthy(Evaluate(agg.Arg!, r))),
 "APPROX_COUNT_DISTINCT" => (long)values.Where(v => v is not null).Distinct().Count(),
 "LOGICAL_AND" => values.All(v => v is true),
@@ -4115,6 +4227,43 @@ switch (alter.Action)
                 ds.Tables[rename.NewName] = t;
         }
         break;
+    // Phase 27: ALTER COLUMN variants
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_column_set_data_type
+    case AlterColumnSetDataTypeAction setType:
+    {
+        var f = table.Schema.Fields.First(f =>
+            f.Name.Equals(setType.ColumnName, StringComparison.OrdinalIgnoreCase));
+        f.Type = setType.NewType;
+        break;
+    }
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_column_set_default
+    case AlterColumnSetDefaultAction setDefault:
+    {
+        var f = table.Schema.Fields.First(f =>
+            f.Name.Equals(setDefault.ColumnName, StringComparison.OrdinalIgnoreCase));
+        f.DefaultValueExpression = setDefault.DefaultExpression;
+        break;
+    }
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_column_drop_default
+    case AlterColumnDropDefaultAction dropDefault:
+    {
+        var f = table.Schema.Fields.First(f =>
+            f.Name.Equals(dropDefault.ColumnName, StringComparison.OrdinalIgnoreCase));
+        f.DefaultValueExpression = null;
+        break;
+    }
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_column_drop_not_null
+    case AlterColumnDropNotNullAction dropNotNull:
+    {
+        var f = table.Schema.Fields.First(f =>
+            f.Name.Equals(dropNotNull.ColumnName, StringComparison.OrdinalIgnoreCase));
+        f.Mode = "NULLABLE";
+        break;
+    }
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_table_set_options
+    case SetOptionsAction:
+        // No-op — metadata-only in an in-memory emulator
+        break;
 }
 return EmptyResult();
 }
@@ -4153,6 +4302,111 @@ if (dsId is null || !_store.Datasets.TryGetValue(dsId, out var ds))
 }
 if (!ds.Tables.TryRemove(viewId, out _) && !drop.IfExists)
     throw new InvalidOperationException($"View '{viewId}' not found");
+return EmptyResult();
+}
+
+// Phase 27: TRUNCATE TABLE
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#truncate_table_statement
+//   "Deletes all rows from the named table."
+private InMemoryBigQueryResult ExecuteTruncateTable(TruncateTableStatement trunc)
+{
+var (parsedDs, tblId) = SplitTableName(trunc.TableName);
+var table = ResolveTable(trunc.DatasetId ?? parsedDs, tblId);
+lock (table.RowLock)
+{
+    table.Rows.Clear();
+}
+return EmptyResult();
+}
+
+// Phase 27: CREATE TABLE LIKE
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_like
+//   "Creates a new table with the same schema as the source table."
+private InMemoryBigQueryResult ExecuteCreateTableLike(CreateTableLikeStatement like)
+{
+var (parsedDs, tblId) = SplitTableName(like.TableName);
+var dsId = like.DatasetId ?? parsedDs ?? _defaultDatasetId
+    ?? throw new InvalidOperationException("No dataset for CREATE TABLE LIKE");
+var (srcParsedDs, srcTblId) = SplitTableName(like.SourceTable);
+var sourceTbl = ResolveTable(like.SourceDatasetId ?? srcParsedDs, srcTblId);
+var newSchema = new TableSchema
+{
+    Fields = new List<TableFieldSchema>(
+        sourceTbl.Schema.Fields.Select(f => new TableFieldSchema
+        {
+            Name = f.Name, Type = f.Type, Mode = f.Mode,
+            DefaultValueExpression = f.DefaultValueExpression,
+            Description = f.Description,
+        }))
+};
+if (!_store.Datasets.TryGetValue(dsId, out var ds))
+{
+    ds = new InMemoryDataset(dsId);
+    _store.Datasets[dsId] = ds;
+}
+ds.Tables[tblId] = new InMemoryTable(dsId, tblId, newSchema);
+return EmptyResult();
+}
+
+// Phase 27: CREATE TABLE COPY / CLONE / SNAPSHOT
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_copy
+//   "Creates a new table by copying the schema and data from the source table."
+private InMemoryBigQueryResult ExecuteCreateTableCopy(CreateTableCopyStatement copy)
+{
+var (parsedDs, tblId) = SplitTableName(copy.TableName);
+var dsId = copy.DatasetId ?? parsedDs ?? _defaultDatasetId
+    ?? throw new InvalidOperationException("No dataset for CREATE TABLE COPY");
+var (srcParsedDs, srcTblId) = SplitTableName(copy.SourceTable);
+var sourceTbl = ResolveTable(copy.SourceDatasetId ?? srcParsedDs, srcTblId);
+var newSchema = new TableSchema
+{
+    Fields = new List<TableFieldSchema>(
+        sourceTbl.Schema.Fields.Select(f => new TableFieldSchema
+        {
+            Name = f.Name, Type = f.Type, Mode = f.Mode,
+            DefaultValueExpression = f.DefaultValueExpression,
+            Description = f.Description,
+        }))
+};
+if (!_store.Datasets.TryGetValue(dsId, out var ds))
+{
+    ds = new InMemoryDataset(dsId);
+    _store.Datasets[dsId] = ds;
+}
+var newTable = new InMemoryTable(dsId, tblId, newSchema);
+lock (sourceTbl.RowLock)
+{
+    foreach (var row in sourceTbl.Rows)
+        newTable.Rows.Add(new InMemoryRow(new Dictionary<string, object?>(row.Fields)));
+}
+ds.Tables[tblId] = newTable;
+return EmptyResult();
+}
+
+// Phase 27: CREATE SCHEMA
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_schema_statement
+//   "Creates a new schema (dataset)."
+private InMemoryBigQueryResult ExecuteCreateSchema(CreateSchemaStatement cs)
+{
+if (_store.Datasets.ContainsKey(cs.SchemaName))
+{
+    if (cs.IfNotExists) return EmptyResult();
+    throw new InvalidOperationException($"Schema '{cs.SchemaName}' already exists");
+}
+_store.Datasets[cs.SchemaName] = new InMemoryDataset(cs.SchemaName);
+return EmptyResult();
+}
+
+// Phase 27: DROP SCHEMA
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#drop_schema_statement
+//   "Drops a schema (dataset)."
+private InMemoryBigQueryResult ExecuteDropSchema(DropSchemaStatement dropSchema)
+{
+if (!_store.Datasets.TryRemove(dropSchema.SchemaName, out _))
+{
+    if (dropSchema.IfExists) return EmptyResult();
+    throw new InvalidOperationException($"Schema '{dropSchema.SchemaName}' not found");
+}
 return EmptyResult();
 }
 

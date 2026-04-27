@@ -95,13 +95,13 @@ public class FakeBigQueryHandler : HttpMessageHandler
 		if (JobRoute.Match(path) is { Success: true } jMatch)
 			return await RouteJob(method, jMatch, request, cancellationToken);
 
+		// Routine routes (check before Dataset — DatasetRoute matches the prefix of routine URLs)
+		if (RoutineRoute.Match(path) is { Success: true } rMatch)
+			return await RouteRoutine(method, rMatch, request, cancellationToken);
+
 		// Dataset routes
 		if (DatasetRoute.Match(path) is { Success: true } dMatch)
 			return await RouteDataset(method, dMatch, request, cancellationToken);
-
-		// Routine routes
-		if (RoutineRoute.Match(path) is { Success: true } rMatch)
-			return await RouteRoutine(method, rMatch, request, cancellationToken);
 
 		return BuildErrorResponse(HttpStatusCode.NotFound, "notFound",
 			$"Unknown route: {method} {path}");
@@ -820,6 +820,16 @@ public class FakeBigQueryHandler : HttpMessageHandler
 	private async Task<HttpResponseMessage> HandleInsertJob(HttpRequestMessage request)
 	{
 		var body = await ReadBodyAsync<Job>(request);
+
+		// Phase 27: Support copy jobs
+		// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs#JobConfigurationTableCopy
+		//   "Copies a table."
+		var copyConfig = body?.Configuration?.Copy;
+		if (copyConfig?.SourceTable is not null && copyConfig.DestinationTable is not null)
+		{
+			return HandleCopyJob(body!, copyConfig);
+		}
+
 		var queryConfig = body?.Configuration?.Query;
 		if (queryConfig?.Query is null)
 			return BuildErrorResponse(HttpStatusCode.BadRequest, "invalid", "Missing query configuration.");
@@ -891,6 +901,62 @@ public class FakeBigQueryHandler : HttpMessageHandler
 
 		Jobs[job.JobId] = job;
 		return BuildJsonResponse(job.ToJobResource());
+	}
+
+	// Phase 27: Copy job handler
+	// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs#JobConfigurationTableCopy
+	//   "Copies a table."
+	private HttpResponseMessage HandleCopyJob(Job jobBody, JobConfigurationTableCopy copyConfig)
+	{
+		var jobId = jobBody.JobReference?.JobId ?? Guid.NewGuid().ToString();
+		try
+		{
+			var srcDsId = copyConfig.SourceTable.DatasetId;
+			var srcTblId = copyConfig.SourceTable.TableId;
+			var dstDsId = copyConfig.DestinationTable.DatasetId;
+			var dstTblId = copyConfig.DestinationTable.TableId;
+
+			if (!_store.Datasets.TryGetValue(srcDsId, out var srcDs) ||
+				!srcDs.Tables.TryGetValue(srcTblId, out var srcTable))
+				return BuildErrorResponse(HttpStatusCode.NotFound, "notFound",
+					$"Not found: Table {srcDsId}.{srcTblId}");
+
+			if (!_store.Datasets.TryGetValue(dstDsId, out var dstDs))
+			{
+				dstDs = new InMemoryDataset(dstDsId);
+				_store.Datasets[dstDsId] = dstDs;
+			}
+
+			var newSchema = new Google.Apis.Bigquery.v2.Data.TableSchema
+			{
+				Fields = new List<Google.Apis.Bigquery.v2.Data.TableFieldSchema>(
+					srcTable.Schema.Fields.Select(f => new Google.Apis.Bigquery.v2.Data.TableFieldSchema
+					{
+						Name = f.Name, Type = f.Type, Mode = f.Mode,
+						DefaultValueExpression = f.DefaultValueExpression,
+						Description = f.Description,
+					}))
+			};
+			var newTable = new InMemoryTable(dstDsId, dstTblId, newSchema);
+			lock (srcTable.RowLock)
+			{
+				foreach (var row in srcTable.Rows)
+					newTable.Rows.Add(new InMemoryRow(new Dictionary<string, object?>(row.Fields)));
+			}
+			dstDs.Tables[dstTblId] = newTable;
+
+			var job = new InMemoryJob(_store.ProjectId, jobId)
+			{
+				StatementType = "COPY",
+				Labels = jobBody.Configuration?.Labels,
+			};
+			Jobs[job.JobId] = job;
+			return BuildJsonResponse(job.ToJobResource());
+		}
+		catch (Exception ex)
+		{
+			return BuildErrorResponse(HttpStatusCode.BadRequest, "invalid", ex.Message);
+		}
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/get
@@ -976,11 +1042,87 @@ public class FakeBigQueryHandler : HttpMessageHandler
 		return BuildJsonResponse(response);
 	}
 
-	private Task<HttpResponseMessage> RouteRoutine(
+	// Phase 27: Routines CRUD
+	// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/routines
+	private async Task<HttpResponseMessage> RouteRoutine(
 		HttpMethod method, Match match, HttpRequestMessage request, CancellationToken ct)
 	{
-		return Task.FromResult(BuildErrorResponse(HttpStatusCode.NotFound, "notFound",
-			"Routine operations not yet implemented."));
+		var datasetId = match.Groups["dataset"].Value;
+		var routineId = match.Groups["routine"].Value;
+
+		if (!_store.Datasets.TryGetValue(datasetId, out var ds))
+			return BuildErrorResponse(HttpStatusCode.NotFound, "notFound",
+				$"Not found: Dataset {datasetId}");
+
+		// GET: list (no routineId) or get (with routineId)
+		if (method == HttpMethod.Get)
+		{
+			if (string.IsNullOrEmpty(routineId))
+			{
+				// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/routines/list
+				var routines = ds.Routines.Values.Select(r => new
+				{
+					routineReference = new { projectId = _store.ProjectId, datasetId, routineId = r.RoutineId },
+					routineType = r.RoutineType,
+					language = r.Language,
+				}).ToList();
+				return BuildJsonResponse(new { routines, kind = "bigquery#routineList" });
+			}
+			else
+			{
+				// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/routines/get
+				if (!ds.Routines.TryGetValue(routineId, out var routine))
+					return BuildErrorResponse(HttpStatusCode.NotFound, "notFound",
+						$"Not found: Routine {datasetId}.{routineId}");
+				return BuildJsonResponse(new
+				{
+					routineReference = new { projectId = _store.ProjectId, datasetId, routineId },
+					routineType = routine.RoutineType,
+					language = routine.Language,
+					definitionBody = routine.Body,
+					returnType = routine.ReturnType is not null ? new { typeKind = routine.ReturnType } : null,
+				});
+			}
+		}
+
+		// POST: insert
+		if (method == HttpMethod.Post)
+		{
+			// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/routines/insert
+			var bodyJson = await request.Content!.ReadAsStringAsync(ct);
+			var body = Newtonsoft.Json.Linq.JObject.Parse(bodyJson);
+			var refObj = body["routineReference"];
+			var rId = refObj?["routineId"]?.ToString() ?? routineId;
+			var rType = body["routineType"]?.ToString() ?? "SCALAR_FUNCTION";
+			var rLang = body["language"]?.ToString() ?? "SQL";
+			var rBody = body["definitionBody"]?.ToString() ?? "";
+			var rReturnType = body["returnType"]?["typeKind"]?.ToString();
+			var rArgs = body["arguments"]?.Select(a =>
+				(a["name"]?.ToString() ?? "", a["dataType"]?["typeKind"]?.ToString() ?? "STRING")).ToList()
+				?? new List<(string, string)>();
+
+			var routine = new InMemoryRoutine(datasetId, rId, rType, rLang, rBody, rArgs, rReturnType);
+			ds.Routines[rId] = routine;
+			return BuildJsonResponse(new
+			{
+				routineReference = new { projectId = _store.ProjectId, datasetId, routineId = rId },
+				routineType = rType,
+				language = rLang,
+			});
+		}
+
+		// DELETE
+		if (method == HttpMethod.Delete)
+		{
+			// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/routines/delete
+			if (!ds.Routines.TryRemove(routineId, out _))
+				return BuildErrorResponse(HttpStatusCode.NotFound, "notFound",
+					$"Not found: Routine {datasetId}.{routineId}");
+			return new HttpResponseMessage(HttpStatusCode.NoContent);
+		}
+
+		return BuildErrorResponse(HttpStatusCode.MethodNotAllowed, "methodNotAllowed",
+			$"Method {method} not supported for routines.");
 	}
 
 	#endregion
