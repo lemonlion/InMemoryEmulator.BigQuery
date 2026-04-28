@@ -93,7 +93,7 @@ public class OrderByLimitPatternTests : IAsyncLifetime
 	}
 
 	// ---- LIMIT ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Limit_3()
 	{
 		var v = await Column("SELECT x FROM UNNEST(GENERATE_ARRAY(1, 10)) AS x ORDER BY x LIMIT 3");
@@ -122,21 +122,21 @@ public class OrderByLimitPatternTests : IAsyncLifetime
 	}
 
 	// ---- OFFSET ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Offset_2()
 	{
 		var v = await Column("SELECT x FROM UNNEST(GENERATE_ARRAY(1, 10)) AS x ORDER BY x LIMIT 3 OFFSET 2");
 		Assert.Equal(new[] { "3", "4", "5" }, v);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Offset_0()
 	{
 		var v = await Column("SELECT x FROM UNNEST(GENERATE_ARRAY(1, 10)) AS x ORDER BY x LIMIT 3 OFFSET 0");
 		Assert.Equal(new[] { "1", "2", "3" }, v);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Offset_7()
 	{
 		var v = await Column("SELECT x FROM UNNEST(GENERATE_ARRAY(1, 10)) AS x ORDER BY x LIMIT 5 OFFSET 7");
@@ -151,28 +151,28 @@ public class OrderByLimitPatternTests : IAsyncLifetime
 	}
 
 	// ---- Pagination patterns ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Pagination_Page1()
 	{
 		var v = await Column("SELECT x FROM UNNEST(GENERATE_ARRAY(1, 20)) AS x ORDER BY x LIMIT 5 OFFSET 0");
 		Assert.Equal(new[] { "1", "2", "3", "4", "5" }, v);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Pagination_Page2()
 	{
 		var v = await Column("SELECT x FROM UNNEST(GENERATE_ARRAY(1, 20)) AS x ORDER BY x LIMIT 5 OFFSET 5");
 		Assert.Equal(new[] { "6", "7", "8", "9", "10" }, v);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Pagination_Page3()
 	{
 		var v = await Column("SELECT x FROM UNNEST(GENERATE_ARRAY(1, 20)) AS x ORDER BY x LIMIT 5 OFFSET 10");
 		Assert.Equal(new[] { "11", "12", "13", "14", "15" }, v);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Pagination_LastPage()
 	{
 		var v = await Column("SELECT x FROM UNNEST(GENERATE_ARRAY(1, 20)) AS x ORDER BY x LIMIT 5 OFFSET 15");
@@ -180,14 +180,14 @@ public class OrderByLimitPatternTests : IAsyncLifetime
 	}
 
 	// ---- TOP-N patterns ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task TopN_Largest3()
 	{
 		var v = await Column("SELECT x FROM UNNEST(GENERATE_ARRAY(1, 10)) AS x ORDER BY x DESC LIMIT 3");
 		Assert.Equal(new[] { "10", "9", "8" }, v);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task TopN_Smallest3()
 	{
 		var v = await Column("SELECT x FROM UNNEST(GENERATE_ARRAY(1, 10)) AS x ORDER BY x ASC LIMIT 3");
@@ -213,7 +213,7 @@ ORDER BY CASE WHEN x = 3 THEN 0 ELSE 1 END, x");
 	}
 
 	// ---- Combining ORDER BY + WHERE + LIMIT ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Combined_FilterSortLimit()
 	{
 		var v = await Column(@"
@@ -224,7 +224,7 @@ LIMIT 3");
 		Assert.Equal(new[] { "20", "18", "16" }, v);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Combined_FilterSortOffset()
 	{
 		var v = await Column(@"
@@ -236,7 +236,7 @@ LIMIT 3 OFFSET 2");
 	}
 
 	// ---- ORDER BY ordinal position ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task OrderBy_Ordinal()
 	{
 		var v = await Column("SELECT x * 2 AS doubled FROM UNNEST([5, 3, 1, 4, 2]) AS x ORDER BY 1");
@@ -244,7 +244,7 @@ LIMIT 3 OFFSET 2");
 	}
 
 	// ---- ORDER BY alias ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task OrderBy_Alias()
 	{
 		var v = await Column("SELECT x * 2 AS doubled FROM UNNEST([5, 3, 1, 4, 2]) AS x ORDER BY doubled");

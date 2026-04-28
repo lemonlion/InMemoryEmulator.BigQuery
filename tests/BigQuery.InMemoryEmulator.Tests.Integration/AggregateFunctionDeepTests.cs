@@ -140,7 +140,7 @@ public class AggregateFunctionDeepTests : IAsyncLifetime
 		Assert.Equal("1", rows[2][1]?.ToString());
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task GroupBy_Sum()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -174,7 +174,7 @@ SELECT grp, SUM(val) as total FROM data GROUP BY grp ORDER BY grp",
 		Assert.Equal("2", rows[1][0]?.ToString());
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task GroupBy_MinMax()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -196,7 +196,7 @@ SELECT grp, MIN(val), MAX(val) FROM data GROUP BY grp ORDER BY grp",
 		Assert.Equal("15", rows[1][2]?.ToString());
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task GroupBy_Avg()
 	{
 		var client = await _fixture.GetClientAsync();

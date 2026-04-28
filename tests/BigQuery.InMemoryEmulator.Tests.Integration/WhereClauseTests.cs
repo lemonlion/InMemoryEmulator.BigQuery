@@ -107,7 +107,7 @@ WHERE (x > 3 AND (x < 7 OR x = 10))");
 	}
 
 	// ---- WHERE with aggregate in HAVING ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Having_CountGT3()
 	{
 		var v = await Scalar(@"
@@ -131,7 +131,7 @@ WHERE CASE WHEN x > 5 THEN 'high' ELSE 'low' END = 'high'");
 	}
 
 	// ---- WHERE with IF ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Where_IfResult()
 	{
 		var v = await Scalar(@"

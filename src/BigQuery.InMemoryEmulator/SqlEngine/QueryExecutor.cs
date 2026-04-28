@@ -193,14 +193,14 @@ if (sel.OrderBy is { Count: > 0 })
 var projFieldNames = schema.Fields.Select(f => f.Name).ToHashSet();
 var dicts = tableRows.Select((r, i) =>
 {
-    var d = RowToDict(r, schema);
+    var d = ParseTypedRow(RowToDict(r, schema), schema);
     if (i < rows.Count)
         foreach (var kv in rows[i].Fields)
             d.TryAdd(kv.Key, kv.Value);
     return d;
 }).ToList();
 var contexts = dicts.Select(d => new RowContext(d, null)).ToList();
-var resolvedOrderBy = ResolveOrderByOrdinals(sel.OrderBy, sel.Columns);
+var resolvedOrderBy = ResolveOrderByAliases(ResolveOrderByOrdinals(sel.OrderBy, sel.Columns), sel.Columns);
 contexts = OrderBy(contexts, resolvedOrderBy);
 tableRows = contexts.Select(c =>
 {
@@ -289,6 +289,10 @@ private InMemoryBigQueryResult ExecuteGroupBy(SelectStatement sel, List<RowConte
 {
 var groupExprs = sel.GroupBy ?? [];
 
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#group_by_clause
+//   "GROUP BY can reference SELECT list aliases."
+groupExprs = ResolveGroupByAliases(groupExprs, sel.Columns);
+
 // Check for ROLLUP
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#rollup
 var rollupExpr = groupExprs.OfType<RollupExpr>().FirstOrDefault();
@@ -352,7 +356,6 @@ resultRows.Add(dict);
 schema ??= new TableSchema { Fields = sel.Columns.Select(c =>
 new TableFieldSchema { Name = c.Alias ?? DeriveColumnName(c.Expr), Type = "STRING" }).ToList() };
 
-if (sel.OrderBy is { Count: > 0 })
 if (sel.OrderBy is { Count: > 0 })
 {
 var ctx2 = resultRows.Select(d => new RowContext(d, null)).ToList();
@@ -1869,12 +1872,14 @@ return name switch
 "FLOOR" => EvaluateFloor(args, row),
 "MOD" => EvaluateMod(args, row),
 "POW" or "POWER" => EvaluatePow(args, row),
-"SQRT" => Math.Sqrt(ToDouble(Evaluate(args[0], row))),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions
+//   "All mathematical functions return NULL for NULL input parameters."
+"SQRT" => EvaluateUnaryMathOrNull(args, row, Math.Sqrt),
 "LOG" => args.Count > 1 ? Math.Log(ToDouble(Evaluate(args[0], row)), ToDouble(Evaluate(args[1], row)))
 : Math.Log(ToDouble(Evaluate(args[0], row))),
-"LOG10" => Math.Log10(ToDouble(Evaluate(args[0], row))),
-"LN" => Math.Log(ToDouble(Evaluate(args[0], row))),
-"EXP" => Math.Exp(ToDouble(Evaluate(args[0], row))),
+"LOG10" => EvaluateUnaryMathOrNull(args, row, Math.Log10),
+"LN" => EvaluateUnaryMathOrNull(args, row, Math.Log),
+"EXP" => EvaluateUnaryMathOrNull(args, row, Math.Exp),
 "GREATEST" => EvaluateGreatest(args, row),
 "LEAST" => EvaluateLeast(args, row),
 "IEEE_DIVIDE" => EvaluateIeeeDivide(args, row),
@@ -6214,6 +6219,50 @@ private static IReadOnlyList<OrderByItem> ResolveOrderByOrdinals(IReadOnlyList<O
 
 private static bool ContainsWindow(List<SelectItem> items)
 => items.Any(i => i.Expr is WindowFunction);
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#order_by_clause
+//   "An alias references the alias of a column in the SELECT list."
+private static IReadOnlyList<OrderByItem> ResolveOrderByAliases(IReadOnlyList<OrderByItem> orderBy, IReadOnlyList<SelectItem> columns)
+{
+    var aliasMap = new Dictionary<string, SqlExpression>(StringComparer.OrdinalIgnoreCase);
+    foreach (var col in columns)
+    {
+        if (col.Alias is not null)
+            aliasMap[col.Alias] = col.Expr;
+    }
+    if (aliasMap.Count == 0) return orderBy;
+    var resolved = new List<OrderByItem>();
+    foreach (var item in orderBy)
+    {
+        if (item.Expr is ColumnRef cr && cr.TableAlias is null && aliasMap.TryGetValue(cr.ColumnName, out var expr) && expr is not WindowFunction && !ContainsAggregate(expr))
+            resolved.Add(new OrderByItem(expr, item.Descending));
+        else
+            resolved.Add(item);
+    }
+    return resolved;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#group_by_clause
+//   "GROUP BY can reference SELECT list aliases."
+private static IReadOnlyList<SqlExpression> ResolveGroupByAliases(IReadOnlyList<SqlExpression> groupBy, IReadOnlyList<SelectItem> columns)
+{
+    var aliasMap = new Dictionary<string, SqlExpression>(StringComparer.OrdinalIgnoreCase);
+    foreach (var col in columns)
+    {
+        if (col.Alias is not null)
+            aliasMap[col.Alias] = col.Expr;
+    }
+    if (aliasMap.Count == 0) return groupBy;
+    var resolved = new List<SqlExpression>();
+    foreach (var expr in groupBy)
+    {
+        if (expr is ColumnRef cr && cr.TableAlias is null && aliasMap.TryGetValue(cr.ColumnName, out var selectExpr))
+            resolved.Add(selectExpr);
+        else
+            resolved.Add(expr);
+    }
+    return resolved;
+}
 
 private static bool IsTruthy(object? val)
 {

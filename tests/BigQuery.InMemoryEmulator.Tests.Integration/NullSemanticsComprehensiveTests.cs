@@ -35,11 +35,11 @@ public class NullSemanticsComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- NULL comparisons ----
-	[Fact(Skip = "Needs investigation")] public async Task Null_Equals_Null_IsNull() { var v = await Scalar("SELECT NULL = NULL"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
-	[Fact(Skip = "Needs investigation")] public async Task Null_NotEquals_Null_IsNull() { var v = await Scalar("SELECT NULL != NULL"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
+	[Fact] public async Task Null_Equals_Null_IsNull() { var v = await Scalar("SELECT NULL = NULL"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
+	[Fact] public async Task Null_NotEquals_Null_IsNull() { var v = await Scalar("SELECT NULL != NULL"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
 	[Fact] public async Task Null_LessThan_Null_IsNull() => Assert.Null(await Scalar("SELECT NULL < NULL"));
-	[Fact(Skip = "Needs investigation")] public async Task Int_Equals_Null_IsNull() { var v = await Scalar("SELECT 1 = NULL"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
-	[Fact(Skip = "Needs investigation")] public async Task Null_Equals_Int_IsNull() { var v = await Scalar("SELECT NULL = 1"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
+	[Fact] public async Task Int_Equals_Null_IsNull() { var v = await Scalar("SELECT 1 = NULL"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
+	[Fact] public async Task Null_Equals_Int_IsNull() { var v = await Scalar("SELECT NULL = 1"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
 
 	// ---- IS NULL / IS NOT NULL ----
 	[Fact] public async Task IsNull_Null_True() => Assert.Equal("True", await Scalar("SELECT NULL IS NULL"));
@@ -57,12 +57,12 @@ public class NullSemanticsComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task Int_Divide_Null() => Assert.Null(await Scalar("SELECT 10 / NULL"));
 
 	// ---- NULL in logical operators ----
-	[Fact(Skip = "Needs investigation")] public async Task Null_And_True() { var v = await Scalar("SELECT NULL AND TRUE"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
+	[Fact] public async Task Null_And_True() { var v = await Scalar("SELECT NULL AND TRUE"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
 	[Fact] public async Task Null_And_False() => Assert.Equal("False", await Scalar("SELECT NULL AND FALSE"));
-	[Fact(Skip = "Needs investigation")] public async Task True_And_Null() { var v = await Scalar("SELECT TRUE AND NULL"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
+	[Fact] public async Task True_And_Null() { var v = await Scalar("SELECT TRUE AND NULL"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
 	[Fact] public async Task False_And_Null() => Assert.Equal("False", await Scalar("SELECT FALSE AND NULL"));
 	[Fact] public async Task Null_Or_True() => Assert.Equal("True", await Scalar("SELECT NULL OR TRUE"));
-	[Fact(Skip = "Needs investigation")] public async Task Null_Or_False() { var v = await Scalar("SELECT NULL OR FALSE"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
+	[Fact] public async Task Null_Or_False() { var v = await Scalar("SELECT NULL OR FALSE"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
 	[Fact] public async Task Not_Null() => Assert.Null(await Scalar("SELECT NOT NULL"));
 
 	// ---- NULL in string operations ----
@@ -97,7 +97,7 @@ public class NullSemanticsComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task Nullif_NotEqual_ReturnsFirst() => Assert.Equal("5", await Scalar("SELECT NULLIF(5, 10)"));
 
 	// ---- NULL in IN ----
-	[Fact(Skip = "Needs investigation")] public async Task In_WithNull_Value() { var v = await Scalar("SELECT NULL IN (1, 2, 3)"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
+	[Fact] public async Task In_WithNull_Value() { var v = await Scalar("SELECT NULL IN (1, 2, 3)"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
 	[Fact] public async Task In_ListContainsNull_NoMatch() { var v = await Scalar("SELECT 4 IN (1, 2, NULL)"); Assert.True(v == null || v == "" || v == "False", $"Expected null or False, got {v}"); }
 	[Fact] public async Task In_ListContainsNull_Match() => Assert.Equal("True", await Scalar("SELECT 1 IN (1, 2, NULL)"));
 
@@ -124,5 +124,5 @@ public class NullSemanticsComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task ConcatOp_Null() { var v = await Scalar("SELECT 'a' || NULL"); Assert.True(v == null || v == "a", $"Expected null or a, got {v}"); }
 
 	// ---- NULL in IF ----
-	[Fact(Skip = "Needs investigation")] public async Task If_NullCondition_ReturnsFalse() => Assert.Equal("no", await Scalar("SELECT IF(CAST(NULL AS BOOL), 'yes', 'no')"));
+	[Fact] public async Task If_NullCondition_ReturnsFalse() => Assert.Equal("no", await Scalar("SELECT IF(CAST(NULL AS BOOL), 'yes', 'no')"));
 }

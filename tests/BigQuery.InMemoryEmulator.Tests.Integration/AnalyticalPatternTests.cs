@@ -164,7 +164,7 @@ SELECT id, name, score FROM deduped WHERE rn = 1 ORDER BY id", parameters: null)
 	}
 
 	// ---- Bucket/histogram ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Histogram()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -189,7 +189,7 @@ ORDER BY bucket", parameters: null);
 	}
 
 	// ---- Pivoting with CASE ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Pivot_Case()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -312,7 +312,7 @@ SELECT x FROM ranked WHERE rn <= 2 ORDER BY x", parameters: null);
 	}
 
 	// ---- Conditional aggregation ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task ConditionalAgg()
 	{
 		var client = await _fixture.GetClientAsync();

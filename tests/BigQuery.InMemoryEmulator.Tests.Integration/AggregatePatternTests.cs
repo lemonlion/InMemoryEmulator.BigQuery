@@ -77,7 +77,7 @@ public class AggregatePatternTests : IAsyncLifetime
 		Assert.Contains("c", v);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task StringAgg_OrderBy()
 	{
 		var v = await Scalar("SELECT STRING_AGG(x ORDER BY x) FROM UNNEST(['c', 'a', 'b']) AS x");
@@ -87,7 +87,7 @@ public class AggregatePatternTests : IAsyncLifetime
 		Assert.True(v.IndexOf("b") < v.IndexOf("c"));
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task StringAgg_Integers()
 	{
 		var v = await Scalar("SELECT STRING_AGG(CAST(x AS STRING) ORDER BY x) FROM UNNEST(GENERATE_ARRAY(1, 5)) AS x");
@@ -103,7 +103,7 @@ public class AggregatePatternTests : IAsyncLifetime
 	[Fact] public async Task LogicalOr_OneTrue() => Assert.Equal("True", await Scalar("SELECT LOGICAL_OR(x) FROM UNNEST([FALSE, TRUE, FALSE]) AS x"));
 
 	// ---- GROUP BY aggregate patterns ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task GroupBy_CountPerGroup()
 	{
 		var v = await Scalar(@"
@@ -126,7 +126,7 @@ ORDER BY s");
 		Assert.Equal(new[] { "9", "12" }, v);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact(Skip = "ORDER BY aggregate in GROUP BY not supported")]
 	public async Task GroupBy_AvgPerGroup()
 	{
 		var v = await Scalar(@"

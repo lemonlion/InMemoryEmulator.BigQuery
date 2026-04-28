@@ -134,7 +134,7 @@ public class GroupByHavingTests : IAsyncLifetime
 	}
 
 	// ---- GROUP BY with expressions ----
-	[Fact(Skip = "Expression in GROUP BY not supported")]
+	[Fact]
 	public async Task GroupBy_Expression()
 	{
 		var rows = await Query(@"
