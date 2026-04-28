@@ -51,6 +51,17 @@ private static readonly System.Text.RegularExpressions.Regex[] StubDdlPatterns =
 	new(@"^\s*DROP\s+(ALL\s+)?ROW\s+ACCESS\s+POLIC(Y|IES)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled),
 	new(@"^\s*CREATE\s+SEARCH\s+INDEX\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled),
 	new(@"^\s*DROP\s+SEARCH\s+INDEX\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled),
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-control-language
+	//   GRANT and REVOKE manage access to datasets, tables, views, and routines.
+	//   Accepted as no-ops in the emulator.
+	new(@"^\s*GRANT\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled),
+	new(@"^\s*REVOKE\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled),
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/other-statements#export_data_statement
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/other-statements#load_data_statement
+	//   EXPORT DATA and LOAD DATA interact with external storage.
+	//   Accepted as no-ops in the emulator.
+	new(@"^\s*EXPORT\s+DATA\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled),
+	new(@"^\s*LOAD\s+DATA\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled),
 ];
 
 private static bool IsStubDdl(string sql)
@@ -1774,7 +1785,10 @@ or "HLL_COUNT_EXTRACT" => EvaluateHllCount(name, args, row),
 // Vector / distance functions
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#cosine_distance
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#euclidean_distance
-"COSINE_DISTANCE" or "EUCLIDEAN_DISTANCE"
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/search_functions#vector_search
+//   APPROX_* variants use approximate algorithms in real BigQuery; in the emulator they are exact.
+"COSINE_DISTANCE" or "EUCLIDEAN_DISTANCE" or "DOT_PRODUCT"
+or "APPROX_COSINE_DISTANCE" or "APPROX_EUCLIDEAN_DISTANCE" or "APPROX_DOT_PRODUCT"
     => EvaluateVectorDistanceFunction(name, args, row),
 
 // Geography functions
@@ -5901,11 +5915,14 @@ private object? EvaluateVectorDistanceFunction(string name, IReadOnlyList<SqlExp
         // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#cosine_distance
         //   "Computes the cosine distance between two vectors."
         //   cosine_distance = 1 - (dot(a,b) / (|a| * |b|))
-        "COSINE_DISTANCE" => CosineDistance(vec1, vec2),
+        "COSINE_DISTANCE" or "APPROX_COSINE_DISTANCE" => CosineDistance(vec1, vec2),
         // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#euclidean_distance
         //   "Computes the Euclidean distance between two vectors."
         //   euclidean_distance = sqrt(sum((a[i] - b[i])^2))
-        "EUCLIDEAN_DISTANCE" => (object)EuclideanDistance(vec1, vec2),
+        "EUCLIDEAN_DISTANCE" or "APPROX_EUCLIDEAN_DISTANCE" => (object)EuclideanDistance(vec1, vec2),
+        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/search_functions#vector_search
+        //   DOT_PRODUCT computes the inner product of two vectors: sum(v1[i] * v2[i]).
+        "DOT_PRODUCT" or "APPROX_DOT_PRODUCT" => (object)DotProduct(vec1, vec2),
         _ => null,
     };
 
@@ -5940,6 +5957,16 @@ private static double EuclideanDistance(double[] a, double[] b)
         sum += diff * diff;
     }
     return Math.Sqrt(sum);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/search_functions#vector_search
+//   DOT_PRODUCT computes the inner product (dot product) of two vectors.
+private static double DotProduct(double[] a, double[] b)
+{
+    double sum = 0;
+    for (var i = 0; i < a.Length; i++)
+        sum += a[i] * b[i];
+    return sum;
 }
 
 private static double[]? ToDoubleArray(object? value)

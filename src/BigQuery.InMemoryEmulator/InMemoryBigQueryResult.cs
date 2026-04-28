@@ -1,5 +1,7 @@
 using Google.Apis.Bigquery.v2;
 using Google.Cloud.BigQuery.V2;
+using Google.Cloud.BigQuery.Storage.V1;
+using BigQuery.InMemoryEmulator.StorageApi;
 
 namespace BigQuery.InMemoryEmulator;
 
@@ -36,6 +38,19 @@ public sealed class InMemoryBigQueryResult : IDisposable
 	public void SetFaultInjector(Func<HttpRequestMessage, HttpResponseMessage?>? injector)
 	{
 		Handler.FaultInjector = injector;
+	}
+
+	/// <summary>
+	/// Creates a <see cref="BigQueryReadClient"/> backed by the same in-memory data store.
+	/// Use this for testing code that uses the BigQuery Storage Read API (gRPC).
+	/// </summary>
+	/// <remarks>
+	/// Ref: https://cloud.google.com/bigquery/docs/reference/storage/rpc/google.cloud.bigquery.storage.v1
+	///   "BigQuery Read API — The Read API can be used to read data from BigQuery."
+	/// </remarks>
+	public BigQueryReadClient CreateReadClient()
+	{
+		return InMemoryBigQueryReadClientFactory.Create(Store);
 	}
 
 	public void Dispose()

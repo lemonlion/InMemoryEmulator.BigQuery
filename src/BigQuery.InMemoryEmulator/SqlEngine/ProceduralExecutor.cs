@@ -198,11 +198,25 @@ internal class ProceduralExecutor
 		foreach (var (name, value) in _variables.OrderByDescending(kv => kv.Key.Length))
 		{
 			var literal = FormatLiteral(value);
-			sql = System.Text.RegularExpressions.Regex.Replace(
-				sql,
-				@"(?<![`@"".\w])\b" + System.Text.RegularExpressions.Regex.Escape(name) + @"\b(?![`"".\w])",
-				literal,
-				System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+			// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#begin
+			//   System variables like @@error.message start with @@ and need special handling
+			//   because the standard lookbehind excludes @ characters.
+			if (name.StartsWith("@@"))
+			{
+				sql = System.Text.RegularExpressions.Regex.Replace(
+					sql,
+					System.Text.RegularExpressions.Regex.Escape(name) + @"(?![`"".\w])",
+					literal,
+					System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+			}
+			else
+			{
+				sql = System.Text.RegularExpressions.Regex.Replace(
+					sql,
+					@"(?<![`@"".\w])\b" + System.Text.RegularExpressions.Regex.Escape(name) + @"\b(?![`"".\w])",
+					literal,
+					System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+			}
 		}
 		return sql;
 	}
@@ -531,7 +545,13 @@ internal class ProceduralExecutor
 			{
 				var paramParts = p.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
 				if (paramParts.Length >= 2)
-					parameters.Add((paramParts[0], paramParts[1]));
+				{
+					// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/user-defined-functions#templated-sql-udf-parameters
+					//   "A templated parameter can match more than one argument type at function call time."
+					//   Handle multi-word types like "ANY TYPE".
+					var paramType = string.Join(" ", paramParts.Skip(1));
+					parameters.Add((paramParts[0], paramType));
+				}
 			}
 		}
 
