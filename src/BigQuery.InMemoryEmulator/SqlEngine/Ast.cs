@@ -19,20 +19,21 @@ internal record SelectStatement(
 	int? Limit,
 	int? Offset,
 	IReadOnlyList<CteDefinition>? Ctes = null,
-	SqlExpression? Qualify = null
+	SqlExpression? Qualify = null,
+	bool IsRecursive = false
 ) : SqlStatement;
 
 /// <summary>A CTE: WITH name AS (SELECT ...)</summary>
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#with_clause
-internal record CteDefinition(string Name, SelectStatement Body, SelectStatement? RecursiveBody = null);
+internal record CteDefinition(string Name, SelectStatement Body, SelectStatement? RecursiveBody = null, IReadOnlyList<SelectStatement>? UnionBodies = null);
 
 /// <summary>A set operation: UNION ALL, EXCEPT DISTINCT, INTERSECT DISTINCT.</summary>
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
 internal record SetOperationStatement(
-	SelectStatement Left,
+	SqlStatement Left,
 	SetOperationType OpType,
 	bool All,
-	SelectStatement Right
+	SqlStatement Right
 ) : SqlStatement;
 
 internal enum SetOperationType { Union, Except, Intersect }
@@ -60,7 +61,7 @@ internal record JoinClause(FromClause Left, JoinType Type, FromClause Right, Sql
 internal record UnnestClause(SqlExpression Expr, string? Alias) : FromClause;
 
 /// <summary>Subquery in FROM: (SELECT ...) [AS alias]</summary>
-internal record SubqueryFrom(SelectStatement Subquery, string? Alias) : FromClause;
+internal record SubqueryFrom(SqlStatement Subquery, string? Alias) : FromClause;
 
 /// <summary>JOIN types supported by GoogleSQL.</summary>
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#join_types
@@ -123,7 +124,7 @@ internal record CaseExpr(
 
 /// <summary>Scalar subquery: (SELECT x FROM ...)</summary>
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/subqueries#scalar_subquery
-internal record ScalarSubquery(SelectStatement Subquery) : SqlExpression;
+internal record ScalarSubquery(SqlStatement Subquery) : SqlExpression;
 
 /// <summary>EXISTS (SELECT ...)</summary>
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/subqueries#exists_subquery

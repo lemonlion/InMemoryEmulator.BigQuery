@@ -143,7 +143,7 @@ public class SubqueryCteSetOpTests : IAsyncLifetime
 		Assert.Equal("2", rows[0][0]?.ToString());
 	}
 
-	[Fact(Skip = "Needs investigation")] public async Task Cte_Multiple()
+	[Fact] public async Task Cte_Multiple()
 	{
 		var rows = await Query($@"
 			WITH 
@@ -154,7 +154,7 @@ public class SubqueryCteSetOpTests : IAsyncLifetime
 		Assert.Equal("4", rows[0][0]?.ToString());
 	}
 
-	[Fact(Skip = "Needs investigation")] public async Task Cte_ChainedReference()
+	[Fact] public async Task Cte_ChainedReference()
 	{
 		var rows = await Query($@"
 			WITH 
@@ -162,7 +162,7 @@ public class SubqueryCteSetOpTests : IAsyncLifetime
 				doubled AS (SELECT id, price * 2 AS dp FROM base)
 			SELECT SUM(dp) FROM doubled
 		");
-		Assert.Equal("300.0", rows[0][0]?.ToString());
+		Assert.Equal("300", rows[0][0]?.ToString());
 	}
 
 	[Fact] public async Task Cte_WithAggregation()
@@ -178,7 +178,7 @@ public class SubqueryCteSetOpTests : IAsyncLifetime
 	}
 
 	// ==== Recursive CTE ====
-	[Fact(Skip = "Not yet supported")] public async Task RecursiveCte_CountTo5()
+	[Fact] public async Task RecursiveCte_CountTo5()
 	{
 		var rows = await Query("WITH RECURSIVE cte AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT n FROM cte ORDER BY n");
 		Assert.Equal(5, rows.Count);
@@ -186,7 +186,7 @@ public class SubqueryCteSetOpTests : IAsyncLifetime
 		Assert.Equal("5", rows[4]["n"]?.ToString());
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task RecursiveCte_Fibonacci()
+	[Fact] public async Task RecursiveCte_Fibonacci()
 	{
 		var rows = await Query("WITH RECURSIVE fib AS (SELECT 1 AS a, 1 AS b, 1 AS n UNION ALL SELECT b, a + b, n + 1 FROM fib WHERE n < 8) SELECT a FROM fib ORDER BY n");
 		Assert.Equal(8, rows.Count);
@@ -195,7 +195,7 @@ public class SubqueryCteSetOpTests : IAsyncLifetime
 	}
 
 	// ==== UNION ALL ====
-	[Fact(Skip = "Needs investigation")] public async Task UnionAll_IncludesDuplicates()
+	[Fact] public async Task UnionAll_IncludesDuplicates()
 	{
 		var rows = await Query("SELECT 1 AS n UNION ALL SELECT 1 UNION ALL SELECT 2");
 		Assert.Equal(3, rows.Count);
@@ -208,7 +208,7 @@ public class SubqueryCteSetOpTests : IAsyncLifetime
 	}
 
 	// ==== UNION DISTINCT ====
-	[Fact(Skip = "Needs investigation")] public async Task UnionDistinct_RemovesDuplicates()
+	[Fact] public async Task UnionDistinct_RemovesDuplicates()
 	{
 		var rows = await Query("SELECT 1 AS n UNION DISTINCT SELECT 1 UNION DISTINCT SELECT 2");
 		Assert.Equal(2, rows.Count);

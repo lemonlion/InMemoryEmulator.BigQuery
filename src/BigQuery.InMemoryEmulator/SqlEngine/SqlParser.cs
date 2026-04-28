@@ -412,8 +412,8 @@ internal static class SqlParser
 	// --- Parenthesized expression or scalar subquery ---
 	private static readonly TokenListParser<SqlToken, SqlExpression> Parens =
 		Token.EqualTo(SqlToken.LParen).IgnoreThen(
-			// Try scalar subquery first
-			SP.Ref(() => SelectStmt!).Then(sub =>
+			// Try scalar subquery first (supports UNION ALL etc. inside)
+			WithSetOps(SP.Ref(() => SelectStmt!).Select(s => (SqlStatement)s)).Then(sub =>
 				Token.EqualTo(SqlToken.RParen).Select(_ => (SqlExpression)new ScalarSubquery(sub))
 			).Try()
 			// Then regular parenthesized expression
@@ -761,10 +761,10 @@ internal static class SqlParser
 					.Select(a => (string?)a).OptionalOrDefault()
 			).Select(alias => (FromClause)new UnnestClause(expr, alias)));
 
-	// --- (SELECT ...) [AS alias] in FROM ---
+	// --- (SELECT ... [UNION ALL SELECT ...]*) [AS alias] in FROM ---
 	private static readonly TokenListParser<SqlToken, FromClause> SubqueryFromParser =
 		Token.EqualTo(SqlToken.LParen)
-			.IgnoreThen(SP.Ref(() => SelectStmt!))
+			.IgnoreThen(WithSetOps(SP.Ref(() => SelectStmt!).Select(s => (SqlStatement)s)))
 			.Then(sub => Token.EqualTo(SqlToken.RParen).IgnoreThen(
 				// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#from_clause
 				//   "Subqueries can have optional aliases: (SELECT ...) AS alias  or  (SELECT ...) alias"
@@ -891,6 +891,18 @@ internal static class SqlParser
 					return result;
 				})
 				.Try()
+				// Comma-join: FROM a, b, c → implicit CROSS JOIN
+				// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#comma_cross_join
+				.Or(Token.EqualTo(SqlToken.Comma).IgnoreThen(SingleTableRef)
+					.AtLeastOnce()
+					.Select(rights =>
+					{
+						FromClause result = left;
+						foreach (var right in rights)
+							result = new JoinClause(result, JoinType.Cross, right, null);
+						return result;
+					})
+					.Try())
 				.Or(Constant(left))
 			).Then(source =>
 				PivotParser.Select(piv => (FromClause)new PivotFrom(source, piv)).Try()
@@ -1008,20 +1020,27 @@ internal static class SqlParser
 			)
 		);
 
-	// --- CTE definition: name AS (SELECT ...) ---
+	// --- CTE definition: name AS (SELECT ... [UNION ALL SELECT ...]*) ---
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#with_clause
 	private static readonly TokenListParser<SqlToken, CteDefinition> CteDefParser =
 		IdentifierOrKeyword.Then(name =>
 			Token.EqualTo(SqlToken.As)
 				.IgnoreThen(Token.EqualTo(SqlToken.LParen))
 				.IgnoreThen(SelectStmt.Then(baseSel =>
-					// Handle UNION ALL for recursive CTEs
+					// Handle one or more UNION ALL
 					Token.EqualTo(SqlToken.Union)
 						.IgnoreThen(Token.EqualTo(SqlToken.All))
 						.IgnoreThen(SelectStmt)
-						.Select(recSel => new CteDefinition(name, baseSel, recSel))
-						.Try()
-						.Or(Constant(new CteDefinition(name, baseSel)))
+						.Many()
+						.Select(unionSels =>
+						{
+							if (unionSels.Length == 0)
+								return new CteDefinition(name, baseSel);
+							if (unionSels.Length == 1)
+								return new CteDefinition(name, baseSel, unionSels[0]);
+							// Multiple UNION ALL: first is RecursiveBody (for compat), rest in UnionBodies
+							return new CteDefinition(name, baseSel, unionSels[0], unionSels.Skip(1).ToList());
+						})
 				))
 				.Then(cte => Token.EqualTo(SqlToken.RParen).Select(_ => cte))
 		);
@@ -1029,41 +1048,45 @@ internal static class SqlParser
 	// --- WITH cte1 AS (...), cte2 AS (...) SELECT ... ---
 	private static readonly TokenListParser<SqlToken, SelectStatement> WithSelectStmt =
 		Token.EqualTo(SqlToken.With)
-			.IgnoreThen(Token.EqualTo(SqlToken.Recursive).Try().Or(Constant(new Token<SqlToken>())))
-			.IgnoreThen(CteDefParser.ManyDelimitedBy(Token.EqualTo(SqlToken.Comma)))
-			.Then(ctes => SelectStmt.Select(sel =>
-				new SelectStatement(sel.Distinct, sel.Columns, sel.From, sel.Where,
-					sel.GroupBy, sel.Having, sel.OrderBy, sel.Limit, sel.Offset, ctes.ToList(), sel.Qualify)));
+			.IgnoreThen(Token.EqualTo(SqlToken.Recursive).Select(_ => true).Try().Or(Constant(false)))
+			.Then(isRecursive =>
+				CteDefParser.ManyDelimitedBy(Token.EqualTo(SqlToken.Comma))
+					.Then(ctes => SelectStmt.Select(sel =>
+						new SelectStatement(sel.Distinct, sel.Columns, sel.From, sel.Where,
+							sel.GroupBy, sel.Having, sel.OrderBy, sel.Limit, sel.Offset, ctes.ToList(), sel.Qualify, isRecursive))));
 
 	// --- Top-level statement with optional set operations ---
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
+	//   "Multiple set operators can be chained: SELECT ... UNION ALL SELECT ... UNION ALL SELECT ..."
+
+	// Helper: parse zero or more set-operation suffixes (UNION ALL, UNION DISTINCT, EXCEPT DISTINCT, INTERSECT DISTINCT)
+	// and fold them left-to-right into nested SetOperationStatements.
+	private static TokenListParser<SqlToken, SqlStatement> WithSetOps(TokenListParser<SqlToken, SqlStatement> inner) =>
+		inner.Then(first =>
+			(
+				Token.EqualTo(SqlToken.Union).IgnoreThen(Token.EqualTo(SqlToken.All))
+					.Select(_ => (Op: SetOperationType.Union, All: true))
+				.Try()
+				.Or(Token.EqualTo(SqlToken.Union).IgnoreThen(Token.EqualTo(SqlToken.Distinct))
+					.Select(_ => (Op: SetOperationType.Union, All: false)))
+				.Try()
+				.Or(Token.EqualTo(SqlToken.Except).IgnoreThen(Token.EqualTo(SqlToken.Distinct))
+					.Select(_ => (Op: SetOperationType.Except, All: false)))
+				.Try()
+				.Or(Token.EqualTo(SqlToken.Intersect).IgnoreThen(Token.EqualTo(SqlToken.Distinct))
+					.Select(_ => (Op: SetOperationType.Intersect, All: false)))
+			)
+			.Then(op => SelectStmt.Select(right => (op, right)))
+			.Try()
+			.Many()
+			.Select(ops => ops.Aggregate((SqlStatement)first, (acc, pair) =>
+				new SetOperationStatement(acc, pair.op.Op, pair.op.All, pair.right)))
+		);
+
 	private static readonly TokenListParser<SqlToken, SqlStatement> TopLevelStatement =
 		SP.Ref(() => DdlStatement!).Try()
 		.Or(SP.Ref(() => DmlStatement!).Try())
-		.Or(WithSelectStmt.Try().Or(SelectStmt).Then(left =>
-			// UNION ALL
-			Token.EqualTo(SqlToken.Union).IgnoreThen(Token.EqualTo(SqlToken.All))
-				.IgnoreThen(SelectStmt)
-				.Select(right => (SqlStatement)new SetOperationStatement(left, SetOperationType.Union, true, right))
-				.Try()
-			// UNION DISTINCT
-			.Or(Token.EqualTo(SqlToken.Union).IgnoreThen(Token.EqualTo(SqlToken.Distinct))
-				.IgnoreThen(SelectStmt)
-				.Select(right => (SqlStatement)new SetOperationStatement(left, SetOperationType.Union, false, right))
-				.Try())
-			// EXCEPT DISTINCT
-			.Or(Token.EqualTo(SqlToken.Except).IgnoreThen(Token.EqualTo(SqlToken.Distinct))
-				.IgnoreThen(SelectStmt)
-				.Select(right => (SqlStatement)new SetOperationStatement(left, SetOperationType.Except, false, right))
-				.Try())
-			// INTERSECT DISTINCT
-			.Or(Token.EqualTo(SqlToken.Intersect).IgnoreThen(Token.EqualTo(SqlToken.Distinct))
-				.IgnoreThen(SelectStmt)
-				.Select(right => (SqlStatement)new SetOperationStatement(left, SetOperationType.Intersect, false, right))
-				.Try())
-			// No set operation
-			.Or(Constant((SqlStatement)left))
-		));
+		.Or(WithSetOps(WithSelectStmt.Select(s => (SqlStatement)s).Try().Or(SelectStmt.Select(s => (SqlStatement)s))));
 
 	// --- DML Parsers ---
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax

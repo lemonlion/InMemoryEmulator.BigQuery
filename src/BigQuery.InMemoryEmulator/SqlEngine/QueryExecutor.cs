@@ -16,6 +16,8 @@ internal class QueryExecutor
 private readonly InMemoryDataStore _store;
 private readonly string? _defaultDatasetId;
 private IList<QueryParameter>? _parameters;
+// CTE results visible to the current query scope (set during ExecuteSelect, read by scalar subqueries)
+private Dictionary<string, (TableSchema Schema, List<Dictionary<string, object?>> Rows)>? _activeCteResults;
 
 public QueryExecutor(InMemoryDataStore store, string? defaultDatasetId = null)
 {
@@ -108,41 +110,15 @@ Dictionary<string, (TableSchema Schema, List<Dictionary<string, object?>> Rows)>
 // Handle CTEs
 Dictionary<string, (TableSchema Schema, List<Dictionary<string, object?>> Rows)>? cteResults = externalCteResults;
 if (sel.Ctes is { Count: > 0 })
-{
-cteResults ??= new Dictionary<string, (TableSchema, List<Dictionary<string, object?>>)>(StringComparer.OrdinalIgnoreCase);
-foreach (var cte in sel.Ctes)
-{
-    if (cte.RecursiveBody is not null)
-    {
-        // Recursive CTE: iterate until no new rows produced
-        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#with-recursive
-        //   The base term runs first, then the recursive term iterates.
-        var baseResult = ExecuteSelect(cte.Body, cteResults);
-        var allRows = baseResult.Rows.Select(r => RowToDict(r, baseResult.Schema)).ToList();
-        var currentRows = new List<Dictionary<string, object?>>(allRows);
-        var recSchema = baseResult.Schema;
-        const int maxIterations = 500;
-        for (int iter = 0; iter < maxIterations && currentRows.Count > 0; iter++)
-        {
-            // Make current rows visible as the CTE
-            cteResults[cte.Name] = (recSchema, currentRows);
-            var recResult = ExecuteSelect(cte.RecursiveBody, cteResults);
-            var newRows = recResult.Rows.Select(r => RowToDict(r, recSchema)).ToList();
-            if (newRows.Count == 0) break;
-            allRows.AddRange(newRows);
-            currentRows = newRows;
-        }
-        cteResults[cte.Name] = (recSchema, allRows);
-    }
-    else
-    {
-        var cteResult = ExecuteSelect(cte.Body, cteResults);
-        var cteRows = cteResult.Rows.Select(r => RowToDict(r, cteResult.Schema)).ToList();
-        cteResults[cte.Name] = (cteResult.Schema, cteRows);
-    }
-}
-}
+    cteResults = ResolveCtes(sel, externalCteResults);
 
+// Make CTE results visible to scalar subqueries and other expression evaluators
+var prevCteResults = _activeCteResults;
+if (cteResults is not null)
+    _activeCteResults = cteResults;
+
+try
+{
 // FROM
 List<RowContext> rows;
 if (sel.From is not null)
@@ -245,6 +221,68 @@ if (sel.Limit.HasValue)
 tableRows = tableRows.Take(sel.Limit.Value).ToList();
 
 return new InMemoryBigQueryResult(schema, tableRows);
+}
+finally
+{
+    _activeCteResults = prevCteResults;
+}
+}
+
+private Dictionary<string, (TableSchema Schema, List<Dictionary<string, object?>> Rows)> ResolveCtes(
+    SelectStatement sel,
+    Dictionary<string, (TableSchema Schema, List<Dictionary<string, object?>> Rows)>? externalCteResults = null)
+{
+var cteResults = externalCteResults != null
+    ? new Dictionary<string, (TableSchema, List<Dictionary<string, object?>>)>(externalCteResults, StringComparer.OrdinalIgnoreCase)
+    : new Dictionary<string, (TableSchema, List<Dictionary<string, object?>>)>(StringComparer.OrdinalIgnoreCase);
+foreach (var cte in sel.Ctes!)
+{
+    if (sel.IsRecursive && cte.RecursiveBody is not null && cte.UnionBodies is null)
+    {
+        var baseResult = ExecuteSelect(cte.Body, cteResults);
+        var allRows = baseResult.Rows.Select(r => ParseTypedRow(RowToDict(r, baseResult.Schema), baseResult.Schema)).ToList();
+        var currentRows = new List<Dictionary<string, object?>>(allRows);
+        var recSchema = baseResult.Schema;
+        const int maxIterations = 500;
+        for (int iter = 0; iter < maxIterations && currentRows.Count > 0; iter++)
+        {
+            cteResults[cte.Name] = (recSchema, currentRows);
+            var recResult = ExecuteSelect(cte.RecursiveBody, cteResults);
+            var newRows = recResult.Rows.Select(r => ParseTypedRow(RowToDict(r, recSchema), recSchema)).ToList();
+            if (newRows.Count == 0) break;
+            allRows.AddRange(newRows);
+            currentRows = newRows;
+        }
+        cteResults[cte.Name] = (recSchema, allRows);
+    }
+    else if (cte.RecursiveBody is not null || cte.UnionBodies is not null)
+    {
+        var baseResult = ExecuteSelect(cte.Body, cteResults);
+        var allRows = baseResult.Rows.Select(r => ParseTypedRow(RowToDict(r, baseResult.Schema), baseResult.Schema)).ToList();
+        var unionSchema = baseResult.Schema;
+        if (cte.RecursiveBody is not null)
+        {
+            var recResult = ExecuteSelect(cte.RecursiveBody, cteResults);
+            allRows.AddRange(recResult.Rows.Select(r => ParseTypedRow(RowToDict(r, unionSchema), unionSchema)));
+        }
+        if (cte.UnionBodies is not null)
+        {
+            foreach (var unionBody in cte.UnionBodies)
+            {
+                var unionResult = ExecuteSelect(unionBody, cteResults);
+                allRows.AddRange(unionResult.Rows.Select(r => ParseTypedRow(RowToDict(r, unionSchema), unionSchema)));
+            }
+        }
+        cteResults[cte.Name] = (unionSchema, allRows);
+    }
+    else
+    {
+        var cteResult = ExecuteSelect(cte.Body, cteResults);
+        var cteRows = cteResult.Rows.Select(r => ParseTypedRow(RowToDict(r, cteResult.Schema), cteResult.Schema)).ToList();
+        cteResults[cte.Name] = (cteResult.Schema, cteRows);
+    }
+}
+return cteResults;
 }
 
 private InMemoryBigQueryResult ExecuteGroupBy(SelectStatement sel, List<RowContext> rows)
@@ -925,7 +963,12 @@ return new RowContext(fields, null);
 
 private List<RowContext> ResolveSubquery(SubqueryFrom sub)
 {
-var result = ExecuteSelect(sub.Subquery);
+var result = sub.Subquery switch
+{
+    SelectStatement sel => ExecuteSelect(sel, _activeCteResults),
+    SetOperationStatement setOp => ExecuteSetOperation(setOp),
+    _ => throw new NotSupportedException($"Unsupported subquery type: {sub.Subquery.GetType().Name}")
+};
 var alias = sub.Alias ?? "subquery";
 return result.Rows.Select(r =>
 {
@@ -1681,20 +1724,25 @@ return caseExpr.Else is not null ? Evaluate(caseExpr.Else, row) : null;
 
 private object? EvaluateScalarSubquery(ScalarSubquery sub)
 {
-var result = ExecuteSelect(sub.Subquery);
+var result = sub.Subquery switch
+{
+    SelectStatement sel => ExecuteSelect(sel, _activeCteResults),
+    SetOperationStatement setOp => ExecuteSetOperation(setOp),
+    _ => throw new NotSupportedException($"Unsupported subquery type: {sub.Subquery.GetType().Name}")
+};
 if (result.Rows.Count == 0) return null;
 return result.Rows[0].F?[0]?.V;
 }
 
 private object? EvaluateExists(ExistsExpr exists)
 {
-var result = ExecuteSelect(exists.Subquery);
+var result = ExecuteSelect(exists.Subquery, _activeCteResults);
 return result.Rows.Count > 0;
 }
 
 private object? EvaluateArraySubquery(ArraySubquery arraySub)
 {
-var result = ExecuteSelect(arraySub.Subquery);
+var result = ExecuteSelect(arraySub.Subquery, _activeCteResults);
 return result.Rows.Select(r => r.F?[0]?.V).Cast<object?>().ToList();
 }
 
@@ -5416,8 +5464,39 @@ return result;
 
 private InMemoryBigQueryResult ExecuteSetOperation(SetOperationStatement setOp)
 {
-var left = ExecuteSelect(setOp.Left);
-var right = ExecuteSelect(setOp.Right);
+// If the left side is a SELECT with CTEs, resolve CTEs and propagate to right side
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#with_clause
+if (setOp.Left is SelectStatement { Ctes: { Count: > 0 } } leftSel)
+{
+    var cteResults = ResolveCtes(leftSel);
+    var leftBody = leftSel with { Ctes = null };
+    var left = ExecuteSelect(leftBody, cteResults);
+    var right = ExecuteWithCtes(setOp.Right, cteResults);
+    return CombineSetOperation(setOp, left, right);
+}
+var leftResult = ExecuteStatement(setOp.Left);
+var rightResult = ExecuteStatement(setOp.Right);
+return CombineSetOperation(setOp, leftResult, rightResult);
+}
+
+private InMemoryBigQueryResult ExecuteWithCtes(
+    SqlStatement stmt,
+    Dictionary<string, (TableSchema Schema, List<Dictionary<string, object?>> Rows)> cteResults)
+{
+return stmt switch
+{
+    SelectStatement rs => ExecuteSelect(rs, cteResults),
+    SetOperationStatement rSetOp =>
+        CombineSetOperation(rSetOp,
+            ExecuteWithCtes(rSetOp.Left, cteResults),
+            ExecuteWithCtes(rSetOp.Right, cteResults)),
+    _ => ExecuteStatement(stmt)
+};
+}
+
+private static InMemoryBigQueryResult CombineSetOperation(
+    SetOperationStatement setOp, InMemoryBigQueryResult left, InMemoryBigQueryResult right)
+{
 var schema = left.Schema;
 
 var resultRows = (setOp.OpType, setOp.All) switch
@@ -6069,10 +6148,8 @@ long l => l.ToString(),
 double d when double.IsPositiveInfinity(d) => "Infinity",
 double d when double.IsNegativeInfinity(d) => "-Infinity",
 double d when double.IsNaN(d) => "NaN",
-double d => d == Math.Floor(d)
-? ((long)d).ToString()
-: d.ToString(CultureInfo.InvariantCulture),
-// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tabledata/list
+            double d => d == Math.Floor(d) ? ((long)d).ToString() : d.ToString(CultureInfo.InvariantCulture),
+            // Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tabledata/list
 //   The BigQuery .NET SDK (v3.11.0) defaults to UseInt64Timestamp=true, which calls
 //   long.Parse() on timestamp values. We must return epoch MICROSECONDS as an integer string.
 //   SDK source: BigQueryResults.ConvertResponseRows â†’ BigQueryRow â†’ Int64TimestampConverter.

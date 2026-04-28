@@ -31,19 +31,19 @@ public class SetOperationTests : IAsyncLifetime
 	}
 
 	// ---- UNION ALL ----
-	[Fact(Skip = "Needs investigation")] public async Task UnionAll_Basic()
+	[Fact] public async Task UnionAll_Basic()
 	{
 		var rows = await Query("SELECT 1 AS x UNION ALL SELECT 2 UNION ALL SELECT 3");
 		Assert.Equal(3, rows.Count);
 	}
 
-	[Fact(Skip = "Needs investigation")] public async Task UnionAll_Duplicates()
+	[Fact] public async Task UnionAll_Duplicates()
 	{
 		var rows = await Query("SELECT 1 AS x UNION ALL SELECT 1 UNION ALL SELECT 1");
 		Assert.Equal(3, rows.Count);
 	}
 
-	[Fact(Skip = "Needs investigation")] public async Task UnionAll_Strings()
+	[Fact] public async Task UnionAll_Strings()
 	{
 		var rows = await Query("SELECT 'a' AS x UNION ALL SELECT 'b' UNION ALL SELECT 'c'");
 		Assert.Equal(3, rows.Count);
@@ -62,7 +62,7 @@ public class SetOperationTests : IAsyncLifetime
 		Assert.Equal("4", rows[3][0]?.ToString());
 	}
 
-	[Fact(Skip = "Needs investigation")] public async Task UnionAll_MultipleColumns()
+	[Fact] public async Task UnionAll_MultipleColumns()
 	{
 		var rows = await Query(@"
 			SELECT 1 AS a, 'x' AS b
@@ -77,13 +77,13 @@ public class SetOperationTests : IAsyncLifetime
 	}
 
 	// ---- UNION DISTINCT ----
-	[Fact(Skip = "Needs investigation")] public async Task UnionDistinct_RemovesDupes()
+	[Fact] public async Task UnionDistinct_RemovesDupes()
 	{
 		var rows = await Query("SELECT 1 AS x UNION DISTINCT SELECT 1 UNION DISTINCT SELECT 2");
 		Assert.Equal(2, rows.Count);
 	}
 
-	[Fact(Skip = "Needs investigation")] public async Task UnionDistinct_NoDupes()
+	[Fact] public async Task UnionDistinct_NoDupes()
 	{
 		var rows = await Query("SELECT 1 AS x UNION DISTINCT SELECT 2 UNION DISTINCT SELECT 3");
 		Assert.Equal(3, rows.Count);
@@ -96,7 +96,7 @@ public class SetOperationTests : IAsyncLifetime
 		Assert.Single(rows);
 	}
 
-	[Fact(Skip = "Needs investigation")] public async Task UnionDistinct_Strings()
+	[Fact] public async Task UnionDistinct_Strings()
 	{
 		var rows = await Query("SELECT 'a' AS x UNION DISTINCT SELECT 'a' UNION DISTINCT SELECT 'b'");
 		Assert.Equal(2, rows.Count);
@@ -173,7 +173,7 @@ public class SetOperationTests : IAsyncLifetime
 	}
 
 	// ---- Combined set operations ----
-	[Fact(Skip = "Needs investigation")] public async Task Combined_UnionIntersect()
+	[Fact] public async Task Combined_UnionIntersect()
 	{
 		var v = await Scalar(@"
 			SELECT COUNT(*) FROM (
@@ -185,7 +185,7 @@ public class SetOperationTests : IAsyncLifetime
 	}
 
 	// ---- UNION ALL with aggregates ----
-	[Fact(Skip = "Needs investigation")] public async Task UnionAll_WithAggregate()
+	[Fact] public async Task UnionAll_WithAggregate()
 	{
 		var v = await Scalar(@"
 			SELECT SUM(x) FROM (
@@ -199,7 +199,7 @@ public class SetOperationTests : IAsyncLifetime
 	}
 
 	// ---- UNION ALL with CTE ----
-	[Fact(Skip = "Needs investigation")] public async Task UnionAll_WithCTE()
+	[Fact] public async Task UnionAll_WithCTE()
 	{
 		var rows = await Query(@"
 			WITH a AS (SELECT x FROM UNNEST([1,2]) AS x),

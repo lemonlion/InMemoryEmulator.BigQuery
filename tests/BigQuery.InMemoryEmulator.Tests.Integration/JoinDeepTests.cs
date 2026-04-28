@@ -27,7 +27,7 @@ public class JoinDeepTests : IAsyncLifetime
 	}
 
 	// ---- CROSS JOIN ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task CrossJoin_Count()
 	{
 		var v = await Scalar(@"
@@ -37,7 +37,7 @@ SELECT COUNT(*) FROM a CROSS JOIN b");
 		Assert.Equal("4", v);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task CrossJoin_3x3()
 	{
 		var v = await Scalar(@"
@@ -58,7 +58,7 @@ SELECT COUNT(*) FROM a CROSS JOIN b");
 	}
 
 	// ---- INNER JOIN ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task InnerJoin_Basic()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -84,7 +84,7 @@ SELECT COUNT(*) FROM a INNER JOIN b ON a.id = b.id");
 		Assert.Equal("0", v);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task InnerJoin_MultiMatch()
 	{
 		var v = await Scalar(@"
@@ -95,7 +95,7 @@ SELECT COUNT(*) FROM a INNER JOIN b ON a.id = b.id");
 	}
 
 	// ---- LEFT JOIN ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task LeftJoin_AllMatch()
 	{
 		var v = await Scalar(@"
@@ -105,7 +105,7 @@ SELECT COUNT(*) FROM a LEFT JOIN b ON a.id = b.id");
 		Assert.Equal("2", v);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task LeftJoin_SomeNull()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -120,7 +120,7 @@ SELECT a.id, b.val FROM a LEFT JOIN b ON a.id = b.id ORDER BY a.id", parameters:
 		Assert.Null(rows[2][1]);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task LeftJoin_NoMatch()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -135,7 +135,7 @@ SELECT a.id, b.val FROM a LEFT JOIN b ON a.id = b.id ORDER BY a.id", parameters:
 	}
 
 	// ---- RIGHT JOIN ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task RightJoin_SomeNull()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -151,7 +151,7 @@ SELECT b.id, a.val FROM a RIGHT JOIN b ON a.id = b.id ORDER BY b.id", parameters
 	}
 
 	// ---- FULL OUTER JOIN ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task FullJoin_All()
 	{
 		var v = await Scalar(@"
@@ -161,7 +161,7 @@ SELECT COUNT(*) FROM a FULL OUTER JOIN b ON a.id = b.id");
 		Assert.Equal("4", v);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task FullJoin_NoOverlap()
 	{
 		var v = await Scalar(@"
@@ -172,7 +172,7 @@ SELECT COUNT(*) FROM a FULL OUTER JOIN b ON a.id = b.id");
 	}
 
 	// ---- Self JOIN ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task SelfJoin_Basic()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -193,7 +193,7 @@ ORDER BY e.id", parameters: null);
 	}
 
 	// ---- Multi-table JOIN ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task ThreeTableJoin()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -215,7 +215,7 @@ ORDER BY o.order_id", parameters: null);
 	}
 
 	// ---- JOIN with aggregate ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task JoinWithAggregate()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -235,7 +235,7 @@ ORDER BY u.name", parameters: null);
 	}
 
 	// ---- JOIN with WHERE ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task JoinWithWhere()
 	{
 		var v = await Scalar(@"
@@ -246,7 +246,7 @@ SELECT COUNT(*) FROM a JOIN b ON a.id = b.id WHERE a.val > 10");
 	}
 
 	// ---- Comma JOIN (implicit cross join) ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task CommaJoin()
 	{
 		var v = await Scalar(@"
@@ -257,7 +257,7 @@ SELECT COUNT(*) FROM a, b");
 	}
 
 	// ---- JOIN with USING ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task JoinUsing()
 	{
 		var v = await Scalar(@"

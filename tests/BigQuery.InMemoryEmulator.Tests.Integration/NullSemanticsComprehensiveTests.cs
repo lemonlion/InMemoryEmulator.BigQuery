@@ -74,14 +74,14 @@ public class NullSemanticsComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task Trim_Null() => Assert.Null(await Scalar("SELECT TRIM(NULL)"));
 
 	// ---- NULL in aggregate functions ----
-	[Fact(Skip = "Needs investigation")] public async Task Count_WithNulls() => Assert.Equal("2", await Scalar("SELECT COUNT(x) FROM (SELECT 1 AS x UNION ALL SELECT NULL UNION ALL SELECT 3) AS t"));
-	[Fact(Skip = "Needs investigation")] public async Task CountStar_IncludesNulls() => Assert.Equal("3", await Scalar("SELECT COUNT(*) FROM (SELECT 1 AS x UNION ALL SELECT NULL UNION ALL SELECT 3) AS t"));
-	[Fact(Skip = "Needs investigation")] public async Task Sum_WithNulls() => Assert.Equal("4", await Scalar("SELECT SUM(x) FROM (SELECT 1 AS x UNION ALL SELECT NULL UNION ALL SELECT 3) AS t"));
-	[Fact(Skip = "Needs investigation")] public async Task Avg_WithNulls() { var v = await Scalar("SELECT AVG(x) FROM (SELECT 1 AS x UNION ALL SELECT NULL UNION ALL SELECT 3) AS t"); Assert.Equal("2", v); }
-	[Fact(Skip = "Needs investigation")] public async Task Min_WithNulls() => Assert.Equal("1", await Scalar("SELECT MIN(x) FROM (SELECT 1 AS x UNION ALL SELECT NULL UNION ALL SELECT 3) AS t"));
-	[Fact(Skip = "Needs investigation")] public async Task Max_WithNulls() => Assert.Equal("3", await Scalar("SELECT MAX(x) FROM (SELECT 1 AS x UNION ALL SELECT NULL UNION ALL SELECT 3) AS t"));
-	[Fact(Skip = "Needs investigation")] public async Task Sum_AllNull() => Assert.Null(await Scalar("SELECT SUM(x) FROM (SELECT CAST(NULL AS INT64) AS x UNION ALL SELECT NULL) AS t"));
-	[Fact(Skip = "Needs investigation")] public async Task Avg_AllNull() => Assert.Null(await Scalar("SELECT AVG(x) FROM (SELECT CAST(NULL AS INT64) AS x UNION ALL SELECT NULL) AS t"));
+	[Fact] public async Task Count_WithNulls() => Assert.Equal("2", await Scalar("SELECT COUNT(x) FROM (SELECT 1 AS x UNION ALL SELECT NULL UNION ALL SELECT 3) AS t"));
+	[Fact] public async Task CountStar_IncludesNulls() => Assert.Equal("3", await Scalar("SELECT COUNT(*) FROM (SELECT 1 AS x UNION ALL SELECT NULL UNION ALL SELECT 3) AS t"));
+	[Fact] public async Task Sum_WithNulls() => Assert.Equal("4", await Scalar("SELECT SUM(x) FROM (SELECT 1 AS x UNION ALL SELECT NULL UNION ALL SELECT 3) AS t"));
+	[Fact] public async Task Avg_WithNulls() { var v = await Scalar("SELECT AVG(x) FROM (SELECT 1 AS x UNION ALL SELECT NULL UNION ALL SELECT 3) AS t"); Assert.Equal("2", v); }
+	[Fact] public async Task Min_WithNulls() => Assert.Equal("1", await Scalar("SELECT MIN(x) FROM (SELECT 1 AS x UNION ALL SELECT NULL UNION ALL SELECT 3) AS t"));
+	[Fact] public async Task Max_WithNulls() => Assert.Equal("3", await Scalar("SELECT MAX(x) FROM (SELECT 1 AS x UNION ALL SELECT NULL UNION ALL SELECT 3) AS t"));
+	[Fact] public async Task Sum_AllNull() => Assert.Null(await Scalar("SELECT SUM(x) FROM (SELECT CAST(NULL AS INT64) AS x UNION ALL SELECT NULL) AS t"));
+	[Fact] public async Task Avg_AllNull() => Assert.Null(await Scalar("SELECT AVG(x) FROM (SELECT CAST(NULL AS INT64) AS x UNION ALL SELECT NULL) AS t"));
 
 	// ---- NULL in CASE ----
 	[Fact] public async Task Case_NullWhen() => Assert.Equal("is null", await Scalar("SELECT CASE WHEN NULL THEN 'is true' ELSE 'is null' END"));
@@ -109,7 +109,7 @@ public class NullSemanticsComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task Like_NullPattern() => Assert.Null(await Scalar("SELECT 'test' LIKE NULL"));
 
 	// ---- NULL ordering ----
-	[Fact(Skip = "Needs investigation")] public async Task OrderBy_NullsFirst_Asc()
+	[Fact] public async Task OrderBy_NullsFirst_Asc()
 	{
 		var client = await _fixture.GetClientAsync();
 		var result = await client.ExecuteQueryAsync("SELECT x FROM (SELECT 3 AS x UNION ALL SELECT CAST(NULL AS INT64) UNION ALL SELECT 1) AS t ORDER BY x ASC", parameters: null);
@@ -118,7 +118,7 @@ public class NullSemanticsComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- DISTINCT with NULLs ----
-	[Fact(Skip = "Needs investigation")] public async Task Distinct_NullsAreEqual() => Assert.Equal("2", await Scalar("SELECT COUNT(*) FROM (SELECT DISTINCT x FROM (SELECT CAST(NULL AS INT64) AS x UNION ALL SELECT CAST(NULL AS INT64) UNION ALL SELECT 1) AS t) AS u"));
+	[Fact] public async Task Distinct_NullsAreEqual() => Assert.Equal("2", await Scalar("SELECT COUNT(*) FROM (SELECT DISTINCT x FROM (SELECT CAST(NULL AS INT64) AS x UNION ALL SELECT CAST(NULL AS INT64) UNION ALL SELECT 1) AS t) AS u"));
 
 	// ---- NULL in string concat operator ----
 	[Fact] public async Task ConcatOp_Null() { var v = await Scalar("SELECT 'a' || NULL"); Assert.True(v == null || v == "a", $"Expected null or a, got {v}"); }

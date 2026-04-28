@@ -36,7 +36,7 @@ public class CteAndQueryPatternTests : IAsyncLifetime
 	[Fact]
 	public async Task Cte_Simple() => Assert.Equal("1", await Scalar("WITH t AS (SELECT 1 AS x) SELECT x FROM t"));
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Cte_MultiRow() => Assert.Equal("3", await Scalar(@"
 WITH t AS (SELECT 1 AS x UNION ALL SELECT 2 UNION ALL SELECT 3)
 SELECT COUNT(*) FROM t"));
@@ -53,7 +53,7 @@ SELECT x FROM nums ORDER BY x");
 	}
 
 	// ---- Multiple CTEs ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Cte_TwoCtes() => Assert.Equal("3", await Scalar(@"
 WITH a AS (SELECT 1 AS x), b AS (SELECT 2 AS y)
 SELECT a.x + b.y FROM a, b"));
@@ -63,7 +63,7 @@ SELECT a.x + b.y FROM a, b"));
 WITH a AS (SELECT 1 AS x), b AS (SELECT x + 1 AS y FROM a)
 SELECT y FROM b"));
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Cte_ThreeCtes() => Assert.Equal("6", await Scalar(@"
 WITH a AS (SELECT 1 AS x), b AS (SELECT 2 AS x), c AS (SELECT 3 AS x)
 SELECT a.x + b.x + c.x FROM a, b, c"));
@@ -79,7 +79,7 @@ SELECT v FROM d"));
 WITH nums AS (SELECT x FROM UNNEST([1,2,3,4,5]) AS x)
 SELECT SUM(x) FROM nums"));
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Cte_GroupBy() => Assert.Equal("2", await Scalar(@"
 WITH data AS (
   SELECT 'a' AS grp, 1 AS val UNION ALL
@@ -88,7 +88,7 @@ WITH data AS (
 )
 SELECT COUNT(DISTINCT grp) FROM data"));
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Cte_AggregateJoin()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -116,7 +116,7 @@ SELECT grp, total FROM sums ORDER BY grp", parameters: null);
 WITH nums AS (SELECT x FROM UNNEST([1,2,3,4,5]) AS x)
 SELECT COUNT(*) FROM nums WHERE x > 3"));
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Cte_WhereString()
 	{
 		var rows = await Column(@"
@@ -226,14 +226,14 @@ SELECT (SELECT SUM(x) FROM UNNEST([1,2,3]) AS x) + (SELECT SUM(x) FROM UNNEST([4
 	}
 
 	// ---- UNION ALL ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task UnionAll_Basic()
 	{
 		var rows = await Column("SELECT 1 AS x UNION ALL SELECT 2 UNION ALL SELECT 3 ORDER BY x");
 		Assert.Equal(3, rows.Count);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task UnionAll_WithCte()
 	{
 		var rows = await Column(@"
@@ -244,7 +244,7 @@ SELECT x FROM a UNION ALL SELECT x FROM b ORDER BY x");
 	}
 
 	// ---- ORDER BY multiple columns ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task OrderBy_TwoColumns()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -264,7 +264,7 @@ SELECT grp, val FROM data ORDER BY grp, val", parameters: null);
 		Assert.Equal("2", rows[3][1]?.ToString());
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task OrderBy_MixedAscDesc()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -296,14 +296,14 @@ SELECT grp, val FROM data ORDER BY grp ASC, val DESC", parameters: null);
 	[Fact] public async Task Alias_Table() => Assert.Equal("3", await Scalar("SELECT COUNT(*) FROM UNNEST([1,2,3]) AS t"));
 
 	// ---- Nested subquery patterns ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task FromSubquery()
 	{
 		var rows = await Column("SELECT x FROM (SELECT 1 AS x UNION ALL SELECT 2 UNION ALL SELECT 3) AS t ORDER BY x");
 		Assert.Equal(3, rows.Count);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task FromSubquery_WithWhere()
 	{
 		var rows = await Column("SELECT x FROM (SELECT x FROM UNNEST([1,2,3,4,5]) AS x) AS t WHERE x > 3 ORDER BY x");
