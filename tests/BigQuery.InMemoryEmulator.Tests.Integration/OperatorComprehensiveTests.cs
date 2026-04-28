@@ -122,8 +122,8 @@ public class OperatorComprehensiveTests : IAsyncLifetime
 	// ---- IS TRUE / IS FALSE / IS NULL ----
 	[Fact] public async Task IsTrue_True() => Assert.Equal("True", await Scalar("SELECT TRUE IS TRUE"));
 	[Fact] public async Task IsTrue_False() => Assert.Equal("False", await Scalar("SELECT FALSE IS TRUE"));
-	[Fact(Skip = "IS FALSE not supported")] public async Task IsFalse_True() => Assert.Equal("True", await Scalar("SELECT FALSE IS FALSE"));
-	[Fact(Skip = "IS FALSE not supported")] public async Task IsFalse_False() => Assert.Equal("False", await Scalar("SELECT TRUE IS FALSE"));
+	[Fact] public async Task IsFalse_True() => Assert.Equal("True", await Scalar("SELECT FALSE IS FALSE"));
+	[Fact] public async Task IsFalse_False() => Assert.Equal("False", await Scalar("SELECT TRUE IS FALSE"));
 
 	// ---- LIKE ----
 	[Fact] public async Task Like_Wildcard() => Assert.Equal("True", await Scalar("SELECT 'hello' LIKE '%ello'"));

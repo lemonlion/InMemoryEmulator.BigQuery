@@ -41,11 +41,11 @@ public class ConditionalExpressionDeepTests : IAsyncLifetime
 	[Fact] public async Task Case_Multi_NoElse() => Assert.Null(await Scalar("SELECT CASE WHEN 1=2 THEN 'one' WHEN 2=3 THEN 'two' END"));
 
 	// ---- Simple CASE (value) ----
-	[Fact(Skip = "Emulator limitation")] public async Task SimpleCase_1() => Assert.Equal("one", await Scalar("SELECT CASE 1 WHEN 1 THEN 'one' WHEN 2 THEN 'two' WHEN 3 THEN 'three' END"));
-	[Fact(Skip = "Emulator limitation")] public async Task SimpleCase_2() => Assert.Equal("two", await Scalar("SELECT CASE 2 WHEN 1 THEN 'one' WHEN 2 THEN 'two' WHEN 3 THEN 'three' END"));
-	[Fact(Skip = "Emulator limitation")] public async Task SimpleCase_3() => Assert.Equal("three", await Scalar("SELECT CASE 3 WHEN 1 THEN 'one' WHEN 2 THEN 'two' WHEN 3 THEN 'three' END"));
-	[Fact(Skip = "Emulator limitation")] public async Task SimpleCase_Else() => Assert.Equal("other", await Scalar("SELECT CASE 4 WHEN 1 THEN 'one' WHEN 2 THEN 'two' ELSE 'other' END"));
-	[Fact(Skip = "Emulator limitation")] public async Task SimpleCase_Str() => Assert.Equal("dog", await Scalar("SELECT CASE 'b' WHEN 'a' THEN 'cat' WHEN 'b' THEN 'dog' ELSE 'bird' END"));
+	[Fact] public async Task SimpleCase_1() => Assert.Equal("one", await Scalar("SELECT CASE 1 WHEN 1 THEN 'one' WHEN 2 THEN 'two' WHEN 3 THEN 'three' END"));
+	[Fact] public async Task SimpleCase_2() => Assert.Equal("two", await Scalar("SELECT CASE 2 WHEN 1 THEN 'one' WHEN 2 THEN 'two' WHEN 3 THEN 'three' END"));
+	[Fact] public async Task SimpleCase_3() => Assert.Equal("three", await Scalar("SELECT CASE 3 WHEN 1 THEN 'one' WHEN 2 THEN 'two' WHEN 3 THEN 'three' END"));
+	[Fact] public async Task SimpleCase_Else() => Assert.Equal("other", await Scalar("SELECT CASE 4 WHEN 1 THEN 'one' WHEN 2 THEN 'two' ELSE 'other' END"));
+	[Fact] public async Task SimpleCase_Str() => Assert.Equal("dog", await Scalar("SELECT CASE 'b' WHEN 'a' THEN 'cat' WHEN 'b' THEN 'dog' ELSE 'bird' END"));
 
 	// ---- CASE with computations ----
 	[Fact] public async Task Case_Arithmetic() => Assert.Equal("20", await Scalar("SELECT CASE WHEN TRUE THEN 10 + 10 ELSE 0 END"));

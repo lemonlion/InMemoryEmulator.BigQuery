@@ -42,7 +42,7 @@ public class DateTimeFunctionDeepTests : IAsyncLifetime
 	[Fact] public async Task DateAdd_7Days() => Assert.Equal("2024-01-22", await Scalar("SELECT DATE_ADD(DATE '2024-01-15', INTERVAL 7 DAY)"));
 	[Fact] public async Task DateAdd_Month() => Assert.Equal("2024-02-15", await Scalar("SELECT DATE_ADD(DATE '2024-01-15', INTERVAL 1 MONTH)"));
 	[Fact] public async Task DateAdd_Year() => Assert.Equal("2025-01-15", await Scalar("SELECT DATE_ADD(DATE '2024-01-15', INTERVAL 1 YEAR)"));
-	[Fact(Skip = "Emulator limitation")] public async Task DateAdd_NegDay() => Assert.Equal("2024-01-14", await Scalar("SELECT DATE_ADD(DATE '2024-01-15', INTERVAL -1 DAY)"));
+	[Fact] public async Task DateAdd_NegDay() => Assert.Equal("2024-01-14", await Scalar("SELECT DATE_ADD(DATE '2024-01-15', INTERVAL -1 DAY)"));
 	[Fact] public async Task DateAdd_MonthEnd() => Assert.Equal("2024-02-29", await Scalar("SELECT DATE_ADD(DATE '2024-01-31', INTERVAL 1 MONTH)"));
 	[Fact] public async Task DateAdd_CrossYear() => Assert.Equal("2025-01-01", await Scalar("SELECT DATE_ADD(DATE '2024-12-31', INTERVAL 1 DAY)"));
 

@@ -190,11 +190,11 @@ public class WindowFunctionComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- SUM / AVG / COUNT as window functions ----
-	[Fact(Skip = "Needs investigation")] public async Task SumWindow_RunningTotal()
+	[Fact] public async Task SumWindow_RunningTotal()
 	{
 		var rows = await Query($"SELECT id, SUM(amount) OVER (ORDER BY id) AS running FROM `{_datasetId}.sales` ORDER BY id");
-		Assert.Equal("100.0", rows[0]["running"]?.ToString());
-		Assert.Equal("300.0", rows[1]["running"]?.ToString());
+		Assert.Equal(100.0, double.Parse(rows[0]["running"]!.ToString()!));
+		Assert.Equal(300.0, double.Parse(rows[1]["running"]!.ToString()!!.ToString()!));
 	}
 	[Fact(Skip = "Needs investigation")] public async Task AvgWindow_Partitioned()
 	{
@@ -210,17 +210,17 @@ public class WindowFunctionComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- Window frame: ROWS BETWEEN ----
-	[Fact(Skip = "Not yet supported")] public async Task WindowFrame_Preceding()
+	[Fact] public async Task WindowFrame_Preceding()
 	{
 		var rows = await Query($"SELECT id, SUM(amount) OVER (ORDER BY id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS s FROM `{_datasetId}.sales` ORDER BY id");
-		Assert.Equal("100.0", rows[0]["s"]?.ToString()); // only 100
-		Assert.Equal("300.0", rows[1]["s"]?.ToString()); // 100 + 200
+		Assert.Equal(100.0, double.Parse(rows[0]["s"]!.ToString()!)); // only 100
+		Assert.Equal(300.0, double.Parse(rows[1]["s"]!.ToString()!)); // 100 + 200
 	}
-	[Fact(Skip = "Not yet supported")] public async Task WindowFrame_Following()
+	[Fact] public async Task WindowFrame_Following()
 	{
 		var rows = await Query($"SELECT id, SUM(amount) OVER (ORDER BY id ROWS BETWEEN CURRENT ROW AND 1 FOLLOWING) AS s FROM `{_datasetId}.sales` ORDER BY id");
-		Assert.Equal("300.0", rows[0]["s"]?.ToString()); // 100 + 200
-		Assert.Equal("350.0", rows[4]["s"]?.ToString()); // 250 + 350 (for ids 5,6)
+		Assert.Equal(300.0, double.Parse(rows[0]["s"]!.ToString()!)); // 100 + 200
+		Assert.Equal(600.0, double.Parse(rows[4]["s"]!.ToString()!!.ToString()!)); // 250 + 350 (for ids 5,6)
 	}
 
 	// ---- QUALIFY ----

@@ -141,10 +141,10 @@ ORDER BY x");
 	}
 
 	// ---- IF expressions ----
-	[Fact(Skip = "Emulator limitation")] public async Task If_True() => Assert.Equal("yes", await Scalar("SELECT IF(TRUE, 'yes', 'no')"));
-	[Fact(Skip = "Emulator limitation")] public async Task If_False() => Assert.Equal("no", await Scalar("SELECT IF(FALSE, 'yes', 'no')"));
-	[Fact(Skip = "Emulator limitation")] public async Task If_Expression() => Assert.Equal("even", await Scalar("SELECT IF(MOD(10, 2) = 0, 'even', 'odd')"));
-	[Fact(Skip = "Emulator limitation")] public async Task If_Nested() => Assert.Equal("B", await Scalar("SELECT IF(5 > 10, 'A', IF(5 > 3, 'B', 'C'))"));
+	[Fact] public async Task If_True() => Assert.Equal("yes", await Scalar("SELECT IF(TRUE, 'yes', 'no')"));
+	[Fact] public async Task If_False() => Assert.Equal("no", await Scalar("SELECT IF(FALSE, 'yes', 'no')"));
+	[Fact] public async Task If_Expression() => Assert.Equal("even", await Scalar("SELECT IF(MOD(10, 2) = 0, 'even', 'odd')"));
+	[Fact] public async Task If_Nested() => Assert.Equal("B", await Scalar("SELECT IF(5 > 10, 'A', IF(5 > 3, 'B', 'C'))"));
 
 	// ---- COALESCE / IFNULL ----
 	[Fact] public async Task Coalesce_FirstNonNull() => Assert.Equal("3", await Scalar("SELECT COALESCE(NULL, NULL, 3)"));

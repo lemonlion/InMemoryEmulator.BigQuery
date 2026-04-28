@@ -122,6 +122,6 @@ LIMIT 1");
 	[Fact] public async Task Coalesce_CastValid() => Assert.Equal("42", await Scalar("SELECT COALESCE(SAFE_CAST('42' AS INT64), 0)"));
 
 	// ---- IF with CAST ----
-	[Fact(Skip = "Emulator limitation")] public async Task If_CastOrDefault() => Assert.Equal("42", await Scalar("SELECT IF(SAFE_CAST('42' AS INT64) IS NOT NULL, SAFE_CAST('42' AS INT64), -1)"));
-	[Fact(Skip = "Emulator limitation")] public async Task If_CastFailDefault() => Assert.Equal("-1", await Scalar("SELECT IF(SAFE_CAST('abc' AS INT64) IS NOT NULL, SAFE_CAST('abc' AS INT64), -1)"));
+	[Fact] public async Task If_CastOrDefault() => Assert.Equal("42", await Scalar("SELECT IF(SAFE_CAST('42' AS INT64) IS NOT NULL, SAFE_CAST('42' AS INT64), -1)"));
+	[Fact] public async Task If_CastFailDefault() => Assert.Equal("-1", await Scalar("SELECT IF(SAFE_CAST('abc' AS INT64) IS NOT NULL, SAFE_CAST('abc' AS INT64), -1)"));
 }

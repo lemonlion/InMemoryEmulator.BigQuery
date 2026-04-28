@@ -55,7 +55,7 @@ internal static class SqlParser
 
 		// INTERVAL n PART → n, 'PART' (inside function args like TIMESTAMP_ADD)
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#interval_type
-		sql = Regex.Replace(sql, @"\bINTERVAL\s+(\d+)\s+(\w+)", "$1, '$2'", RegexOptions.IgnoreCase);
+		sql = Regex.Replace(sql, @"\bINTERVAL\s+(-?\d+)\s+(\w+)", "$1, '$2'", RegexOptions.IgnoreCase);
 
 		// ARRAY_AGG(expr IGNORE NULLS) → ARRAY_AGG(expr) — remove IGNORE NULLS modifier
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#array_agg
@@ -113,7 +113,10 @@ internal static class SqlParser
 		.Or(Token.EqualTo(SqlToken.Right).Select(t => t.ToStringValue()))
 		.Or(Token.EqualTo(SqlToken.Exists).Select(t => t.ToStringValue()))
 		.Or(Token.EqualTo(SqlToken.Replace).Select(t => t.ToStringValue()))
-		.Or(Token.EqualTo(SqlToken.Range).Select(t => t.ToStringValue()));
+		.Or(Token.EqualTo(SqlToken.Range).Select(t => t.ToStringValue()))
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conditional_expressions#if
+		//   "IF(expr, true_result, else_result)"
+		.Or(Token.EqualTo(SqlToken.If).Select(t => t.ToStringValue()));
 
 	/// <summary>Helper: matches an Identifier token whose text equals the given value (case-insensitive).</summary>
 	private static TokenListParser<SqlToken, Token<SqlToken>> IdentifierMatching(string value) =>
@@ -265,28 +268,42 @@ internal static class SqlParser
 
 	// --- Column reference: identifier or alias.identifier ---
 
+	private static readonly HashSet<string> AggregateNames = new(StringComparer.OrdinalIgnoreCase)
+	{
+		"COUNT", "SUM", "AVG", "MIN", "MAX", "ANY_VALUE",
+		"ARRAY_AGG", "ARRAY_CONCAT_AGG", "STRING_AGG", "COUNTIF", "LOGICAL_AND", "LOGICAL_OR",
+		"APPROX_COUNT_DISTINCT", "BIT_AND", "BIT_OR", "BIT_XOR",
+		"VAR_SAMP", "VAR_POP", "VARIANCE", "STDDEV", "STDDEV_SAMP", "STDDEV_POP",
+		"CORR", "COVAR_POP", "COVAR_SAMP",
+		"APPROX_QUANTILES", "APPROX_TOP_COUNT", "APPROX_TOP_SUM",
+		"ST_CENTROID_AGG", "ST_UNION_AGG"
+	};
+
 	private static readonly TokenListParser<SqlToken, SqlExpression> ColumnOrFunctionRef =
 		FunctionNameOrIdentifier.Then(name =>
 			// Check for function call: name(...)
 			Token.EqualTo(SqlToken.LParen).IgnoreThen(
 				SP.Ref(() => Expression!).ManyDelimitedBy(Token.EqualTo(SqlToken.Comma))
-			).Then(args => Token.EqualTo(SqlToken.RParen).Select(_ =>
-			{
-				// Check if it's an aggregate function
-				var upper = name.ToUpperInvariant();
-				if (upper is "COUNT" or "SUM" or "AVG" or "MIN" or "MAX" or "ANY_VALUE"
-					or "ARRAY_AGG" or "ARRAY_CONCAT_AGG" or "STRING_AGG" or "COUNTIF" or "LOGICAL_AND" or "LOGICAL_OR"
-					or "APPROX_COUNT_DISTINCT" or "BIT_AND" or "BIT_OR" or "BIT_XOR"
-					or "VAR_SAMP" or "VAR_POP" or "VARIANCE" or "STDDEV" or "STDDEV_SAMP" or "STDDEV_POP"
-					or "CORR" or "COVAR_POP" or "COVAR_SAMP"
-					or "APPROX_QUANTILES" or "APPROX_TOP_COUNT" or "APPROX_TOP_SUM"
-					or "ST_CENTROID_AGG" or "ST_UNION_AGG")
-				{
-					var extraArgs = args.Length > 1 ? args.Skip(1).ToList() : null;
-					return (SqlExpression)new AggregateCall(upper, args.Length > 0 ? args[0] : null, false, extraArgs);
-				}
-				return (SqlExpression)new FunctionCall(upper, args.ToList());
-			}))
+			).Then(args =>
+				// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions
+				//   "Many aggregate functions support ORDER BY to determine the order elements are aggregated."
+				Token.EqualTo(SqlToken.Order).IgnoreThen(Token.EqualTo(SqlToken.By))
+					.IgnoreThen(SP.Ref(() => OrderByItemParser!).ManyDelimitedBy(Token.EqualTo(SqlToken.Comma)))
+					.Select(o => (IReadOnlyList<OrderByItem>?)o.ToList())
+					.OptionalOrDefault()
+				.Then(aggOrderBy =>
+					Token.EqualTo(SqlToken.RParen).Select(_ =>
+					{
+						var upper = name.ToUpperInvariant();
+						if (AggregateNames.Contains(upper))
+						{
+							var extraArgs = args.Length > 1 ? args.Skip(1).ToList() : null;
+							return (SqlExpression)new AggregateCall(upper, args.Length > 0 ? args[0] : null, false, extraArgs, aggOrderBy);
+						}
+						return (SqlExpression)new FunctionCall(upper, args.ToList());
+					})
+				)
+			)
 			.Try()
 			// Check for qualified name: alias.column or alias.*
 			.Or(Token.EqualTo(SqlToken.Dot).IgnoreThen(
@@ -296,6 +313,28 @@ internal static class SqlParser
 			// Just a column reference
 			.Or(Constant((SqlExpression)new ColumnRef(null, name)))
 		);
+
+	// --- AGG(DISTINCT x [, args...]) general parser ---
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions
+	//   "For DISTINCT to work, the argument must be a type that supports equality comparison."
+	private static readonly TokenListParser<SqlToken, SqlExpression> AggDistinct =
+		FunctionNameOrIdentifier
+			.Where(t => AggregateNames.Contains(t.ToUpperInvariant()))
+			.Then(name =>
+				Token.EqualTo(SqlToken.LParen)
+				.IgnoreThen(Token.EqualTo(SqlToken.Distinct))
+				.IgnoreThen(SP.Ref(() => Expression!))
+				.Then(firstArg =>
+					Token.EqualTo(SqlToken.Comma).IgnoreThen(SP.Ref(() => Expression!)).Many()
+					.Then(extraArgs =>
+						Token.EqualTo(SqlToken.RParen).Select(_ =>
+						{
+							var extra = extraArgs.Length > 0 ? extraArgs.ToList() : null;
+							return (SqlExpression)new AggregateCall(name.ToUpperInvariant(), firstArg, true, extra);
+						})
+					)
+				)
+			);
 
 	// --- COUNT(DISTINCT x) special case ---
 	private static readonly TokenListParser<SqlToken, SqlExpression> CountDistinct =
@@ -324,7 +363,27 @@ internal static class SqlParser
 			);
 
 	// --- CASE expression ---
-	private static readonly TokenListParser<SqlToken, SqlExpression> CaseExprParser =
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conditional_expressions#case_expr
+	//   "CASE expr WHEN value THEN result [...] [ELSE else_result] END"
+	//   "CASE WHEN condition THEN result [...] [ELSE else_result] END"
+	private static readonly TokenListParser<SqlToken, SqlExpression> SimpleCaseExprParser =
+		Token.EqualTo(SqlToken.Case).IgnoreThen(
+			SP.Ref(() => Expression!)
+		).Then(operand =>
+			Token.EqualTo(SqlToken.When).IgnoreThen(SP.Ref(() => Expression!))
+				.Then(when => Token.EqualTo(SqlToken.Then).IgnoreThen(SP.Ref(() => Expression!))
+					.Select(then => (When: when, Then: then)))
+				.AtLeastOnce()
+				.Then(branches =>
+					Token.EqualTo(SqlToken.Else).IgnoreThen(SP.Ref(() => Expression!))
+						.Select(e => (SqlExpression?)e).OptionalOrDefault()
+						.Then(elseExpr => Token.EqualTo(SqlToken.End).Select(_ =>
+							(SqlExpression)new CaseExpr(operand, branches.Select(b => (b.When, b.Then)).ToList(), elseExpr)
+						))
+				)
+		);
+
+	private static readonly TokenListParser<SqlToken, SqlExpression> SearchedCaseExprParser =
 		Token.EqualTo(SqlToken.Case).IgnoreThen(
 			Token.EqualTo(SqlToken.When).IgnoreThen(SP.Ref(() => Expression!))
 				.Then(when => Token.EqualTo(SqlToken.Then).IgnoreThen(SP.Ref(() => Expression!))
@@ -337,6 +396,9 @@ internal static class SqlParser
 					(SqlExpression)new CaseExpr(null, branches.Select(b => (b.When, b.Then)).ToList(), elseExpr)
 				))
 		);
+
+	private static readonly TokenListParser<SqlToken, SqlExpression> CaseExprParser =
+		SearchedCaseExprParser.Try().Or(SimpleCaseExprParser);
 
 	// --- EXISTS (SELECT ...) ---
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/subqueries#exists_subquery
@@ -381,7 +443,8 @@ internal static class SqlParser
 
 	// --- Atom: base expression ---
 	private static readonly TokenListParser<SqlToken, SqlExpression> Atom =
-		CountDistinct.Try()
+		AggDistinct.Try()
+		.Or(CountDistinct.Try())
 		.Or(CastExprParser.Try())
 		.Or(CaseExprParser.Try())
 		.Or(ExistsExprParser.Try())
@@ -397,6 +460,36 @@ internal static class SqlParser
 		.Or(Parens)
 		.Or(UnaryNot)
 		.Or(UnaryMinus);
+
+	// --- Window frame boundary ---
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls#def_window_frame
+	private static readonly TokenListParser<SqlToken, FrameBoundary> FrameBoundaryParser =
+		// UNBOUNDED PRECEDING
+		Token.EqualTo(SqlToken.Unbounded).IgnoreThen(Token.EqualTo(SqlToken.Preceding))
+			.Select(_ => new FrameBoundary(FrameBoundaryType.UnboundedPreceding))
+		// UNBOUNDED FOLLOWING
+		.Or(Token.EqualTo(SqlToken.Unbounded).IgnoreThen(Token.EqualTo(SqlToken.Following))
+			.Select(_ => new FrameBoundary(FrameBoundaryType.UnboundedFollowing)))
+		// CURRENT ROW
+		.Or(Token.EqualTo(SqlToken.Current).IgnoreThen(Token.EqualTo(SqlToken.Row))
+			.Select(_ => new FrameBoundary(FrameBoundaryType.CurrentRow)))
+		// n PRECEDING
+		.Or(SP.Ref(() => Atom!).Then(offset =>
+			Token.EqualTo(SqlToken.Preceding).Select(_ => new FrameBoundary(FrameBoundaryType.Preceding, offset))
+			.Or(Token.EqualTo(SqlToken.Following).Select(_ => new FrameBoundary(FrameBoundaryType.Following, offset)))
+		));
+
+	// --- Window frame spec: ROWS/RANGE BETWEEN start AND end ---
+	private static readonly TokenListParser<SqlToken, FrameSpec> FrameSpecParser =
+		Token.EqualTo(SqlToken.Rows).Select(_ => FrameType.Rows)
+			.Or(Token.EqualTo(SqlToken.Range).Select(_ => FrameType.Range))
+		.Then(frameType =>
+			Token.EqualTo(SqlToken.Between).IgnoreThen(FrameBoundaryParser)
+			.Then(start =>
+				Token.EqualTo(SqlToken.And).IgnoreThen(FrameBoundaryParser)
+				.Select(end => new FrameSpec(frameType, start, end))
+			)
+		);
 
 	// --- OVER (window function) suffix ---
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls
@@ -415,20 +508,27 @@ internal static class SqlParser
 					.Select(o => (IReadOnlyList<OrderByItem>?)o.ToList())
 					.OptionalOrDefault()
 				.Then(orderBy =>
-					Token.EqualTo(SqlToken.RParen).Select(_ =>
-						(SqlExpression)new WindowFunction(expr, partitionBy, orderBy))
+					// Window frame spec: ROWS/RANGE BETWEEN ... AND ...
+					FrameSpecParser.Select(f => (FrameSpec?)f).OptionalOrDefault()
+					.Then(frame =>
+						Token.EqualTo(SqlToken.RParen).Select(_ =>
+							(SqlExpression)new WindowFunction(expr, partitionBy, orderBy, frame))
+					)
 				)
 			).Try()
 			.Or(Constant(expr))
 		);
 
-	// --- IS [NOT] NULL suffix ---
+	// --- IS [NOT] NULL / IS [NOT] TRUE / IS [NOT] FALSE suffix ---
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#is_operators
 	private static readonly TokenListParser<SqlToken, SqlExpression> IsNullSuffix =
 		OverSuffix.Then(expr =>
 			Token.EqualTo(SqlToken.Is).IgnoreThen(
 				Token.EqualTo(SqlToken.Not).Select(_ => true).OptionalOrDefault(false)
 			).Then(isNot =>
 				Token.EqualTo(SqlToken.Null).Select(_ => (SqlExpression)new IsNullExpr(expr, isNot))
+				.Or(Token.EqualTo(SqlToken.True).Select(_ => (SqlExpression)new IsBoolExpr(expr, isNot, true)))
+				.Or(Token.EqualTo(SqlToken.False).Select(_ => (SqlExpression)new IsBoolExpr(expr, isNot, false)))
 			).Try()
 			.Or(Constant(expr))
 		);

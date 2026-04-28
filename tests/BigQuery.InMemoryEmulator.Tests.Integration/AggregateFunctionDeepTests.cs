@@ -49,7 +49,7 @@ public class AggregateFunctionDeepTests : IAsyncLifetime
 	[Fact] public async Task Sum_Negative() => Assert.Equal("-6", await Scalar("SELECT SUM(x) FROM UNNEST([-1,-2,-3]) AS x"));
 	[Fact] public async Task Sum_Mixed() => Assert.Equal("0", await Scalar("SELECT SUM(x) FROM UNNEST([-1,0,1]) AS x"));
 	[Fact] public async Task Sum_Large() => Assert.Equal("55", await Scalar("SELECT SUM(x) FROM UNNEST([1,2,3,4,5,6,7,8,9,10]) AS x"));
-	[Fact(Skip = "Emulator limitation")] public async Task Sum_Distinct() => Assert.Equal("6", await Scalar("SELECT SUM(DISTINCT x) FROM UNNEST([1,1,2,2,3,3]) AS x"));
+	[Fact] public async Task Sum_Distinct() => Assert.Equal("6", await Scalar("SELECT SUM(DISTINCT x) FROM UNNEST([1,1,2,2,3,3]) AS x"));
 	[Fact] public async Task Sum_AllSame() => Assert.Equal("15", await Scalar("SELECT SUM(x) FROM UNNEST([5,5,5]) AS x"));
 
 	// ---- AVG ----
@@ -84,13 +84,13 @@ public class AggregateFunctionDeepTests : IAsyncLifetime
 
 	// ---- STRING_AGG ----
 	[Fact] public async Task StringAgg_Comma() => Assert.Contains(",", await Scalar("SELECT STRING_AGG(x, ',') FROM UNNEST(['a','b','c']) AS x") ?? "");
-	[Fact(Skip = "Emulator limitation")] public async Task StringAgg_Pipe() => Assert.Contains("|", await Scalar("SELECT STRING_AGG(x, '|') FROM UNNEST(['x','y']) AS x") ?? "");
+	[Fact] public async Task StringAgg_Pipe() => Assert.Contains("|", await Scalar("SELECT STRING_AGG(x, '|') FROM UNNEST(['x','y']) AS x") ?? "");
 	[Fact] public async Task StringAgg_Single() => Assert.Equal("hello", await Scalar("SELECT STRING_AGG(x, ',') FROM UNNEST(['hello']) AS x"));
 	[Fact] public async Task StringAgg_Length() { var v = await Scalar("SELECT LENGTH(STRING_AGG(x, ',')) FROM UNNEST(['a','b','c']) AS x"); Assert.Equal("5", v); }
 
 	// ---- ARRAY_AGG ----
 	[Fact] public async Task ArrayAgg_Count() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(ARRAY_AGG(x)) FROM UNNEST([1,2,3]) AS x"));
-	[Fact(Skip = "Emulator limitation")] public async Task ArrayAgg_Distinct() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(ARRAY_AGG(DISTINCT x)) FROM UNNEST([1,1,2,2,3,3]) AS x"));
+	[Fact] public async Task ArrayAgg_Distinct() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(ARRAY_AGG(DISTINCT x)) FROM UNNEST([1,1,2,2,3,3]) AS x"));
 	[Fact] public async Task ArrayAgg_Single() => Assert.Equal("1", await Scalar("SELECT ARRAY_LENGTH(ARRAY_AGG(x)) FROM UNNEST([42]) AS x"));
 
 	// ---- ANY_VALUE ----

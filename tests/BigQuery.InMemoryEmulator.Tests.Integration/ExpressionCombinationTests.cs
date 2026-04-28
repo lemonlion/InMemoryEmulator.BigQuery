@@ -122,15 +122,15 @@ public class ExpressionCombinationTests : IAsyncLifetime
 	[Fact] public async Task Literal_Bytes() { var v = await Scalar("SELECT CAST(b'hello' AS STRING)"); Assert.Equal("hello", v); }
 
 	// ---- IF expression ----
-	[Fact(Skip = "IF function not supported")] public async Task If_True() => Assert.Equal("yes", await Scalar("SELECT IF(TRUE, 'yes', 'no')"));
-	[Fact(Skip = "IF function not supported")] public async Task If_False() => Assert.Equal("no", await Scalar("SELECT IF(FALSE, 'yes', 'no')"));
-	[Fact(Skip = "IF function not supported")] public async Task If_Condition() => Assert.Equal("big", await Scalar("SELECT IF(10 > 5, 'big', 'small')"));
-	[Fact(Skip = "IF function not supported")] public async Task If_Nested() => Assert.Equal("c", await Scalar("SELECT IF(1 > 2, 'a', IF(3 > 2, 'c', 'd'))"));
-	[Fact(Skip = "IF function not supported")] public async Task If_WithFunction() => Assert.Equal("5", await Scalar("SELECT IF(LENGTH('hello') > 3, CAST(LENGTH('hello') AS STRING), 'short')"));
+	[Fact] public async Task If_True() => Assert.Equal("yes", await Scalar("SELECT IF(TRUE, 'yes', 'no')"));
+	[Fact] public async Task If_False() => Assert.Equal("no", await Scalar("SELECT IF(FALSE, 'yes', 'no')"));
+	[Fact] public async Task If_Condition() => Assert.Equal("big", await Scalar("SELECT IF(10 > 5, 'big', 'small')"));
+	[Fact] public async Task If_Nested() => Assert.Equal("c", await Scalar("SELECT IF(1 > 2, 'a', IF(3 > 2, 'c', 'd'))"));
+	[Fact] public async Task If_WithFunction() => Assert.Equal("5", await Scalar("SELECT IF(LENGTH('hello') > 3, CAST(LENGTH('hello') AS STRING), 'short')"));
 
 	// ---- Ternary in expressions ----
 	[Fact] public async Task CaseInConcat() => Assert.Equal("hello world", await Scalar("SELECT CONCAT('hello', CASE WHEN TRUE THEN ' world' ELSE '' END)"));
-	[Fact(Skip = "IF function not supported")] public async Task IfInConcat() => Assert.Equal("hello there", await Scalar("SELECT CONCAT('hello', IF(TRUE, ' there', ''))"));
+	[Fact] public async Task IfInConcat() => Assert.Equal("hello there", await Scalar("SELECT CONCAT('hello', IF(TRUE, ' there', ''))"));
 
 	// ---- String concatenation with || ----
 	[Fact] public async Task StringConcat_Pipe() => Assert.Equal("helloworld", await Scalar("SELECT 'hello' || 'world'"));
@@ -138,7 +138,7 @@ public class ExpressionCombinationTests : IAsyncLifetime
 	[Fact] public async Task StringConcat_PipeEmpty() => Assert.Equal("hello", await Scalar("SELECT 'hello' || ''"));
 
 	// ---- Complex mixed expressions ----
-	[Fact(Skip = "IF function not supported")] public async Task Complex_CastIfLength() => Assert.Equal("5", await Scalar("SELECT CAST(IF(LENGTH('hello') > 0, LENGTH('hello'), 0) AS STRING)"));
+	[Fact] public async Task Complex_CastIfLength() => Assert.Equal("5", await Scalar("SELECT CAST(IF(LENGTH('hello') > 0, LENGTH('hello'), 0) AS STRING)"));
 	[Fact] public async Task Complex_CoalesceConcat() => Assert.Equal("hello", await Scalar("SELECT COALESCE(CONCAT('hel', 'lo'), 'default')"));
 	[Fact] public async Task Complex_NestedCase()
 	{

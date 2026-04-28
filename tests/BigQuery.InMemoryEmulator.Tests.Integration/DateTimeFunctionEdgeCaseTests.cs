@@ -79,7 +79,7 @@ public class DateTimeFunctionEdgeCaseTests : IAsyncLifetime
 	[Fact] public async Task DateAdd_Year() { var v = await Scalar("SELECT DATE_ADD(DATE '2024-03-15', INTERVAL 1 YEAR)"); Assert.Contains("2025-03-15", v); }
 	[Fact] public async Task DateSub_Day() { var v = await Scalar("SELECT DATE_SUB(DATE '2024-01-01', INTERVAL 1 DAY)"); Assert.Contains("2023-12-31", v); }
 	[Fact] public async Task DateAdd_Week() { var v = await Scalar("SELECT DATE_ADD(DATE '2024-01-01', INTERVAL 1 WEEK)"); Assert.Contains("2024-01-08", v); }
-	[Fact(Skip = "Needs investigation")] public async Task DateAdd_NegativeDay() { var v = await Scalar("SELECT DATE_ADD(DATE '2024-01-10', INTERVAL -5 DAY)"); Assert.Contains("2024-01-05", v); }
+	[Fact] public async Task DateAdd_NegativeDay() { var v = await Scalar("SELECT DATE_ADD(DATE '2024-01-10', INTERVAL -5 DAY)"); Assert.Contains("2024-01-05", v); }
 	[Fact] public async Task DateSub_Month() { var v = await Scalar("SELECT DATE_SUB(DATE '2024-03-31', INTERVAL 1 MONTH)"); Assert.Contains("2024-02", v); }
 
 	// ---- DATE_DIFF ----

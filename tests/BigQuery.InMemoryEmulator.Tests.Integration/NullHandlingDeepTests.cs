@@ -122,9 +122,9 @@ public class NullHandlingDeepTests : IAsyncLifetime
 	[Fact] public async Task In_FoundWithNull() => Assert.Equal("True", await Scalar("SELECT 2 IN (1, 2, NULL)"));
 
 	// ---- NULL in IF ----
-	[Fact(Skip = "Needs investigation")] public async Task If_NullCondition() => Assert.Equal("b", await Scalar("SELECT IF(NULL, 'a', 'b')"));
-	[Fact(Skip = "Needs investigation")] public async Task If_NullTrue() => Assert.Null(await Scalar("SELECT IF(TRUE, NULL, 'b')"));
-	[Fact(Skip = "Needs investigation")] public async Task If_NullFalse() => Assert.Null(await Scalar("SELECT IF(FALSE, 'a', NULL)"));
+	[Fact] public async Task If_NullCondition() => Assert.Equal("b", await Scalar("SELECT IF(NULL, 'a', 'b')"));
+	[Fact] public async Task If_NullTrue() => Assert.Null(await Scalar("SELECT IF(TRUE, NULL, 'b')"));
+	[Fact] public async Task If_NullFalse() => Assert.Null(await Scalar("SELECT IF(FALSE, 'a', NULL)"));
 
 	// ---- NULL propagation in nested expressions ----
 	[Fact] public async Task NullProp_Nested() => Assert.Null(await Scalar("SELECT ABS(NULL + 1)"));

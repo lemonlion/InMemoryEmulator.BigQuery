@@ -40,11 +40,11 @@ public class ConditionalAndCastComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task Coalesce_Strings() => Assert.Equal("hello", await Scalar("SELECT COALESCE(NULL, 'hello', 'world')"));
 
 	// ---- IF ----
-	[Fact(Skip = "IF() function causes ArgumentOutOfRangeException")] public async Task If_TrueCondition() => Assert.Equal("yes", await Scalar("SELECT IF(TRUE, 'yes', 'no')"));
-	[Fact(Skip = "IF() function causes ArgumentOutOfRangeException")] public async Task If_FalseCondition() => Assert.Equal("no", await Scalar("SELECT IF(FALSE, 'yes', 'no')"));
-	[Fact(Skip = "IF() function causes ArgumentOutOfRangeException")] public async Task If_NullCondition() => Assert.Equal("no", await Scalar("SELECT IF(NULL, 'yes', 'no')"));
-	[Fact(Skip = "IF() function causes ArgumentOutOfRangeException")] public async Task If_WithExpressions() => Assert.Equal("big", await Scalar("SELECT IF(10 > 5, 'big', 'small')"));
-	[Fact(Skip = "IF() function causes ArgumentOutOfRangeException")] public async Task If_Nested() => Assert.Equal("medium", await Scalar("SELECT IF(5 > 10, 'big', IF(5 > 3, 'medium', 'small'))"));
+	[Fact] public async Task If_TrueCondition() => Assert.Equal("yes", await Scalar("SELECT IF(TRUE, 'yes', 'no')"));
+	[Fact] public async Task If_FalseCondition() => Assert.Equal("no", await Scalar("SELECT IF(FALSE, 'yes', 'no')"));
+	[Fact] public async Task If_NullCondition() => Assert.Equal("no", await Scalar("SELECT IF(NULL, 'yes', 'no')"));
+	[Fact] public async Task If_WithExpressions() => Assert.Equal("big", await Scalar("SELECT IF(10 > 5, 'big', 'small')"));
+	[Fact] public async Task If_Nested() => Assert.Equal("medium", await Scalar("SELECT IF(5 > 10, 'big', IF(5 > 3, 'medium', 'small'))"));
 
 	// ---- IIF ----
 	[Fact] public async Task Iif_TrueCondition() => Assert.Equal("yes", await Scalar("SELECT IIF(TRUE, 'yes', 'no')"));
@@ -62,9 +62,9 @@ public class ConditionalAndCastComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task Nullif_StringsDifferent() => Assert.Equal("a", await Scalar("SELECT NULLIF('a', 'b')"));
 
 	// ---- CASE ----
-	[Fact(Skip = "CASE simple form causes ArgumentOutOfRangeException")] public async Task Case_SimpleForms_FirstMatch() => Assert.Equal("one", await Scalar("SELECT CASE 1 WHEN 1 THEN 'one' WHEN 2 THEN 'two' ELSE 'other' END"));
-	[Fact(Skip = "CASE simple form causes ArgumentOutOfRangeException")] public async Task Case_SimpleForms_SecondMatch() => Assert.Equal("two", await Scalar("SELECT CASE 2 WHEN 1 THEN 'one' WHEN 2 THEN 'two' ELSE 'other' END"));
-	[Fact(Skip = "CASE simple form causes ArgumentOutOfRangeException")] public async Task Case_SimpleForms_ElseClause() => Assert.Equal("other", await Scalar("SELECT CASE 3 WHEN 1 THEN 'one' WHEN 2 THEN 'two' ELSE 'other' END"));
+	[Fact] public async Task Case_SimpleForms_FirstMatch() => Assert.Equal("one", await Scalar("SELECT CASE 1 WHEN 1 THEN 'one' WHEN 2 THEN 'two' ELSE 'other' END"));
+	[Fact] public async Task Case_SimpleForms_SecondMatch() => Assert.Equal("two", await Scalar("SELECT CASE 2 WHEN 1 THEN 'one' WHEN 2 THEN 'two' ELSE 'other' END"));
+	[Fact] public async Task Case_SimpleForms_ElseClause() => Assert.Equal("other", await Scalar("SELECT CASE 3 WHEN 1 THEN 'one' WHEN 2 THEN 'two' ELSE 'other' END"));
 	[Fact] public async Task Case_SearchedForm_FirstMatch() => Assert.Equal("positive", await Scalar("SELECT CASE WHEN 5 > 0 THEN 'positive' WHEN 5 < 0 THEN 'negative' ELSE 'zero' END"));
 	[Fact] public async Task Case_SearchedForm_SecondMatch() => Assert.Equal("negative", await Scalar("SELECT CASE WHEN -5 > 0 THEN 'positive' WHEN -5 < 0 THEN 'negative' ELSE 'zero' END"));
 	[Fact] public async Task Case_NoElse_NoMatch_ReturnsNull() => Assert.Null(await Scalar("SELECT CASE WHEN FALSE THEN 'yes' END"));
@@ -200,5 +200,5 @@ public class ConditionalAndCastComprehensiveTests : IAsyncLifetime
 	// ---- Null-coalescing -- (might not exist in BQ, actually BQ uses IFNULL/COALESCE) ----
 
 	// ---- Ternary / IF in expressions ----
-	[Fact(Skip = "IF() function causes ArgumentOutOfRangeException")] public async Task IfExpression_Arithmetic() => Assert.Equal("10", await Scalar("SELECT IF(2 > 1, 10, 20)"));
+	[Fact] public async Task IfExpression_Arithmetic() => Assert.Equal("10", await Scalar("SELECT IF(2 > 1, 10, 20)"));
 }

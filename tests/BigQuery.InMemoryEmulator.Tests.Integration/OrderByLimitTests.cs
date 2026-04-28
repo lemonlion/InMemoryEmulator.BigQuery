@@ -90,7 +90,7 @@ public class OrderByLimitTests : IAsyncLifetime
 	}
 
 	// ---- ORDER BY by ordinal ----
-	[Fact(Skip = "ORDER BY ordinal not supported")]
+	[Fact]
 	public async Task OrderBy_Ordinal()
 	{
 		var rows = await Query("SELECT x, x * 2 AS doubled FROM UNNEST([3,1,2]) AS x ORDER BY 2");

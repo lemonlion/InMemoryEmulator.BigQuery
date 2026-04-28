@@ -138,9 +138,9 @@ public class OperatorDeepTests : IAsyncLifetime
 	[Fact] public async Task Case_Second() => Assert.Equal("two", await Scalar("SELECT CASE WHEN 1=2 THEN 'one' WHEN 2=2 THEN 'two' END"));
 	[Fact] public async Task Case_Else() =>Assert.Equal("other", await Scalar("SELECT CASE WHEN 1=2 THEN 'one' ELSE 'other' END"));
 	[Fact] public async Task Case_NoMatch() => Assert.Null(await Scalar("SELECT CASE WHEN 1=2 THEN 'one' END"));
-	[Fact(Skip = "Emulator limitation")] public async Task Case_Simple() => Assert.Equal("one", await Scalar("SELECT CASE 1 WHEN 1 THEN 'one' WHEN 2 THEN 'two' END"));
-	[Fact(Skip = "Emulator limitation")] public async Task Case_Simple2() => Assert.Equal("two", await Scalar("SELECT CASE 2 WHEN 1 THEN 'one' WHEN 2 THEN 'two' END"));
-	[Fact(Skip = "Emulator limitation")] public async Task Case_SimpleElse() => Assert.Equal("other", await Scalar("SELECT CASE 3 WHEN 1 THEN 'one' WHEN 2 THEN 'two' ELSE 'other' END"));
+	[Fact] public async Task Case_Simple() => Assert.Equal("one", await Scalar("SELECT CASE 1 WHEN 1 THEN 'one' WHEN 2 THEN 'two' END"));
+	[Fact] public async Task Case_Simple2() => Assert.Equal("two", await Scalar("SELECT CASE 2 WHEN 1 THEN 'one' WHEN 2 THEN 'two' END"));
+	[Fact] public async Task Case_SimpleElse() => Assert.Equal("other", await Scalar("SELECT CASE 3 WHEN 1 THEN 'one' WHEN 2 THEN 'two' ELSE 'other' END"));
 	[Fact] public async Task Case_Nested() => Assert.Equal("big", await Scalar("SELECT CASE WHEN 10 > 5 THEN CASE WHEN 10 > 8 THEN 'big' ELSE 'medium' END ELSE 'small' END"));
 	[Fact] public async Task Case_Int() => Assert.Equal("10", await Scalar("SELECT CASE WHEN TRUE THEN 10 ELSE 20 END"));
 	[Fact] public async Task Case_Multi() => Assert.Equal("b", await Scalar("SELECT CASE WHEN 1=2 THEN 'a' WHEN 2=2 THEN 'b' WHEN 3=3 THEN 'c' END"));

@@ -222,7 +222,7 @@ public class WindowFunctionTests : IAsyncLifetime
 	}
 
 	// ---- Running aggregate ----
-	[Fact(Skip = "Named window frame aliases not supported")]
+	[Fact]
 	public async Task RunningSum()
 	{
 		var rows = await Query(@"
@@ -234,7 +234,7 @@ public class WindowFunctionTests : IAsyncLifetime
 		Assert.Equal("10", rows[3]["running"]?.ToString());
 	}
 
-	[Fact(Skip = "Named window frame aliases not supported")]
+	[Fact]
 	public async Task RunningCount()
 	{
 		var rows = await Query(@"
@@ -245,7 +245,7 @@ public class WindowFunctionTests : IAsyncLifetime
 		Assert.Equal("3", rows[2]["cnt"]?.ToString());
 	}
 
-	[Fact(Skip = "Named window frame aliases not supported")]
+	[Fact]
 	public async Task RunningAvg()
 	{
 		var rows = await Query(@"

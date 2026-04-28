@@ -93,10 +93,15 @@ internal record UnaryExpr(UnaryOp Op, SqlExpression Operand) : SqlExpression;
 internal record FunctionCall(string FunctionName, IReadOnlyList<SqlExpression> Args) : SqlExpression;
 
 /// <summary>An aggregate call: COUNT(x), SUM(x), etc.</summary>
-internal record AggregateCall(string FunctionName, SqlExpression? Arg, bool Distinct, IReadOnlyList<SqlExpression>? ExtraArgs = null) : SqlExpression;
+internal record AggregateCall(string FunctionName, SqlExpression? Arg, bool Distinct, IReadOnlyList<SqlExpression>? ExtraArgs = null, IReadOnlyList<OrderByItem>? AggOrderBy = null) : SqlExpression;
 
 /// <summary>IS [NOT] NULL check.</summary>
 internal record IsNullExpr(SqlExpression Expr, bool IsNot) : SqlExpression;
+
+/// <summary>IS [NOT] TRUE / IS [NOT] FALSE check (three-valued logic).</summary>
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#is_operators
+//   "expr IS TRUE" returns TRUE if expr evaluates to TRUE (not NULL, not FALSE)
+internal record IsBoolExpr(SqlExpression Expr, bool IsNot, bool Value) : SqlExpression;
 
 /// <summary>expr BETWEEN low AND high.</summary>
 internal record BetweenExpr(SqlExpression Expr, SqlExpression Low, SqlExpression High) : SqlExpression;
@@ -128,13 +133,22 @@ internal record ExistsExpr(SelectStatement Subquery) : SqlExpression;
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/subqueries#in_subquery
 internal record InSubqueryExpr(SqlExpression Expr, SelectStatement Subquery) : SqlExpression;
 
-/// <summary>A window function: func() OVER(PARTITION BY ... ORDER BY ...)</summary>
+/// <summary>A window function: func() OVER(PARTITION BY ... ORDER BY ... [frame])</summary>
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls
 internal record WindowFunction(
 	SqlExpression Function,
 	IReadOnlyList<SqlExpression>? PartitionBy,
-	IReadOnlyList<OrderByItem>? OrderBy
+	IReadOnlyList<OrderByItem>? OrderBy,
+	FrameSpec? Frame = null
 ) : SqlExpression;
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls#def_window_frame
+//   "ROWS: Physical frame defined by counting individual rows."
+//   "RANGE: Logical frame based on a range of values in the ORDER BY column."
+internal enum FrameType { Rows, Range }
+internal enum FrameBoundaryType { UnboundedPreceding, Preceding, CurrentRow, Following, UnboundedFollowing }
+internal record FrameBoundary(FrameBoundaryType Type, SqlExpression? Offset = null);
+internal record FrameSpec(FrameType Type, FrameBoundary Start, FrameBoundary End);
 
 /// <summary>ARRAY(SELECT ...) subquery expression.</summary>
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/subqueries#array_subquery

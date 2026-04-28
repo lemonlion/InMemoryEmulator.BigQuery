@@ -108,13 +108,13 @@ public class AggregateFunctionComprehensiveTests : IAsyncLifetime
 		Assert.NotNull(v);
 		Assert.Contains("x", v);
 	}
-	[Fact(Skip = "STRING_AGG DISTINCT not supported")]
+	[Fact]
 	public async Task StringAgg_Distinct()
 	{
 		var v = await Scalar($"SELECT STRING_AGG(DISTINCT label, ',') FROM `{_datasetId}.nums`");
 		Assert.NotNull(v);
 	}
-	[Fact(Skip = "STRING_AGG ORDER BY not supported")]
+	[Fact]
 	public async Task StringAgg_OrderBy()
 	{
 		var v = await Scalar($"SELECT STRING_AGG(label, ',' ORDER BY label) FROM `{_datasetId}.nums`");
@@ -124,7 +124,7 @@ public class AggregateFunctionComprehensiveTests : IAsyncLifetime
 	// ---- ARRAY_AGG ----
 	[Fact] public async Task ArrayAgg_Basic() => Assert.Equal("5", await Scalar($"SELECT ARRAY_LENGTH(ARRAY_AGG(id)) FROM `{_datasetId}.nums`"));
 	[Fact] public async Task ArrayAgg_IgnoreNulls() => Assert.Equal("4", await Scalar($"SELECT ARRAY_LENGTH(ARRAY_AGG(val IGNORE NULLS)) FROM `{_datasetId}.nums`"));
-	[Fact(Skip = "ARRAY_AGG DISTINCT returns null")] public async Task ArrayAgg_Distinct() => Assert.Equal("2", await Scalar($"SELECT ARRAY_LENGTH(ARRAY_AGG(DISTINCT grp)) FROM `{_datasetId}.nums`"));
+	[Fact] public async Task ArrayAgg_Distinct() => Assert.Equal("2", await Scalar($"SELECT ARRAY_LENGTH(ARRAY_AGG(DISTINCT grp)) FROM `{_datasetId}.nums`"));
 
 	// ---- ARRAY_CONCAT_AGG ----
 	[Fact(Skip = "FROM subquery not supported")]

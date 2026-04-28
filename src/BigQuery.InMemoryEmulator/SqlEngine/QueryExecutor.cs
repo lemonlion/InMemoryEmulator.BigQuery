@@ -30,7 +30,7 @@ _parameters = parameters;
 
 public InMemoryBigQueryResult Execute(string sql)
 {
-// Phase 27: Detect stub DDL patterns before parsing — these have complex syntax
+// Phase 27: Detect stub DDL patterns before parsing â€” these have complex syntax
 // that the parser doesn't handle, but we support them as no-ops for Go emulator parity.
 if (IsStubDdl(sql))
 	return EmptyResult();
@@ -224,7 +224,8 @@ var dicts = tableRows.Select((r, i) =>
     return d;
 }).ToList();
 var contexts = dicts.Select(d => new RowContext(d, null)).ToList();
-contexts = OrderBy(contexts, sel.OrderBy);
+var resolvedOrderBy = ResolveOrderByOrdinals(sel.OrderBy, sel.Columns);
+contexts = OrderBy(contexts, resolvedOrderBy);
 tableRows = contexts.Select(c =>
 {
     var proj = new Dictionary<string, object?>();
@@ -258,11 +259,11 @@ if (rollupExpr is not null)
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#group_by_clause
 //   When there's no explicit GROUP BY but the SELECT contains aggregates
-//   (implicit aggregation), the entire table is one group — even if empty.
+//   (implicit aggregation), the entire table is one group â€” even if empty.
 //   SELECT COUNT(*) FROM empty_table returns 1 row (count=0).
 if (groupExprs.Count == 0 && rows.Count == 0)
 {
-    // Implicit aggregation over empty set → produce one result row
+    // Implicit aggregation over empty set â†’ produce one result row
     var dict2 = new Dictionary<string, object?>();
     var fields2 = new List<TableFieldSchema>();
     var emptyGroupRows = new List<RowContext>();
@@ -317,7 +318,7 @@ if (sel.OrderBy is { Count: > 0 })
 if (sel.OrderBy is { Count: > 0 })
 {
 var ctx2 = resultRows.Select(d => new RowContext(d, null)).ToList();
-ctx2 = OrderBy(ctx2, sel.OrderBy);
+ctx2 = OrderBy(ctx2, ResolveOrderByOrdinals(sel.OrderBy, sel.Columns));
 resultRows = ctx2.Select(c => c.Fields).ToList();
 }
 
@@ -378,7 +379,7 @@ private InMemoryBigQueryResult ExecuteRollup(SelectStatement sel, List<RowContex
     if (sel.OrderBy is { Count: > 0 })
     {
         var ctx2 = allResultRows.Select(d => new RowContext(d, null)).ToList();
-        ctx2 = OrderBy(ctx2, sel.OrderBy);
+        ctx2 = OrderBy(ctx2, ResolveOrderByOrdinals(sel.OrderBy, sel.Columns));
         allResultRows = ctx2.Select(c => c.Fields).ToList();
     }
 
@@ -1152,14 +1153,16 @@ var navArgs = wf.Function is FunctionCall navFn ? navFn.Args : [];
 //   "Returns the value of the value_expression for the first row in the current window frame."
 if (funcName == "FIRST_VALUE")
 {
-return Evaluate(navArgs[0], partition[0]);
+var framedPartition = GetFramedPartition(wf, partition, currentRow);
+return Evaluate(navArgs[0], framedPartition[0]);
 }
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#last_value
 //   "Returns the value of the value_expression for the last row in the current window frame."
 if (funcName == "LAST_VALUE")
 {
-return Evaluate(navArgs[0], partition[^1]);
+var framedPartition = GetFramedPartition(wf, partition, currentRow);
+return Evaluate(navArgs[0], framedPartition[^1]);
 }
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#lag
@@ -1190,9 +1193,7 @@ if (funcName == "NTH_VALUE")
 {
 int n = navArgs.Count > 1 ? (int)ToLong(Evaluate(navArgs[1], currentRow)) : 1;
 if (n <= 0) throw new InvalidOperationException("NTH_VALUE requires a positive integer for N");
-// Apply window frame: for ORDER BY without explicit frame, default is RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-var idx = partition.IndexOf(currentRow);
-var framedPartition = wf.OrderBy is { Count: > 0 } ? partition.Take(idx + 1).ToList() : partition;
+var framedPartition = GetFramedPartition(wf, partition, currentRow);
 return n <= framedPartition.Count ? Evaluate(navArgs[0], framedPartition[n - 1]) : null;
 }
 
@@ -1239,11 +1240,85 @@ return sortedValues[^1];
 }
 
 // Window aggregate functions
-if (wf.Function is AggregateCall agg)
-return EvaluateAggregate(agg, partition);
-
-return null;
+if (wf.Function is AggregateCall windowAgg)
+{
+    var framedPartition = GetFramedPartition(wf, partition, currentRow);
+    return EvaluateAggregate(windowAgg, framedPartition);
 }
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls#window_frame_clause
+//   "If ORDER BY is specified but no window frame, default is RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW."
+//   "If neither ORDER BY nor window frame is specified, default is ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING."
+private List<RowContext> GetFramedPartition(WindowFunction wf, List<RowContext> partition, RowContext currentRow)
+{
+    var frame = wf.Frame;
+    var currentIdx = partition.IndexOf(currentRow);
+
+    if (frame is null)
+    {
+        if (wf.OrderBy is { Count: > 0 })
+        {
+            frame = new FrameSpec(FrameType.Range,
+                new FrameBoundary(FrameBoundaryType.UnboundedPreceding, null),
+                new FrameBoundary(FrameBoundaryType.CurrentRow, null));
+        }
+        else
+        {
+            return partition;
+        }
+    }
+
+    int startIdx = ResolveBoundaryIndex(frame.Start, currentIdx, partition.Count, wf, partition, currentRow, isStart: true);
+    int endIdx = ResolveBoundaryIndex(frame.End, currentIdx, partition.Count, wf, partition, currentRow, isStart: false);
+
+    startIdx = Math.Max(0, startIdx);
+    endIdx = Math.Min(partition.Count - 1, endIdx);
+
+    if (startIdx > endIdx) return new List<RowContext>();
+    return partition.GetRange(startIdx, endIdx - startIdx + 1);
+}
+
+private int ResolveBoundaryIndex(FrameBoundary boundary, int currentIdx, int partitionCount,
+    WindowFunction wf, List<RowContext> partition, RowContext currentRow, bool isStart)
+{
+    return boundary.Type switch
+    {
+        FrameBoundaryType.UnboundedPreceding => 0,
+        FrameBoundaryType.UnboundedFollowing => partitionCount - 1,
+        FrameBoundaryType.CurrentRow => wf.Frame?.Type == FrameType.Range
+            ? (isStart
+                ? FindFirstPeer(partition, currentRow, wf.OrderBy, currentIdx)
+                : FindLastPeer(partition, currentRow, wf.OrderBy, currentIdx))
+            : currentIdx,
+        FrameBoundaryType.Preceding => boundary.Offset is LiteralExpr { Value: long offset }
+            ? currentIdx - (int)offset
+            : currentIdx,
+        FrameBoundaryType.Following => boundary.Offset is LiteralExpr { Value: long offset }
+            ? currentIdx + (int)offset
+            : currentIdx,
+        _ => currentIdx
+    };
+}
+
+private int FindFirstPeer(List<RowContext> partition, RowContext currentRow, IReadOnlyList<OrderByItem>? orderBy, int currentIdx)
+{
+    for (int i = currentIdx - 1; i >= 0; i--)
+    {
+        if (CompareOrderByRow(partition[i], currentRow, orderBy) != 0)
+            return i + 1;
+    }
+    return 0;
+}
+
+private int FindLastPeer(List<RowContext> partition, RowContext currentRow, IReadOnlyList<OrderByItem>? orderBy, int currentIdx)
+{
+    for (int i = currentIdx + 1; i < partition.Count; i++)
+    {
+        if (CompareOrderByRow(partition[i], currentRow, orderBy) != 0)
+            return i - 1;
+    }
+    return partition.Count - 1;
+}
+
 
 private int CompareOrderByRow(RowContext a, RowContext b, IReadOnlyList<OrderByItem>? orderBy)
 {
@@ -1302,6 +1377,7 @@ UnaryExpr un => EvaluateUnary(un, row),
 FunctionCall fn => EvaluateFunctionCall(fn, row),
 AggregateCall _ => throw new InvalidOperationException("Aggregate outside GROUP BY"),
 IsNullExpr isNull => Evaluate(isNull.Expr, row) is null == !isNull.IsNot,
+IsBoolExpr isBool => EvaluateIsBool(isBool, row),
 BetweenExpr btw => EvaluateBetween(btw, row),
 InExpr inExpr => EvaluateIn(inExpr, row),
 InSubqueryExpr inSub => EvaluateInSubquery(inSub, row),
@@ -1394,6 +1470,23 @@ UnaryOp.Not => val is null ? null : !IsTruthy(val),
 UnaryOp.Negate => Negate(val),
 _ => throw new NotSupportedException("Unsupported unary operator: " + un.Op)
 };
+}
+
+private object? EvaluateIsBool(IsBoolExpr isBool, RowContext row)
+{
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#is_operators
+    //   "expr IS [NOT] TRUE / FALSE - three-valued logic comparison."
+    var val = Evaluate(isBool.Expr, row);
+    bool? boolVal = val switch
+    {
+        bool b => b,
+        null => null,
+        _ => IsTruthy(val)
+    };
+    bool result = isBool.Value
+        ? boolVal == true    // IS TRUE
+        : boolVal == false;  // IS FALSE
+    return isBool.IsNot ? !result : result;
 }
 
 private object? EvaluateBetween(BetweenExpr btw, RowContext row)
@@ -1911,7 +2004,7 @@ return name switch
 "RANGE_OVERLAPS" => EvaluateRangeOverlaps(args, row),
 "GENERATE_RANGE_ARRAY" => EvaluateGenerateRangeArray(args, row),
 
-// Net functions (normalized from NET.HOST → NET_HOST etc.)
+// Net functions (normalized from NET.HOST â†’ NET_HOST etc.)
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions
 "NET_HOST" => EvaluateNetHost(args, row),
 "NET_PUBLIC_SUFFIX" => EvaluateNetPublicSuffix(args, row),
@@ -1928,7 +2021,7 @@ return name switch
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions#netsafe_ip_from_string
 "NET_SAFE_IP_FROM_STRING" => EvaluateNetSafeIpFromString(args, row),
 
-// HLL++ approximate counting (exact in-memory implementation, normalized from HLL_COUNT.INIT → HLL_COUNT_INIT)
+// HLL++ approximate counting (exact in-memory implementation, normalized from HLL_COUNT.INIT â†’ HLL_COUNT_INIT)
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/hll_count_functions
 "HLL_COUNT_INIT" or "HLL_COUNT_MERGE" or "HLL_COUNT_MERGE_PARTIAL"
 or "HLL_COUNT_EXTRACT" => EvaluateHllCount(name, args, row),
@@ -1971,7 +2064,7 @@ or "ST_BUFFER" or "ST_SIMPLIFY" or "ST_DUMP"
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#string_for_json
 "STRING" or "JSON_STRING" => EvaluateJsonString(args, row),
 
-// AEAD encryption functions (normalized from KEYS.* → KEYS_*, AEAD.* → AEAD_*)
+// AEAD encryption functions (normalized from KEYS.* â†’ KEYS_*, AEAD.* â†’ AEAD_*)
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aead_encryption_functions
 "KEYS_NEW_KEYSET" => EvaluateKeysNewKeyset(args, row),
 "KEYS_ROTATE_KEYSET" => EvaluateKeysRotateKeyset(args, row),
@@ -3518,7 +3611,7 @@ try
 {
     var dict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, System.Text.Json.JsonElement>>(json);
     if (dict is null) return json;
-    // Simple path: $.key → remove "key"
+    // Simple path: $.key â†’ remove "key"
     var key = path.TrimStart('$', '.');
     dict.Remove(key);
     return System.Text.Json.JsonSerializer.Serialize(dict);
@@ -3929,7 +4022,7 @@ private object? EvaluateLaxBool(IReadOnlyList<SqlExpression> args, RowContext ro
     }
     catch
     {
-        // Not valid JSON — try as raw value
+        // Not valid JSON â€” try as raw value
         if (s.Equals("true", StringComparison.OrdinalIgnoreCase)) return true;
         if (s.Equals("false", StringComparison.OrdinalIgnoreCase)) return false;
         if (val is bool b) return b;
@@ -4385,7 +4478,7 @@ return EvaluateAeadDecryptString(args, row); // Same decryption logic
 #endregion
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/hll_count_functions
-//   "In-memory exact counting — HLL++ functions are approximated as exact distinct counts."
+//   "In-memory exact counting â€” HLL++ functions are approximated as exact distinct counts."
 private object? EvaluateHllCount(string name, IReadOnlyList<SqlExpression> args, RowContext row)
 {
 // In-memory: HLL_COUNT.INIT returns value, MERGE/EXTRACT return the value directly
@@ -4715,7 +4808,7 @@ private static object? GeoDifference(object? first, object? second)
     if (first is null || second is null) return null;
     var a = (GeoValue)first;
     var b = (GeoValue)second;
-    // Same geometry → empty
+    // Same geometry â†’ empty
     if (a.ToWkt() == b.ToWkt()) return new GeoEmpty();
     // Simple approximation: for polygons, return points of a not inside b
     if (a is GeoPolygon pa && b is GeoPolygon pb)
@@ -4967,6 +5060,9 @@ var funcName = agg.FunctionName.ToUpperInvariant();
 if (funcName == "COUNT" && agg.Arg is StarExpr)
     return (long)rows.Count;
 
+    if (agg.AggOrderBy is { Count: > 0 })
+        rows = OrderBy(rows, agg.AggOrderBy);
+
 var values = rows.Select(r => Evaluate(agg.Arg!, r)).ToList();
 
 if (agg.Distinct)
@@ -5042,9 +5138,25 @@ _ => throw new NotSupportedException("Unsupported aggregate: " + funcName)
 
 private object? EvaluateStringAgg(AggregateCall agg, List<RowContext> rows)
 {
-var values = rows.Select(r => Evaluate(agg.Arg!, r)?.ToString())
-.Where(v => v is not null).ToList();
-return string.Join(",", values);
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#string_agg
+    //   "Returns a value (either STRING or BYTES) obtained by concatenating non-null values."
+    var separator = agg.ExtraArgs is { Count: > 0 }
+        ? Evaluate(agg.ExtraArgs[0], rows[0])?.ToString() ?? ","
+        : ",";
+    var values = rows.Select(r => Evaluate(agg.Arg!, r)?.ToString())
+        .Where(v => v is not null).ToList();
+    if (agg.Distinct)
+        values = values.Distinct().ToList();
+    if (agg.AggOrderBy is { Count: > 0 })
+    {
+        var paired = rows.Select(r => (Value: Evaluate(agg.Arg!, r)?.ToString(), Row: r))
+            .Where(p => p.Value is not null).ToList();
+        if (agg.Distinct)
+            paired = paired.GroupBy(p => p.Value).Select(g => g.First()).ToList();
+        var ordered = OrderBy(paired.Select(p => p.Row).ToList(), agg.AggOrderBy);
+        values = ordered.Select(r => Evaluate(agg.Arg!, r)?.ToString()).Where(v => v is not null).ToList()!;
+    }
+    return string.Join(separator, values);
 }
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/statistical_aggregate_functions#var_samp
@@ -5262,7 +5374,7 @@ if (insert.Columns is not null && insert.Columns.Count > 0)
 }
 else
 {
-	// No explicit columns — map by schema field names
+	// No explicit columns â€” map by schema field names
 	foreach (var f in result.Schema.Fields)
 		fields[f.Name] = dict.GetValueOrDefault(f.Name);
 }
@@ -5549,7 +5661,7 @@ switch (alter.Action)
     }
     // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_table_set_options
     case SetOptionsAction:
-        // No-op — metadata-only in an in-memory emulator
+        // No-op â€” metadata-only in an in-memory emulator
         break;
 }
 return EmptyResult();
@@ -5727,6 +5839,7 @@ private object? EvaluateWithAggregates(SqlExpression expr, List<RowContext> grou
             ce.Else is not null ? new LiteralExpr(EvaluateWithAggregates(ce.Else, groupRows)) : null), groupRows[0]),
         CastExpr cast => CastValue(EvaluateWithAggregates(cast.Expr, groupRows), cast.TargetType, cast.Safe),
         IsNullExpr isNull => EvaluateWithAggregates(isNull.Expr, groupRows) is null == !isNull.IsNot,
+        IsBoolExpr isBool => EvaluateIsBool(isBool, groupRows[0]),
         _ => Evaluate(expr, groupRows[0])
     };
 }
@@ -5779,7 +5892,7 @@ return dict;
 
 /// <summary>
 /// Converts formatted string values in a row back to typed .NET values based on the schema.
-/// Needed when subquery/CTE results are consumed by outer queries (formatted values → typed values).
+/// Needed when subquery/CTE results are consumed by outer queries (formatted values â†’ typed values).
 /// </summary>
 private static Dictionary<string, object?> ParseTypedRow(Dictionary<string, object?> dict, TableSchema schema)
 {
@@ -5836,7 +5949,7 @@ double d => d == Math.Floor(d) && !double.IsInfinity(d) && !double.IsNaN(d)
 // Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tabledata/list
 //   The BigQuery .NET SDK (v3.11.0) defaults to UseInt64Timestamp=true, which calls
 //   long.Parse() on timestamp values. We must return epoch MICROSECONDS as an integer string.
-//   SDK source: BigQueryResults.ConvertResponseRows → BigQueryRow → Int64TimestampConverter.
+//   SDK source: BigQueryResults.ConvertResponseRows â†’ BigQueryRow â†’ Int64TimestampConverter.
 DateTimeOffset dto => (dto.ToUnixTimeMilliseconds() * 1000L).ToString(CultureInfo.InvariantCulture),
 // Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tabledata/list
 //   DATE values are returned as "yyyy-MM-dd" strings.
@@ -5875,6 +5988,25 @@ ordered = item.Descending
 }
 }
 return ordered?.ToList() ?? rows;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#order_by_clause
+//   "An ordinal references the column position in the SELECT list."
+private static IReadOnlyList<OrderByItem> ResolveOrderByOrdinals(IReadOnlyList<OrderByItem> orderBy, IReadOnlyList<SelectItem> columns)
+{
+    var resolved = new List<OrderByItem>();
+    foreach (var item in orderBy)
+    {
+        if (item.Expr is LiteralExpr lit && lit.Value is long ordinal && ordinal >= 1 && ordinal <= columns.Count)
+        {
+            resolved.Add(new OrderByItem(columns[(int)ordinal - 1].Expr, item.Descending));
+        }
+        else
+        {
+            resolved.Add(item);
+        }
+    }
+    return resolved;
 }
 
 private static bool ContainsWindow(List<SelectItem> items)
@@ -6044,9 +6176,9 @@ _ => val.ToString()
 };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 //  Vector distance helpers
-// ═══════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 private object? EvaluateVectorDistanceFunction(string name, IReadOnlyList<SqlExpression> args, RowContext row)
 {
@@ -6094,7 +6226,7 @@ private static object? CosineDistance(double[] a, double[] b)
         magB += b[i] * b[i];
     }
     var denominator = Math.Sqrt(magA) * Math.Sqrt(magB);
-    // Zero vector → return null (real BigQuery produces an error)
+    // Zero vector â†’ return null (real BigQuery produces an error)
     if (denominator == 0) return null;
     return 1.0 - (dot / denominator);
 }
@@ -6147,7 +6279,7 @@ private static double[]? ToDoubleArray(object? value)
     return null;
 }
 
-// ── String function helpers (Phase 24) ──────────────────────────────
+// â”€â”€ String function helpers (Phase 24) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 private object? EvaluateByteLength(IReadOnlyList<SqlExpression> args, RowContext row)
 {
@@ -6208,7 +6340,7 @@ private object? EvaluateTranslate(IReadOnlyList<SqlExpression> args, RowContext 
         var idx = source.IndexOf(c);
         if (idx < 0) sb.Append(c);
         else if (idx < target.Length) sb.Append(target[idx]);
-        // else: character in source but not in target → omitted
+        // else: character in source but not in target â†’ omitted
     }
     return sb.ToString();
 }
@@ -6235,9 +6367,9 @@ private object? EvaluateSoundex(IReadOnlyList<SqlExpression> args, RowContext ro
         {
             code[idx++] = digit;
         }
-        // H and W are transparent — they don't reset the last digit,
+        // H and W are transparent â€” they don't reset the last digit,
         // so adjacent consonants with the same code separated only by H/W
-        // are treated as one (e.g. Ashcraft → A261, not A226).
+        // are treated as one (e.g. Ashcraft â†’ A261, not A226).
         if (upper != 'H' && upper != 'W')
         {
             lastDigit = digit;
@@ -6405,7 +6537,7 @@ private static byte[] Base32Decode(string input)
     return output.ToArray();
 }
 
-// ── Math function helpers (Phase 24) ────────────────────────────────
+// â”€â”€ Math function helpers (Phase 24) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 private object? EvaluateUnaryMathOrNull(IReadOnlyList<SqlExpression> args, RowContext row, Func<double, double> fn)
 {
