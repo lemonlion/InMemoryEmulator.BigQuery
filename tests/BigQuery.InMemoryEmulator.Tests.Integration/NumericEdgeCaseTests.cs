@@ -155,7 +155,7 @@ public class NumericEdgeCaseTests : IAsyncLifetime
 	[Fact] public async Task Expr_AddMul() => Assert.Equal("14", await Scalar("SELECT 2 + 3 * 4"));
 	[Fact] public async Task Expr_MulAdd() => Assert.Equal("14", await Scalar("SELECT 3 * 4 + 2"));
 	[Fact] public async Task Expr_Parens() => Assert.Equal("20", await Scalar("SELECT (2 + 3) * 4"));
-	[Fact(Skip = "Emulator limitation")] public async Task Expr_DivSub() => Assert.Equal("3", await Scalar("SELECT 10 - 12 / 4 + CAST(-4 AS INT64)"));
+	[Fact] public async Task Expr_DivSub() => Assert.Equal("3", await Scalar("SELECT 10 - 12 / 4 + CAST(-4 AS INT64)"));
 	[Fact] public async Task Expr_NestedFunctions() => Assert.Equal("4", await Scalar("SELECT ABS(FLOOR(-3.7))"));
 	[Fact] public async Task Expr_SqrtPow() => Assert.Equal("10", await Scalar("SELECT CAST(SQRT(CAST(POW(10, 2) AS INT64)) AS INT64)"));
 	[Fact] public async Task Expr_ModOfMod() => Assert.Equal("0", await Scalar("SELECT MOD(MOD(100, 7), 2)"));

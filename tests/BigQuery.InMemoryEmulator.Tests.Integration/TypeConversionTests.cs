@@ -82,8 +82,8 @@ public class TypeConversionTests : IAsyncLifetime
 	[Fact] public async Task SafeCast_InvalidStr_To_Bool() => Assert.Null(await Scalar("SELECT SAFE_CAST('abc' AS BOOL)"));
 
 	// ---- Implicit conversions in expressions ----
-	[Fact(Skip = "Emulator limitation")] public async Task Implicit_IntPlusFloat() => Assert.Equal("5.14", await Scalar("SELECT 2 + 3.14"));
-	[Fact(Skip = "Emulator limitation")] public async Task Implicit_FloatPlusInt() => Assert.Equal("5.14", await Scalar("SELECT 3.14 + 2"));
+	[Fact(Skip = "Emulator uses FLOAT64 for decimal literals; BigQuery uses NUMERIC")] public async Task Implicit_IntPlusFloat() => Assert.Equal("5.14", await Scalar("SELECT 2 + 3.14"));
+	[Fact(Skip = "Emulator uses FLOAT64 for decimal literals; BigQuery uses NUMERIC")] public async Task Implicit_FloatPlusInt() => Assert.Equal("5.14", await Scalar("SELECT 3.14 + 2"));
 	[Fact] public async Task Implicit_IntMulFloat() => Assert.Equal("6.28", await Scalar("SELECT 2 * 3.14"));
 
 	// ---- CAST with computed values ----

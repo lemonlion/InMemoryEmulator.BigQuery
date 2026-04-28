@@ -143,7 +143,9 @@ public class ConditionalAndCastComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task In_Found() => Assert.Equal("True", await Scalar("SELECT 3 IN (1, 2, 3)"));
 	[Fact] public async Task In_NotFound() => Assert.Equal("False", await Scalar("SELECT 4 IN (1, 2, 3)"));
 	[Fact] public async Task In_StringFound() => Assert.Equal("True", await Scalar("SELECT 'b' IN ('a', 'b', 'c')"));
-	[Fact] public async Task In_NullInList() => Assert.Equal("False", await Scalar("SELECT NULL IN (1, 2, 3)"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
+	//   "Returns NULL if search_value is NULL."
+	[Fact] public async Task In_NullInList() => Assert.Null(await Scalar("SELECT NULL IN (1, 2, 3)"));
 	[Fact] public async Task NotIn_Found() => Assert.Equal("False", await Scalar("SELECT NOT (3 IN (1, 2, 3))"));
 	[Fact] public async Task NotIn_NotFound() => Assert.Equal("True", await Scalar("SELECT NOT (4 IN (1, 2, 3))"));
 

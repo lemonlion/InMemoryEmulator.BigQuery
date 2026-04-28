@@ -70,7 +70,7 @@ public class StringManipulationTests : IAsyncLifetime
 	// ---- String comparison patterns ----
 	[Fact] public async Task StrEq_True() => Assert.Equal("True", await Scalar("SELECT 'hello' = 'hello'"));
 	[Fact] public async Task StrEq_False() => Assert.Equal("False", await Scalar("SELECT 'hello' = 'world'"));
-	[Fact(Skip = "Emulator limitation")] public async Task StrEq_CaseSensitive() => Assert.Equal("False", await Scalar("SELECT 'Hello' = 'hello'"));
+	[Fact] public async Task StrEq_CaseSensitive() => Assert.Equal("False", await Scalar("SELECT 'Hello' = 'hello'"));
 	[Fact] public async Task StrNeq_True() => Assert.Equal("True", await Scalar("SELECT 'hello' != 'world'"));
 	[Fact] public async Task StrLt_True2() => Assert.Equal("True", await Scalar("SELECT 'abc' < 'abd'"));
 	[Fact] public async Task StrGt_True2() => Assert.Equal("True", await Scalar("SELECT 'abd' > 'abc'"));

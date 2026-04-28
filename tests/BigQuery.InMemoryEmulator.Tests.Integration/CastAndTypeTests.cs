@@ -115,18 +115,21 @@ public class CastAndTypeTests : IAsyncLifetime
 	}
 
 	// ---- Special float values ----
-	[Fact(Skip = "Emulator limitation")] public async Task Float_Infinity()
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#floating_point_literals
+	//   "inf and -inf represent positive and negative infinity."
+	[Fact] public async Task Float_Infinity()
 	{
 		var v = await Scalar("SELECT CAST('inf' AS FLOAT64)");
 		Assert.NotNull(v);
-		Assert.Contains("Infinity", v!, StringComparison.OrdinalIgnoreCase);
+		// .NET 8 returns ∞ for double.PositiveInfinity.ToString()
+		Assert.True(v == "Infinity" || v == "\u221E", $"Expected Infinity or ∞, got: {v}");
 	}
 
-	[Fact(Skip = "Emulator limitation")] public async Task Float_NegInfinity()
+	[Fact] public async Task Float_NegInfinity()
 	{
 		var v = await Scalar("SELECT CAST('-inf' AS FLOAT64)");
 		Assert.NotNull(v);
-		Assert.Contains("Infinity", v!, StringComparison.OrdinalIgnoreCase);
+		Assert.True(v == "-Infinity" || v == "-\u221E", $"Expected -Infinity or -∞, got: {v}");
 	}
 
 	[Fact] public async Task Float_NaN()

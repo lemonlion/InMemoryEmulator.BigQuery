@@ -106,13 +106,13 @@ public class HashAndFormatFunctionTests : IAsyncLifetime
 	// ---- FORMAT ----
 	[Fact] public async Task Format_String() => Assert.Equal("hello world", await Scalar("SELECT FORMAT('%s %s', 'hello', 'world')"));
 	[Fact] public async Task Format_Int() => Assert.Equal("42", await Scalar("SELECT FORMAT('%d', 42)"));
-	[Fact(Skip = "Emulator limitation")] public async Task Format_Float2Decimal() => Assert.Equal("3.14", await Scalar("SELECT FORMAT('%.2f', 3.14159)"));
-	[Fact(Skip = "Emulator limitation")] public async Task Format_Padding() => Assert.Equal("  42", await Scalar("SELECT FORMAT('%4d', 42)"));
-	[Fact(Skip = "Emulator limitation")] public async Task Format_LeadingZero() => Assert.Equal("042", await Scalar("SELECT FORMAT('%03d', 42)"));
+	[Fact] public async Task Format_Float2Decimal() => Assert.Equal("3.14", await Scalar("SELECT FORMAT('%.2f', 3.14159)"));
+	[Fact] public async Task Format_Padding() => Assert.Equal("  42", await Scalar("SELECT FORMAT('%4d', 42)"));
+	[Fact] public async Task Format_LeadingZero() => Assert.Equal("042", await Scalar("SELECT FORMAT('%03d', 42)"));
 	[Fact] public async Task Format_Multiple() => Assert.Equal("name=alice age=30", await Scalar("SELECT FORMAT('name=%s age=%d', 'alice', 30)"));
-	[Fact(Skip = "Emulator limitation")] public async Task Format_Percent() => Assert.Equal("100%", await Scalar("SELECT FORMAT('%d%%', 100)"));
+	[Fact] public async Task Format_Percent() => Assert.Equal("100%", await Scalar("SELECT FORMAT('%d%%', 100)"));
 	[Fact] public async Task Format_NegInt() => Assert.Equal("-5", await Scalar("SELECT FORMAT('%d', -5)"));
-	[Fact(Skip = "Emulator limitation")] public async Task Format_LargeFloat() => Assert.Equal("1.23", await Scalar("SELECT FORMAT('%.2f', 1.2345)"));
+	[Fact] public async Task Format_LargeFloat() => Assert.Equal("1.23", await Scalar("SELECT FORMAT('%.2f', 1.2345)"));
 	[Fact] public async Task Format_Zero() => Assert.Equal("0", await Scalar("SELECT FORMAT('%d', 0)"));
 
 	// ---- Combination tests ----

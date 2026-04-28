@@ -40,6 +40,13 @@ internal enum SqlToken
 	Plus, Minus, Slash, Percent,
 	Pipe,            // ||
 	Arrow,           // -> (lambda)
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#bitwise_operators
+	Ampersand,       // & (bitwise AND)
+	Caret,           // ^ (bitwise XOR)
+	Tilde,           // ~ (bitwise NOT)
+	BitOr,           // | (bitwise OR, single pipe)
+	ShiftLeft,       // <<
+	ShiftRight,      // >>
 }
 
 internal static class SqlTokenizer
@@ -54,6 +61,9 @@ internal static class SqlTokenizer
 		.Match(Span.EqualTo(">="), SqlToken.Gte)
 		.Match(Span.EqualTo("||"), SqlToken.Pipe)
 		.Match(Span.EqualTo("->"), SqlToken.Arrow)
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#bitwise_operators
+		.Match(Span.EqualTo("<<"), SqlToken.ShiftLeft)
+		.Match(Span.EqualTo(">>"), SqlToken.ShiftRight)
 		// Single-char operators
 		.Match(Character.EqualTo('='), SqlToken.Eq)
 		.Match(Character.EqualTo('<'), SqlToken.Lt)
@@ -69,6 +79,11 @@ internal static class SqlTokenizer
 		.Match(Character.EqualTo('-'), SqlToken.Minus)
 		.Match(Character.EqualTo('/'), SqlToken.Slash)
 		.Match(Character.EqualTo('%'), SqlToken.Percent)
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#bitwise_operators
+		.Match(Character.EqualTo('&'), SqlToken.Ampersand)
+		.Match(Character.EqualTo('^'), SqlToken.Caret)
+		.Match(Character.EqualTo('~'), SqlToken.Tilde)
+		.Match(Character.EqualTo('|'), SqlToken.BitOr)
 		// Parameter: @identifier
 		.Match(Character.EqualTo('@').IgnoreThen(Span.MatchedBy(
 			Character.LetterOrDigit.Or(Character.EqualTo('_')).AtLeastOnce())),

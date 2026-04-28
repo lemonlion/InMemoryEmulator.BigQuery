@@ -1426,18 +1426,25 @@ return null;
 
 private object? EvaluateBinary(BinaryExpr bin, RowContext row)
 {
-// Short-circuit AND/OR
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#logical_operators
+//   Three-valued logic: NULL AND FALSE = FALSE, NULL AND TRUE = NULL, NULL OR TRUE = TRUE, NULL OR FALSE = NULL.
 if (bin.Op == BinaryOp.And)
 {
 var l = Evaluate(bin.Left, row);
-if (!IsTruthy(l)) return false;
-return IsTruthy(Evaluate(bin.Right, row));
+if (l is not null && !IsTruthy(l)) return false;
+var r = Evaluate(bin.Right, row);
+if (r is not null && !IsTruthy(r)) return false;
+if (l is null || r is null) return null;
+return true;
 }
 if (bin.Op == BinaryOp.Or)
 {
 var l = Evaluate(bin.Left, row);
-if (IsTruthy(l)) return true;
-return IsTruthy(Evaluate(bin.Right, row));
+if (l is not null && IsTruthy(l)) return true;
+var r = Evaluate(bin.Right, row);
+if (r is not null && IsTruthy(r)) return true;
+if (l is null || r is null) return null;
+return false;
 }
 
 var left = Evaluate(bin.Left, row);
@@ -1445,8 +1452,10 @@ var right = Evaluate(bin.Right, row);
 
 return bin.Op switch
 {
-BinaryOp.Eq => left is null || right is null ? (object?)(left is null && right is null) : CompareRaw(left, right) == 0,
-BinaryOp.Neq => left is null || right is null ? (object?)(left is not null || right is not null) : CompareRaw(left, right) != 0,
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#comparison_operators
+//   "All comparisons return NULL when either of the values being compared is NULL."
+BinaryOp.Eq => left is null || right is null ? null : CompareRaw(left, right) == 0,
+BinaryOp.Neq => left is null || right is null ? null : CompareRaw(left, right) != 0,
 BinaryOp.Lt => left is null || right is null ? null : CompareRaw(left, right) < 0,
 BinaryOp.Lte => left is null || right is null ? null : CompareRaw(left, right) <= 0,
 BinaryOp.Gt => left is null || right is null ? null : CompareRaw(left, right) > 0,
@@ -1458,8 +1467,14 @@ BinaryOp.Div => ArithmeticOp(left, right, (a, b) => b == 0 ? throw new DivideByZ
 (a, b) => b == 0.0 ? throw new DivideByZeroException() : a / b),
 BinaryOp.Mod => ArithmeticOp(left, right, (a, b) => a % b, (a, b) => a % b),
 BinaryOp.Concat => (left?.ToString() ?? "") + (right?.ToString() ?? ""),
-BinaryOp.And => IsTruthy(left) && IsTruthy(right),
-BinaryOp.Or => IsTruthy(left) || IsTruthy(right),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#bitwise_operators
+BinaryOp.BitAnd => BitwiseOp(left, right, (a, b) => a & b),
+BinaryOp.BitOr => BitwiseOp(left, right, (a, b) => a | b),
+BinaryOp.BitXor => BitwiseOp(left, right, (a, b) => a ^ b),
+BinaryOp.ShiftLeft => BitwiseOp(left, right, (a, b) => a << (int)b),
+BinaryOp.ShiftRight => BitwiseOp(left, right, (a, b) => a >> (int)b),
+BinaryOp.And => left is not null && !IsTruthy(left) ? false : right is not null && !IsTruthy(right) ? (object)false : left is null || right is null ? null : (object)true,
+BinaryOp.Or => left is not null && IsTruthy(left) ? true : right is not null && IsTruthy(right) ? (object)true : left is null || right is null ? null : (object)false,
 _ => throw new NotSupportedException("Unsupported binary operator: " + bin.Op)
 };
 }
@@ -1471,8 +1486,25 @@ return un.Op switch
 {
 UnaryOp.Not => val is null ? null : !IsTruthy(val),
 UnaryOp.Negate => Negate(val),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#bitwise_operators
+//   "~ (bitwise not) — Performs logical negation on each bit."
+UnaryOp.BitNot => val is null ? null : val switch
+{
+long l => (object)~l,
+int i => (object)(long)~i,
+_ => (object)~Convert.ToInt64(val, CultureInfo.InvariantCulture)
+},
 _ => throw new NotSupportedException("Unsupported unary operator: " + un.Op)
 };
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#bitwise_operators
+private static object? BitwiseOp(object? left, object? right, Func<long, long, long> op)
+{
+if (left is null || right is null) return null;
+var l = left is long ll ? ll : Convert.ToInt64(left, CultureInfo.InvariantCulture);
+var r = right is long rl ? rl : Convert.ToInt64(right, CultureInfo.InvariantCulture);
+return op(l, r);
 }
 
 private object? EvaluateIsBool(IsBoolExpr isBool, RowContext row)
@@ -1505,6 +1537,9 @@ return result;
 private object? EvaluateIn(InExpr inExpr, RowContext row)
 {
 var val = Evaluate(inExpr.Expr, row);
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
+//   "Returns NULL if search_value is NULL."
+if (val is null) return null;
 var found = inExpr.Values.Any(v => Equals(val, Evaluate(v, row)));
 return found;
 }
@@ -1555,6 +1590,11 @@ _ => Convert.ToInt64(val, CultureInfo.InvariantCulture)
 {
 double d => d,
 long l => (double)l,
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#floating_point_literals
+//   "inf and -inf represent positive and negative infinity respectively."
+string s when s.Equals("inf", StringComparison.OrdinalIgnoreCase) => double.PositiveInfinity,
+string s when s.Equals("-inf", StringComparison.OrdinalIgnoreCase) => double.NegativeInfinity,
+string s when s.Equals("nan", StringComparison.OrdinalIgnoreCase) => double.NaN,
 string s => double.Parse(s, CultureInfo.InvariantCulture),
 _ => Convert.ToDouble(val, CultureInfo.InvariantCulture)
 },
@@ -1695,9 +1735,17 @@ return name switch
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#length
 //   "Returns the length of a STRING or BYTES value."
 "LENGTH" or "CHAR_LENGTH" or "CHARACTER_LENGTH" => EvaluateLength(args, row),
-"TRIM" => Evaluate(args[0], row)?.ToString()?.Trim(),
-"LTRIM" => Evaluate(args[0], row)?.ToString()?.TrimStart(),
-"RTRIM" => Evaluate(args[0], row)?.ToString()?.TrimEnd(),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#trim
+//   "TRIM(value[, characters]) — Removes leading and trailing characters that match characters."
+"TRIM" => args.Count >= 2
+	? Evaluate(args[0], row)?.ToString()?.Trim((Evaluate(args[1], row)?.ToString() ?? "").ToCharArray())
+	: Evaluate(args[0], row)?.ToString()?.Trim(),
+"LTRIM" => args.Count >= 2
+	? Evaluate(args[0], row)?.ToString()?.TrimStart((Evaluate(args[1], row)?.ToString() ?? "").ToCharArray())
+	: Evaluate(args[0], row)?.ToString()?.TrimStart(),
+"RTRIM" => args.Count >= 2
+	? Evaluate(args[0], row)?.ToString()?.TrimEnd((Evaluate(args[1], row)?.ToString() ?? "").ToCharArray())
+	: Evaluate(args[0], row)?.ToString()?.TrimEnd(),
 "REVERSE" => Evaluate(args[0], row)?.ToString() is string s ? new string(s.Reverse().ToArray()) : null,
 "REPLACE" => EvaluateReplace(args, row),
 "SUBSTR" or "SUBSTRING" => EvaluateSubstr(args, row),
@@ -2176,16 +2224,86 @@ private object? EvaluateFormat(IReadOnlyList<SqlExpression> args, RowContext row
 var fmt = Evaluate(args[0], row)?.ToString();
 if (fmt is null) return null;
 var fmtArgs = args.Skip(1).Select(a => Evaluate(a, row)).ToArray();
-// Simple %s/%d/%f replacement
-var result = fmt;
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#format_string
+//   "FORMAT(format_string, ...) — Formats arguments using printf-style format specifiers."
+var result = new System.Text.StringBuilder();
 int argIdx = 0;
-result = System.Text.RegularExpressions.Regex.Replace(result, @"%[sdftTe]", m =>
+int i = 0;
+while (i < fmt.Length)
 {
-if (argIdx < fmtArgs.Length)
-return ConvertToString(fmtArgs[argIdx++]) ?? "NULL";
-return m.Value;
-});
-return result;
+if (fmt[i] == '%' && i + 1 < fmt.Length)
+{
+if (fmt[i + 1] == '%') { result.Append('%'); i += 2; continue; }
+// Parse flags, width, precision, and type
+int start = i;
+i++; // skip %
+// Flags: 0, -, +, space
+while (i < fmt.Length && "0-+ ".Contains(fmt[i])) i++;
+// Width
+while (i < fmt.Length && char.IsDigit(fmt[i])) i++;
+// Precision
+int precision = -1;
+if (i < fmt.Length && fmt[i] == '.')
+{
+i++;
+int precStart = i;
+while (i < fmt.Length && char.IsDigit(fmt[i])) i++;
+if (i > precStart) precision = int.Parse(fmt[precStart..i], CultureInfo.InvariantCulture);
+}
+// Type character
+if (i < fmt.Length && argIdx < fmtArgs.Length)
+{
+char type = fmt[i]; i++;
+string spec = fmt[start..i]; // e.g., "%.2f", "%03d", "%4d"
+var arg = fmtArgs[argIdx++];
+result.Append(FormatOneArg(spec, type, precision, arg));
+}
+}
+else
+{
+result.Append(fmt[i]); i++;
+}
+}
+return result.ToString();
+}
+
+private static string FormatOneArg(string spec, char type, int precision, object? arg)
+{
+if (arg is null) return "NULL";
+switch (type)
+{
+case 'd':
+{
+long val = arg is long l ? l : Convert.ToInt64(arg, CultureInfo.InvariantCulture);
+// Extract width and flags from spec
+string csFmt = spec.Replace("%", "").TrimEnd('d');
+if (string.IsNullOrEmpty(csFmt)) return val.ToString(CultureInfo.InvariantCulture);
+bool zeroPad = csFmt.StartsWith('0');
+int width = int.TryParse(csFmt.TrimStart('0', '-'), out var w) ? w : 0;
+string s = val.ToString(CultureInfo.InvariantCulture);
+if (zeroPad && width > 0) return s.PadLeft(width, '0');
+if (width > 0) return s.PadLeft(width);
+return s;
+}
+case 'f':
+{
+double val = arg is double d ? d : Convert.ToDouble(arg, CultureInfo.InvariantCulture);
+if (precision >= 0) return val.ToString("F" + precision, CultureInfo.InvariantCulture);
+return val.ToString("F6", CultureInfo.InvariantCulture);
+}
+case 'e':
+{
+double val = arg is double d ? d : Convert.ToDouble(arg, CultureInfo.InvariantCulture);
+if (precision >= 0) return val.ToString("E" + precision, CultureInfo.InvariantCulture);
+return val.ToString("E", CultureInfo.InvariantCulture);
+}
+case 's':
+return ConvertToString(arg) ?? "NULL";
+case 't': case 'T':
+return ConvertToString(arg) ?? "NULL";
+default:
+return ConvertToString(arg) ?? "NULL";
+}
 }
 
 private object? EvaluateRegexpContains(IReadOnlyList<SqlExpression> args, RowContext row)
@@ -5946,7 +6064,12 @@ return val switch
 null => null,
 bool b => b ? "true" : "false",
 long l => l.ToString(),
-double d => d == Math.Floor(d) && !double.IsInfinity(d) && !double.IsNaN(d)
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#floating_point_literals
+//   "inf and -inf represent positive and negative infinity respectively."
+double d when double.IsPositiveInfinity(d) => "Infinity",
+double d when double.IsNegativeInfinity(d) => "-Infinity",
+double d when double.IsNaN(d) => "NaN",
+double d => d == Math.Floor(d)
 ? ((long)d).ToString()
 : d.ToString(CultureInfo.InvariantCulture),
 // Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tabledata/list
@@ -6047,8 +6170,10 @@ if (a is string sa && b is long lb2 && long.TryParse(sa, out var parsed2))
 return parsed2.CompareTo(lb2);
 
 // string <-> string
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#comparison_operators
+//   "Comparisons on STRING values are case sensitive."
 if (a is string sa2 && b is string sb2)
-return string.Compare(sa2, sb2, StringComparison.OrdinalIgnoreCase);
+return string.Compare(sa2, sb2, StringComparison.Ordinal);
 
 // DateTimeOffset
 if (a is DateTimeOffset dtoa && b is DateTimeOffset dtob) return dtoa.CompareTo(dtob);
@@ -6666,6 +6791,6 @@ if (y is null) return 1;
 if (x is long la && y is double db) return ((double)la).CompareTo(db);
 if (x is double da && y is long lb) return da.CompareTo((double)lb);
 if (x is IComparable cx) return cx.CompareTo(y);
-return string.Compare(x.ToString(), y.ToString(), StringComparison.OrdinalIgnoreCase);
+return string.Compare(x.ToString(), y.ToString(), StringComparison.Ordinal);
 }
 }

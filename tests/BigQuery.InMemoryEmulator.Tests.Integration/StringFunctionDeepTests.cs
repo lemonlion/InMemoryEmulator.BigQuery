@@ -67,10 +67,10 @@ public class StringFunctionDeepTests : IAsyncLifetime
 	[Fact] public async Task Trim_Right() => Assert.Equal("  hello", await Scalar("SELECT RTRIM('  hello  ')"));
 	[Fact] public async Task Trim_NoSpaces() => Assert.Equal("hello", await Scalar("SELECT TRIM('hello')"));
 	[Fact] public async Task Trim_AllSpaces() => Assert.Equal("", await Scalar("SELECT TRIM('   ')"));
-	[Fact(Skip = "Emulator limitation")] public async Task Trim_Chars() => Assert.Equal("hello", await Scalar("SELECT TRIM('xxhelloxx', 'x')"));
-	[Fact(Skip = "Emulator limitation")] public async Task Ltrim_Chars() => Assert.Equal("helloxx", await Scalar("SELECT LTRIM('xxhelloxx', 'x')"));
-	[Fact(Skip = "Emulator limitation")] public async Task Rtrim_Chars() => Assert.Equal("xxhello", await Scalar("SELECT RTRIM('xxhelloxx', 'x')"));
-	[Fact(Skip = "Emulator limitation")] public async Task Trim_MultiChar() => Assert.Equal("hello", await Scalar("SELECT TRIM('xyxyhellyxyxy', 'xy')"));
+	[Fact] public async Task Trim_Chars() => Assert.Equal("hello", await Scalar("SELECT TRIM('xxhelloxx', 'x')"));
+	[Fact] public async Task Ltrim_Chars() => Assert.Equal("helloxx", await Scalar("SELECT LTRIM('xxhelloxx', 'x')"));
+	[Fact] public async Task Rtrim_Chars() => Assert.Equal("xxhello", await Scalar("SELECT RTRIM('xxhelloxx', 'x')"));
+	[Fact] public async Task Trim_MultiChar() => Assert.Equal("hello", await Scalar("SELECT TRIM('xyxyhelloxyxy', 'xy')"));
 	[Fact] public async Task Trim_Empty() => Assert.Equal("", await Scalar("SELECT TRIM('')"));
 
 	// ---- SUBSTR / SUBSTRING ----

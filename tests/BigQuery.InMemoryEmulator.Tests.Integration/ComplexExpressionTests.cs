@@ -44,7 +44,7 @@ public class ComplexExpressionTests : IAsyncLifetime
 	[Fact] public async Task FloorPow() => Assert.Equal("9", await Scalar("SELECT CAST(FLOOR(POW(2.1, 3)) AS INT64)"));
 	[Fact] public async Task SignAbs() => Assert.Equal("1", await Scalar("SELECT SIGN(ABS(-42))"));
 	[Fact] public async Task ModDiv() => Assert.Equal("1", await Scalar("SELECT MOD(DIV(10, 3), 2)"));
-	[Fact(Skip = "Emulator limitation")] public async Task GreatestLeast() => Assert.Equal("3", await Scalar("SELECT GREATEST(1, 2, 3) - LEAST(1, 2, 3) + 1"));
+	[Fact] public async Task GreatestLeast() => Assert.Equal("3", await Scalar("SELECT GREATEST(1, 2, 3) - LEAST(1, 2, 3) + 1"));
 	[Fact] public async Task PowMod() => Assert.Equal("1", await Scalar("SELECT CAST(MOD(CAST(POW(2, 10) AS INT64), 3) AS INT64)"));
 
 	// ---- Conditional + String ----

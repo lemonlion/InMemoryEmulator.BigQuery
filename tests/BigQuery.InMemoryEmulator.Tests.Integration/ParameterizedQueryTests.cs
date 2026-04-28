@@ -257,7 +257,7 @@ public class ParameterizedQueryTests : IAsyncLifetime
 	}
 
 	// ---- Param in CASE ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Param_InCase()
 	{
 		var client = await _fixture.GetClientAsync();

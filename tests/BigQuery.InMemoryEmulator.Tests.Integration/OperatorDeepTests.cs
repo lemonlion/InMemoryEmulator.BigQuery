@@ -71,8 +71,8 @@ public class OperatorDeepTests : IAsyncLifetime
 	[Fact] public async Task Between_High() => Assert.Equal("True", await Scalar("SELECT 10 BETWEEN 1 AND 10"));
 	[Fact] public async Task Between_Below() => Assert.Equal("False", await Scalar("SELECT 0 BETWEEN 1 AND 10"));
 	[Fact] public async Task Between_Above() => Assert.Equal("False", await Scalar("SELECT 11 BETWEEN 1 AND 10"));
-	[Fact(Skip = "Emulator limitation")] public async Task NotBetween_Below() => Assert.Equal("True", await Scalar("SELECT 0 NOT BETWEEN 1 AND 10"));
-	[Fact(Skip = "Emulator limitation")] public async Task NotBetween_InRange() => Assert.Equal("False", await Scalar("SELECT 5 NOT BETWEEN 1 AND 10"));
+	[Fact] public async Task NotBetween_Below() => Assert.Equal("True", await Scalar("SELECT 0 NOT BETWEEN 1 AND 10"));
+	[Fact] public async Task NotBetween_InRange() => Assert.Equal("False", await Scalar("SELECT 5 NOT BETWEEN 1 AND 10"));
 	[Fact] public async Task Between_Float() => Assert.Equal("True", await Scalar("SELECT 5.5 BETWEEN 1.0 AND 10.0"));
 	[Fact] public async Task Between_String() => Assert.Equal("True", await Scalar("SELECT 'b' BETWEEN 'a' AND 'c'"));
 	[Fact] public async Task Between_NegRange() => Assert.Equal("True", await Scalar("SELECT 0 BETWEEN -5 AND 5"));
@@ -84,8 +84,8 @@ public class OperatorDeepTests : IAsyncLifetime
 	[Fact] public async Task In_Last() => Assert.Equal("True", await Scalar("SELECT 3 IN (1, 2, 3)"));
 	[Fact] public async Task In_String() => Assert.Equal("True", await Scalar("SELECT 'b' IN ('a', 'b', 'c')"));
 	[Fact] public async Task In_StringNotFound() => Assert.Equal("False", await Scalar("SELECT 'd' IN ('a', 'b', 'c')"));
-	[Fact(Skip = "Emulator limitation")] public async Task NotIn_Found() => Assert.Equal("False", await Scalar("SELECT 2 NOT IN (1, 2, 3)"));
-	[Fact(Skip = "Emulator limitation")] public async Task NotIn_NotFound() => Assert.Equal("True", await Scalar("SELECT 5 NOT IN (1, 2, 3)"));
+	[Fact] public async Task NotIn_Found() => Assert.Equal("False", await Scalar("SELECT 2 NOT IN (1, 2, 3)"));
+	[Fact] public async Task NotIn_NotFound() => Assert.Equal("True", await Scalar("SELECT 5 NOT IN (1, 2, 3)"));
 	[Fact] public async Task In_Single() => Assert.Equal("True", await Scalar("SELECT 1 IN (1)"));
 	[Fact] public async Task In_SingleFalse() => Assert.Equal("False", await Scalar("SELECT 2 IN (1)"));
 
@@ -163,10 +163,10 @@ public class OperatorDeepTests : IAsyncLifetime
 	[Fact] public async Task Prec_MultipleParen() => Assert.Equal("20", await Scalar("SELECT (2 + 3) * (1 + 3)"));
 
 	// ---- Bitwise operators ----
-	[Fact(Skip = "Emulator limitation")] public async Task BitAnd() => Assert.Equal("0", await Scalar("SELECT 5 & 2"));
-	[Fact(Skip = "Emulator limitation")] public async Task BitOr() => Assert.Equal("7", await Scalar("SELECT 5 | 2"));
-	[Fact(Skip = "Emulator limitation")] public async Task BitXor() => Assert.Equal("7", await Scalar("SELECT 5 ^ 2"));
-	[Fact(Skip = "Emulator limitation")] public async Task BitNot() => Assert.Equal("-6", await Scalar("SELECT ~5"));
-	[Fact(Skip = "Emulator limitation")] public async Task ShiftLeft() => Assert.Equal("20", await Scalar("SELECT 5 << 2"));
-	[Fact(Skip = "Emulator limitation")] public async Task ShiftRight() => Assert.Equal("5", await Scalar("SELECT 20 >> 2"));
+	[Fact] public async Task BitAnd() => Assert.Equal("0", await Scalar("SELECT 5 & 2"));
+	[Fact] public async Task BitOr() => Assert.Equal("7", await Scalar("SELECT 5 | 2"));
+	[Fact] public async Task BitXor() => Assert.Equal("7", await Scalar("SELECT 5 ^ 2"));
+	[Fact] public async Task BitNot() => Assert.Equal("-6", await Scalar("SELECT ~5"));
+	[Fact] public async Task ShiftLeft() => Assert.Equal("20", await Scalar("SELECT 5 << 2"));
+	[Fact] public async Task ShiftRight() => Assert.Equal("5", await Scalar("SELECT 20 >> 2"));
 }

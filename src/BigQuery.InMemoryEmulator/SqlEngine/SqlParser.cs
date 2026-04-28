@@ -421,7 +421,7 @@ internal static class SqlParser
 				Token.EqualTo(SqlToken.RParen).Select(_ => e)))
 		);
 
-	// --- Unary NOT / - ---
+	// --- Unary NOT / - / ~ ---
 	private static readonly TokenListParser<SqlToken, SqlExpression> UnaryNot =
 		Token.EqualTo(SqlToken.Not).IgnoreThen(
 			SP.Ref(() => Atom!)
@@ -431,6 +431,13 @@ internal static class SqlParser
 		Token.EqualTo(SqlToken.Minus).IgnoreThen(
 			SP.Ref(() => Atom!)
 		).Select(e => (SqlExpression)new UnaryExpr(UnaryOp.Negate, e));
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#bitwise_operators
+	//   "~ (bitwise not) — Performs logical negation on each bit."
+	private static readonly TokenListParser<SqlToken, SqlExpression> UnaryBitNot =
+		Token.EqualTo(SqlToken.Tilde).IgnoreThen(
+			SP.Ref(() => Atom!)
+		).Select(e => (SqlExpression)new UnaryExpr(UnaryOp.BitNot, e));
 
 	// --- Lambda expression: param -> body (used in ARRAY_FILTER, ARRAY_TRANSFORM) ---
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_filter
@@ -459,7 +466,8 @@ internal static class SqlParser
 		.Or(Star)
 		.Or(Parens)
 		.Or(UnaryNot)
-		.Or(UnaryMinus);
+		.Or(UnaryMinus)
+		.Or(UnaryBitNot);
 
 	// --- Window frame boundary ---
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls#def_window_frame
@@ -536,11 +544,31 @@ internal static class SqlParser
 	// --- BETWEEN / IN / LIKE postfix ---
 	private static readonly TokenListParser<SqlToken, SqlExpression> PostfixOps =
 		IsNullSuffix.Then(expr =>
+			// NOT BETWEEN low AND high
+			// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#comparison_operators
+			Token.EqualTo(SqlToken.Not).IgnoreThen(Token.EqualTo(SqlToken.Between)).IgnoreThen(IsNullSuffix)
+				.Then(low => Token.EqualTo(SqlToken.And).IgnoreThen(IsNullSuffix)
+					.Select(high => (SqlExpression)new UnaryExpr(UnaryOp.Not, new BetweenExpr(expr, low, high))))
+				.Try()
 			// BETWEEN low AND high
-			Token.EqualTo(SqlToken.Between).IgnoreThen(IsNullSuffix)
+			.Or(Token.EqualTo(SqlToken.Between).IgnoreThen(IsNullSuffix)
 				.Then(low => Token.EqualTo(SqlToken.And).IgnoreThen(IsNullSuffix)
 					.Select(high => (SqlExpression)new BetweenExpr(expr, low, high)))
-				.Try()
+				.Try())
+			// NOT IN (SELECT ...) or NOT IN (values)
+			// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
+			.Or(Token.EqualTo(SqlToken.Not).IgnoreThen(Token.EqualTo(SqlToken.In))
+				.IgnoreThen(Token.EqualTo(SqlToken.LParen))
+				.IgnoreThen(
+					SP.Ref(() => SelectStmt!).Then(sub =>
+						Token.EqualTo(SqlToken.RParen)
+							.Select(_ => (SqlExpression)new UnaryExpr(UnaryOp.Not, new InSubqueryExpr(expr, sub)))
+					).Try()
+					.Or(SP.Ref(() => Expression!).ManyDelimitedBy(Token.EqualTo(SqlToken.Comma))
+						.Then(vals => Token.EqualTo(SqlToken.RParen)
+							.Select(_ => (SqlExpression)new UnaryExpr(UnaryOp.Not, new InExpr(expr, vals.ToList())))))
+				)
+				.Try())
 			// IN (SELECT ...) or IN (values)
 			.Or(Token.EqualTo(SqlToken.In)
 				.IgnoreThen(Token.EqualTo(SqlToken.LParen))
@@ -568,43 +596,86 @@ internal static class SqlParser
 			.Or(Constant(expr))
 		);
 
-	// --- Multiplication / Division ---
+	// --- Multiplication / Division (left-associative) ---
 	private static readonly TokenListParser<SqlToken, SqlExpression> MulDiv =
-		PostfixOps.Then(left =>
+		PostfixOps.Then(first =>
 			(Token.EqualTo(SqlToken.Star).Select(_ => BinaryOp.Mul)
 				.Or(Token.EqualTo(SqlToken.Slash).Select(_ => BinaryOp.Div))
 				.Or(Token.EqualTo(SqlToken.Percent).Select(_ => BinaryOp.Mod))
-			.Then(op => SP.Ref(() => MulDiv!).Select(right => (Op: op, Right: right)))
-			).Try()
-			.Select(pair => (SqlExpression)new BinaryExpr(left, pair.Op, pair.Right))
-			.Or(Constant(left))
+			.Then(op => PostfixOps.Select(right => (Op: op, Right: right)))
+			).Try().Many()
+			.Select(pairs => pairs.Aggregate(first, (left, pair) =>
+				(SqlExpression)new BinaryExpr(left, pair.Op, pair.Right)))
 		);
 
-	// --- Addition / Subtraction / Concat ---
+	// --- Addition / Subtraction / Concat (left-associative) ---
 	private static readonly TokenListParser<SqlToken, SqlExpression> AddSub =
-		MulDiv.Then(left =>
+		MulDiv.Then(first =>
 			(Token.EqualTo(SqlToken.Plus).Select(_ => BinaryOp.Add)
 				.Or(Token.EqualTo(SqlToken.Minus).Select(_ => BinaryOp.Sub))
 				.Or(Token.EqualTo(SqlToken.Pipe).Select(_ => BinaryOp.Concat))
-			.Then(op => SP.Ref(() => AddSub!).Select(right => (Op: op, Right: right)))
-			).Try()
-			.Select(pair => (SqlExpression)new BinaryExpr(left, pair.Op, pair.Right))
-			.Or(Constant(left))
+			.Then(op => MulDiv.Select(right => (Op: op, Right: right)))
+			).Try().Many()
+			.Select(pairs => pairs.Aggregate(first, (left, pair) =>
+				(SqlExpression)new BinaryExpr(left, pair.Op, pair.Right)))
 		);
 
-	// --- Comparison operators ---
+	// --- Shift operators (left-associative) ---
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#shift_operators
+	private static readonly TokenListParser<SqlToken, SqlExpression> ShiftExpr =
+		AddSub.Then(first =>
+			(Token.EqualTo(SqlToken.ShiftLeft).Select(_ => BinaryOp.ShiftLeft)
+				.Or(Token.EqualTo(SqlToken.ShiftRight).Select(_ => BinaryOp.ShiftRight))
+			.Then(op => AddSub.Select(right => (Op: op, Right: right)))
+			).Try().Many()
+			.Select(pairs => pairs.Aggregate(first, (left, pair) =>
+				(SqlExpression)new BinaryExpr(left, pair.Op, pair.Right)))
+		);
+
+	// --- Bitwise AND (left-associative) ---
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#bitwise_operators
+	private static readonly TokenListParser<SqlToken, SqlExpression> BitAndExpr =
+		ShiftExpr.Then(first =>
+			Token.EqualTo(SqlToken.Ampersand)
+				.IgnoreThen(ShiftExpr)
+				.Many()
+			.Select(rights => rights.Aggregate(first, (left, right) =>
+				(SqlExpression)new BinaryExpr(left, BinaryOp.BitAnd, right)))
+		);
+
+	// --- Bitwise XOR (left-associative) ---
+	private static readonly TokenListParser<SqlToken, SqlExpression> BitXorExpr =
+		BitAndExpr.Then(first =>
+			Token.EqualTo(SqlToken.Caret)
+				.IgnoreThen(BitAndExpr)
+				.Many()
+			.Select(rights => rights.Aggregate(first, (left, right) =>
+				(SqlExpression)new BinaryExpr(left, BinaryOp.BitXor, right)))
+		);
+
+	// --- Bitwise OR (left-associative) ---
+	private static readonly TokenListParser<SqlToken, SqlExpression> BitOrExpr =
+		BitXorExpr.Then(first =>
+			Token.EqualTo(SqlToken.BitOr)
+				.IgnoreThen(BitXorExpr)
+				.Many()
+			.Select(rights => rights.Aggregate(first, (left, right) =>
+				(SqlExpression)new BinaryExpr(left, BinaryOp.BitOr, right)))
+		);
+
+	// --- Comparison operators (left-associative) ---
 	private static readonly TokenListParser<SqlToken, SqlExpression> Comparison =
-		AddSub.Then(left =>
+		BitOrExpr.Then(first =>
 			(Token.EqualTo(SqlToken.Eq).Select(_ => BinaryOp.Eq)
 				.Or(Token.EqualTo(SqlToken.Neq).Select(_ => BinaryOp.Neq))
 				.Or(Token.EqualTo(SqlToken.Lte).Select(_ => BinaryOp.Lte))
 				.Or(Token.EqualTo(SqlToken.Gte).Select(_ => BinaryOp.Gte))
 				.Or(Token.EqualTo(SqlToken.Lt).Select(_ => BinaryOp.Lt))
 				.Or(Token.EqualTo(SqlToken.Gt).Select(_ => BinaryOp.Gt))
-			.Then(op => AddSub.Select(right => (Op: op, Right: right)))
-			).Try()
-			.Select(pair => (SqlExpression)new BinaryExpr(left, pair.Op, pair.Right))
-			.Or(Constant(left))
+			.Then(op => BitOrExpr.Select(right => (Op: op, Right: right)))
+			).Try().Many()
+			.Select(pairs => pairs.Aggregate(first, (left, pair) =>
+				(SqlExpression)new BinaryExpr(left, pair.Op, pair.Right)))
 		);
 
 	// --- AND ---

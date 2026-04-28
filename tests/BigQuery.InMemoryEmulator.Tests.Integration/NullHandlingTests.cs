@@ -34,12 +34,12 @@ public class NullHandlingTests : IAsyncLifetime
 	[Fact] public async Task Int_PlusNull() => Assert.Null(await Scalar("SELECT 1 + NULL"));
 
 	// ---- NULL comparison ----
-	[Fact(Skip = "Emulator limitation")] public async Task Null_Eq_Null() => Assert.Null(await Scalar("SELECT NULL = NULL"));
-	[Fact(Skip = "Emulator limitation")] public async Task Null_Neq_Null() => Assert.Null(await Scalar("SELECT NULL != NULL"));
+	[Fact] public async Task Null_Eq_Null() => Assert.Null(await Scalar("SELECT NULL = NULL"));
+	[Fact] public async Task Null_Neq_Null() => Assert.Null(await Scalar("SELECT NULL != NULL"));
 	[Fact] public async Task Null_Lt_Null() => Assert.Null(await Scalar("SELECT NULL < NULL"));
 	[Fact] public async Task Null_Gt_Null() => Assert.Null(await Scalar("SELECT NULL > NULL"));
-	[Fact(Skip = "Emulator limitation")] public async Task Int_Eq_Null() => Assert.Null(await Scalar("SELECT 1 = NULL"));
-	[Fact(Skip = "Emulator limitation")] public async Task Null_Eq_Int() => Assert.Null(await Scalar("SELECT NULL = 1"));
+	[Fact] public async Task Int_Eq_Null() => Assert.Null(await Scalar("SELECT 1 = NULL"));
+	[Fact] public async Task Null_Eq_Int() => Assert.Null(await Scalar("SELECT NULL = 1"));
 
 	// ---- IS NULL / IS NOT NULL ----
 	[Fact] public async Task IsNull_Null() => Assert.Equal("True", await Scalar("SELECT NULL IS NULL"));
@@ -105,12 +105,12 @@ public class NullHandlingTests : IAsyncLifetime
 	[Fact] public async Task Null_NotBetween() => Assert.Null(await Scalar("SELECT NULL NOT BETWEEN 1 AND 10"));
 
 	// ---- NULL in IN ----
-	[Fact(Skip = "Emulator limitation")] public async Task Null_In() => Assert.Null(await Scalar("SELECT NULL IN (1, 2, 3)"));
+	[Fact] public async Task Null_In() => Assert.Null(await Scalar("SELECT NULL IN (1, 2, 3)"));
 
 	// ---- NULL boolean logic ----
 	[Fact] public async Task Null_And_False() => Assert.Equal("False", await Scalar("SELECT NULL AND FALSE"));
 	[Fact] public async Task Null_Or_True() => Assert.Equal("True", await Scalar("SELECT NULL OR TRUE"));
-	[Fact(Skip = "Emulator limitation")] public async Task Null_Or_False() => Assert.Null(await Scalar("SELECT NULL OR FALSE"));
+	[Fact] public async Task Null_Or_False() => Assert.Null(await Scalar("SELECT NULL OR FALSE"));
 	[Fact] public async Task Not_Null() => Assert.Null(await Scalar("SELECT NOT CAST(NULL AS BOOL)"));
 
 	// ---- NULL CAST ----

@@ -193,9 +193,11 @@ internal enum BinaryOp
 	Add, Sub, Mul, Div, Mod,
 	And, Or,
 	Concat,
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#bitwise_operators
+	BitAnd, BitOr, BitXor, ShiftLeft, ShiftRight,
 }
 
-internal enum UnaryOp { Not, Negate }
+internal enum UnaryOp { Not, Negate, BitNot }
 
 
 // --- DML Statements ---
