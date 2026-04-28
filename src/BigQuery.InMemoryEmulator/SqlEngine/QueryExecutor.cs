@@ -1245,6 +1245,9 @@ if (wf.Function is AggregateCall windowAgg)
     var framedPartition = GetFramedPartition(wf, partition, currentRow);
     return EvaluateAggregate(windowAgg, framedPartition);
 }
+return null;
+}
+
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls#window_frame_clause
 //   "If ORDER BY is specified but no window frame, default is RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW."
 //   "If neither ORDER BY nor window frame is specified, default is ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING."

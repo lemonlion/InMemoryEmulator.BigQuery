@@ -194,7 +194,7 @@ public class WindowFunctionComprehensiveTests : IAsyncLifetime
 	{
 		var rows = await Query($"SELECT id, SUM(amount) OVER (ORDER BY id) AS running FROM `{_datasetId}.sales` ORDER BY id");
 		Assert.Equal(100.0, double.Parse(rows[0]["running"]!.ToString()!));
-		Assert.Equal(300.0, double.Parse(rows[1]["running"]!.ToString()!!.ToString()!));
+		Assert.Equal(300.0, double.Parse(rows[1]["running"]!.ToString()!));
 	}
 	[Fact(Skip = "Needs investigation")] public async Task AvgWindow_Partitioned()
 	{
@@ -220,7 +220,7 @@ public class WindowFunctionComprehensiveTests : IAsyncLifetime
 	{
 		var rows = await Query($"SELECT id, SUM(amount) OVER (ORDER BY id ROWS BETWEEN CURRENT ROW AND 1 FOLLOWING) AS s FROM `{_datasetId}.sales` ORDER BY id");
 		Assert.Equal(300.0, double.Parse(rows[0]["s"]!.ToString()!)); // 100 + 200
-		Assert.Equal(600.0, double.Parse(rows[4]["s"]!.ToString()!!.ToString()!)); // 250 + 350 (for ids 5,6)
+		Assert.Equal(600.0, double.Parse(rows[4]["s"]!.ToString()!)); // 250 + 350 (for ids 5,6)
 	}
 
 	// ---- QUALIFY ----
