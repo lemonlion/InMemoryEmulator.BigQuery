@@ -60,6 +60,10 @@ public class FakeBigQueryHandler : HttpMessageHandler
 
 	internal ConcurrentDictionary<string, InMemoryJob> Jobs { get; } = new();
 
+	// Ref: https://developers.google.com/api-client-library/dotnet/guide/media_upload
+	//   Resumable upload stores pending Job metadata between initiation POST and data PUT.
+	private readonly ConcurrentDictionary<string, Job> _pendingUploads = new();
+
 	public FakeBigQueryHandler(InMemoryDataStore store)
 	{
 		_store = store ?? throw new ArgumentNullException(nameof(store));
@@ -78,6 +82,21 @@ public class FakeBigQueryHandler : HttpMessageHandler
 		// 3. Route â€” matched most-specific-first to avoid ambiguity
 		var path = request.RequestUri?.AbsolutePath ?? string.Empty;
 		var method = request.Method;
+
+		// Ref: https://developers.google.com/api-client-library/dotnet/guide/media_upload
+		//   Resumable uploads use /upload/ prefix. Handle before regular routing.
+		if (path.Contains("/upload/"))
+		{
+			var uploadQuery = System.Web.HttpUtility.ParseQueryString(
+				request.RequestUri?.Query ?? string.Empty);
+			var uploadId = uploadQuery["upload_id"];
+
+			if (method == HttpMethod.Post && uploadId is null)
+				return await HandleInitiateUpload(request);
+
+			if (method == HttpMethod.Put && uploadId is not null)
+				return await HandleUploadData(uploadId, request);
+		}
 
 		// TableData routes (most specific â€” check before table routes)
 		if (TableDataRoute.Match(path) is { Success: true } tdMatch)
@@ -830,6 +849,16 @@ public class FakeBigQueryHandler : HttpMessageHandler
 			return HandleCopyJob(body!, copyConfig);
 		}
 
+		// Phase 31: Support extract jobs (no-op stub)
+		// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs#JobConfigurationExtract
+		//   "Configures an extract job."
+		var extractConfig = body?.Configuration?.Extract;
+		if (extractConfig is not null &&
+			(extractConfig.DestinationUri is not null || extractConfig.DestinationUris is not null))
+		{
+			return HandleExtractJob(body!, extractConfig);
+		}
+
 		var queryConfig = body?.Configuration?.Query;
 		if (queryConfig?.Query is null)
 			return BuildErrorResponse(HttpStatusCode.BadRequest, "invalid", "Missing query configuration.");
@@ -957,6 +986,194 @@ public class FakeBigQueryHandler : HttpMessageHandler
 		{
 			return BuildErrorResponse(HttpStatusCode.BadRequest, "invalid", ex.Message);
 		}
+	}
+
+	// Phase 31: Extract job handler (no-op stub)
+	// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs#JobConfigurationExtract
+	//   "Configures an extract job." The emulator returns a completed job without
+	//   writing data since there is no real GCS to export to.
+	private HttpResponseMessage HandleExtractJob(Job jobBody, JobConfigurationExtract extractConfig)
+	{
+		var jobId = jobBody.JobReference?.JobId ?? Guid.NewGuid().ToString();
+		try
+		{
+			var srcRef = extractConfig.SourceTable;
+			if (srcRef is not null)
+			{
+				var dsId = srcRef.DatasetId;
+				var tblId = srcRef.TableId;
+				if (!_store.Datasets.TryGetValue(dsId, out var ds) ||
+					!ds.Tables.ContainsKey(tblId))
+					return BuildErrorResponse(HttpStatusCode.NotFound, "notFound",
+						$"Not found: Table {_store.ProjectId}:{dsId}.{tblId}");
+			}
+
+			var job = new InMemoryJob(_store.ProjectId, jobId)
+			{
+				StatementType = "EXPORT_DATA",
+				Labels = jobBody.Configuration?.Labels,
+				ExtractConfig = extractConfig,
+			};
+			Jobs[job.JobId] = job;
+			return BuildJsonResponse(job.ToJobResource());
+		}
+		catch (Exception ex)
+		{
+			return BuildErrorResponse(HttpStatusCode.BadRequest, "invalid", ex.Message);
+		}
+	}
+
+	// Phase 31: Resumable upload — initiation POST
+	// Ref: https://developers.google.com/api-client-library/dotnet/guide/media_upload
+	//   "The resumable media upload protocol" — POST with metadata, server returns Location header.
+	// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs#JobConfigurationLoad
+	//   "Configures a load job."
+	private async Task<HttpResponseMessage> HandleInitiateUpload(HttpRequestMessage request)
+	{
+		var body = await ReadBodyAsync<Job>(request);
+		if (body?.Configuration?.Load is null)
+			return BuildErrorResponse(HttpStatusCode.BadRequest, "invalid",
+				"Missing load configuration for upload.");
+
+		var uploadId = Guid.NewGuid().ToString();
+		_pendingUploads[uploadId] = body;
+
+		// Return 200 with Location header containing the upload URI
+		var baseUri = request.RequestUri!.GetLeftPart(UriPartial.Path);
+		var locationUri = $"{baseUri}?uploadType=resumable&upload_id={uploadId}";
+
+		var response = new HttpResponseMessage(HttpStatusCode.OK);
+		response.Headers.Location = new Uri(locationUri);
+		return response;
+	}
+
+	// Phase 31: Resumable upload — data PUT
+	// Ref: https://developers.google.com/api-client-library/dotnet/guide/media_upload
+	//   After initiation, the client PUTs the actual data to the Location URI.
+	private async Task<HttpResponseMessage> HandleUploadData(string uploadId, HttpRequestMessage request)
+	{
+		if (!_pendingUploads.TryRemove(uploadId, out var jobBody))
+			return BuildErrorResponse(HttpStatusCode.NotFound, "notFound",
+				$"Upload session not found: {uploadId}");
+
+		var loadConfig = jobBody.Configuration!.Load!;
+		var destRef = loadConfig.DestinationTable;
+		if (destRef is null)
+			return BuildErrorResponse(HttpStatusCode.BadRequest, "invalid",
+				"Missing destination table in load configuration.");
+
+		var datasetId = destRef.DatasetId;
+		var tableId = destRef.TableId;
+
+		// Ensure dataset exists
+		if (!_store.Datasets.TryGetValue(datasetId, out var dataset))
+			return BuildErrorResponse(HttpStatusCode.NotFound, "notFound",
+				$"Not found: Dataset {_store.ProjectId}:{datasetId}");
+
+		// Get or create the destination table
+		var schema = loadConfig.Schema;
+		if (!dataset.Tables.TryGetValue(tableId, out var table))
+		{
+			if (schema is null)
+				return BuildErrorResponse(HttpStatusCode.BadRequest, "invalid",
+					"Schema required when creating a new table via load job.");
+			table = new InMemoryTable(datasetId, tableId, schema);
+			dataset.Tables[tableId] = table;
+		}
+
+		// Read the upload data
+		var data = string.Empty;
+		if (request.Content is not null)
+		{
+			data = await request.Content.ReadAsStringAsync();
+		}
+
+		// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs#JobConfigurationLoad
+		//   "sourceFormat: The format of the data files. Default is CSV."
+		var sourceFormat = loadConfig.SourceFormat ?? "CSV";
+		var skipRows = (int)(loadConfig.SkipLeadingRows ?? 0);
+
+		var rows = sourceFormat switch
+		{
+			"CSV" => ParseCsvData(data, table.Schema, skipRows),
+			"NEWLINE_DELIMITED_JSON" => ParseJsonData(data, table.Schema),
+			_ => throw new NotSupportedException($"Unsupported source format: {sourceFormat}")
+		};
+
+		lock (table.RowLock)
+		{
+			foreach (var row in rows)
+				table.Rows.Add(row);
+		}
+
+		var jobId = jobBody.JobReference?.JobId ?? Guid.NewGuid().ToString();
+		var job = new InMemoryJob(_store.ProjectId, jobId)
+		{
+			StatementType = "LOAD_DATA",
+			Labels = jobBody.Configuration?.Labels,
+			LoadConfig = loadConfig,
+			TotalRows = rows.Count,
+		};
+		Jobs[job.JobId] = job;
+		return BuildJsonResponse(job.ToJobResource());
+	}
+
+	// Phase 31: Parse CSV data into InMemoryRows
+	// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs#JobConfigurationLoad
+	//   "sourceFormat: CSV — CSV data."
+	private static List<InMemoryRow> ParseCsvData(string data, TableSchema schema, int skipRows)
+	{
+		var rows = new List<InMemoryRow>();
+		if (string.IsNullOrWhiteSpace(data)) return rows;
+
+		var lines = data.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+		var fieldNames = schema.Fields.Select(f => f.Name).ToList();
+
+		for (var i = skipRows; i < lines.Length; i++)
+		{
+			var line = lines[i].TrimEnd('\r');
+			if (string.IsNullOrWhiteSpace(line)) continue;
+
+			var values = line.Split(',');
+			var fields = new Dictionary<string, object?>();
+
+			for (var j = 0; j < fieldNames.Count && j < values.Length; j++)
+			{
+				fields[fieldNames[j]] = values[j];
+			}
+
+			// Fill missing fields with null
+			for (var j = values.Length; j < fieldNames.Count; j++)
+				fields[fieldNames[j]] = null;
+
+			rows.Add(new InMemoryRow(fields));
+		}
+
+		return rows;
+	}
+
+	// Phase 31: Parse newline-delimited JSON data into InMemoryRows
+	// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs#JobConfigurationLoad
+	//   "sourceFormat: NEWLINE_DELIMITED_JSON — Newline delimited JSON."
+	private static List<InMemoryRow> ParseJsonData(string data, TableSchema schema)
+	{
+		var rows = new List<InMemoryRow>();
+		if (string.IsNullOrWhiteSpace(data)) return rows;
+
+		var lines = data.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+		foreach (var line in lines)
+		{
+			var trimmed = line.TrimEnd('\r');
+			if (string.IsNullOrWhiteSpace(trimmed)) continue;
+
+			var jsonObj = JsonConvert.DeserializeObject<Dictionary<string, object?>>(trimmed);
+			if (jsonObj is null) continue;
+
+			rows.Add(new InMemoryRow(jsonObj));
+		}
+
+		return rows;
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/get

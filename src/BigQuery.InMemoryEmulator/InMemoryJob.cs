@@ -29,6 +29,12 @@ internal class InMemoryJob
 	public List<TableRow>? ResultRows { get; set; }
 	public long TotalRows { get; set; }
 
+	// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs#JobConfigurationLoad
+	public JobConfigurationLoad? LoadConfig { get; set; }
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs#JobConfigurationExtract
+	public JobConfigurationExtract? ExtractConfig { get; set; }
+
 	public InMemoryJob(string projectId, string? jobId = null)
 	{
 		ProjectId = projectId;
@@ -40,32 +46,43 @@ internal class InMemoryJob
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs#JobResource
-	public Job ToJobResource() => new()
+	public Job ToJobResource()
 	{
-		Kind = "bigquery#job",
-		ETag = Guid.NewGuid().ToString(),
-		Id = $"{ProjectId}:{JobId}",
-		JobReference = new JobReference { ProjectId = ProjectId, JobId = JobId },
-		Configuration = new JobConfiguration
+		var config = new JobConfiguration
 		{
-			Query = new JobConfigurationQuery { Query = Query, UseLegacySql = false },
 			Labels = Labels as Dictionary<string, string> ?? Labels?.ToDictionary(kv => kv.Key, kv => kv.Value),
 			DryRun = IsDryRun ? true : null
-		},
-		Status = new JobStatus { State = State },
-		Statistics = new JobStatistics
+		};
+
+		if (LoadConfig is not null)
+			config.Load = LoadConfig;
+		else if (ExtractConfig is not null)
+			config.Extract = ExtractConfig;
+		else
+			config.Query = new JobConfigurationQuery { Query = Query, UseLegacySql = false };
+
+		return new Job
 		{
-			CreationTime = CreationTime.ToUnixTimeMilliseconds(),
-			StartTime = StartTime.ToUnixTimeMilliseconds(),
-			EndTime = EndTime.ToUnixTimeMilliseconds(),
-			Query = new JobStatistics2
+			Kind = "bigquery#job",
+			ETag = Guid.NewGuid().ToString(),
+			Id = $"{ProjectId}:{JobId}",
+			JobReference = new JobReference { ProjectId = ProjectId, JobId = JobId },
+			Configuration = config,
+			Status = new JobStatus { State = State },
+			Statistics = new JobStatistics
 			{
-				TotalBytesProcessed = TotalBytesProcessed,
-				TotalBytesBilled = 0,
-				CacheHit = false,
-				StatementType = StatementType,
-				NumDmlAffectedRows = NumDmlAffectedRows > 0 ? NumDmlAffectedRows : null,
+				CreationTime = CreationTime.ToUnixTimeMilliseconds(),
+				StartTime = StartTime.ToUnixTimeMilliseconds(),
+				EndTime = EndTime.ToUnixTimeMilliseconds(),
+				Query = new JobStatistics2
+				{
+					TotalBytesProcessed = TotalBytesProcessed,
+					TotalBytesBilled = 0,
+					CacheHit = false,
+					StatementType = StatementType,
+					NumDmlAffectedRows = NumDmlAffectedRows > 0 ? NumDmlAffectedRows : null,
+				}
 			}
-		}
-	};
+		};
+	}
 }
