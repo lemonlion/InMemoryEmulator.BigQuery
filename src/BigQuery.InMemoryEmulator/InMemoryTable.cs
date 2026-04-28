@@ -35,6 +35,13 @@ public class InMemoryTable
 	// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tables#ViewDefinition
 	internal SqlEngine.SelectStatement? ViewQuery { get; set; }
 
+	/// <summary>
+	/// If this table represents a VIEW, stores the original SQL definition text.
+	/// Used to populate INFORMATION_SCHEMA.VIEWS.view_definition.
+	/// </summary>
+	// Ref: https://cloud.google.com/bigquery/docs/information-schema-views
+	internal string? ViewDefinitionSql { get; set; }
+
 	internal List<InMemoryRow> Rows { get; } = [];
 	internal readonly object RowLock = new();
 

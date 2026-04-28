@@ -604,12 +604,14 @@ if (dsId is null || !_store.Datasets.TryGetValue(dsId, out var ds)) return [];
 
 if (tableName.EndsWith("TABLES", StringComparison.OrdinalIgnoreCase))
 {
+// Ref: https://cloud.google.com/bigquery/docs/information-schema-tables
+//   "table_type: BASE TABLE for a standard table, VIEW for a view"
 return ds.Tables.Values.Select(t => new RowContext(new Dictionary<string, object?>
 {
 ["table_catalog"] = _store.ProjectId,
 ["table_schema"] = dsId,
 ["table_name"] = t.TableId,
-["table_type"] = "BASE TABLE",
+["table_type"] = t.ViewQuery is not null ? "VIEW" : "BASE TABLE",
 ["creation_time"] = t.CreationTime,
 }, alias)).ToList();
 }
@@ -643,7 +645,156 @@ return _store.Datasets.Keys.Select(name => new RowContext(new Dictionary<string,
 ["schema_name"] = name,
 }, alias)).ToList();
 }
+// Ref: https://cloud.google.com/bigquery/docs/information-schema-routines
+//   "The INFORMATION_SCHEMA.ROUTINES view contains one row for each routine in a dataset."
+if (tableName.EndsWith("ROUTINES", StringComparison.OrdinalIgnoreCase))
+{
+return ds.Routines.Values.Select(r => new RowContext(new Dictionary<string, object?>
+{
+["specific_catalog"] = _store.ProjectId,
+["specific_schema"] = dsId,
+["specific_name"] = r.RoutineId,
+["routine_catalog"] = _store.ProjectId,
+["routine_schema"] = dsId,
+["routine_name"] = r.RoutineId,
+["routine_type"] = r.RoutineType,
+["data_type"] = r.ReturnType,
+["routine_body"] = r.Language,
+["routine_definition"] = r.Body,
+["external_language"] = r.Language == "SQL" ? null : r.Language,
+["is_deterministic"] = "NO",
+["security_type"] = (object?)null,
+["created"] = r.CreationTime,
+["last_altered"] = r.CreationTime,
+}, alias)).ToList();
+}
+// Ref: https://cloud.google.com/bigquery/docs/information-schema-views
+//   "The INFORMATION_SCHEMA.VIEWS view contains metadata about views."
+if (tableName.EndsWith("VIEWS", StringComparison.OrdinalIgnoreCase))
+{
+return ds.Tables.Values
+.Where(t => t.ViewQuery is not null)
+.Select(t => new RowContext(new Dictionary<string, object?>
+{
+["table_catalog"] = _store.ProjectId,
+["table_schema"] = dsId,
+["table_name"] = t.TableId,
+["view_definition"] = t.ViewDefinitionSql ?? "(view definition not available)",
+["check_option"] = "NONE",
+["use_standard_sql"] = "YES",
+}, alias)).ToList();
+}
+// Ref: https://cloud.google.com/bigquery/docs/information-schema-table-options
+//   "The INFORMATION_SCHEMA.TABLE_OPTIONS view contains one row for each option."
+if (tableName.EndsWith("TABLE_OPTIONS", StringComparison.OrdinalIgnoreCase))
+{
+var rows = new List<RowContext>();
+foreach (var t in ds.Tables.Values)
+{
+if (t.Description is not null)
+rows.Add(MakeTableOptionRow(dsId, t.TableId, "description", "STRING",
+$"\"{t.Description}\"", alias));
+if (t.FriendlyName is not null)
+rows.Add(MakeTableOptionRow(dsId, t.TableId, "friendly_name", "STRING",
+$"\"{t.FriendlyName}\"", alias));
+if (t.Labels is { Count: > 0 })
+{
+var labelPairs = string.Join(", ",
+t.Labels.Select(kv => $"\"{kv.Key}\", \"{kv.Value}\""));
+rows.Add(MakeTableOptionRow(dsId, t.TableId, "labels",
+"ARRAY<STRUCT<STRING, STRING>>", $"[{labelPairs}]", alias));
+}
+}
+return rows;
+}
+// Ref: https://cloud.google.com/bigquery/docs/information-schema-column-field-paths
+//   "The INFORMATION_SCHEMA.COLUMN_FIELD_PATHS view contains one row for each column
+//    nested within a RECORD (or STRUCT) column."
+if (tableName.EndsWith("COLUMN_FIELD_PATHS", StringComparison.OrdinalIgnoreCase))
+{
+var rows = new List<RowContext>();
+foreach (var t in ds.Tables.Values)
+FlattenFieldPaths(rows, dsId, t.TableId, t.Schema.Fields, "", alias);
+return rows;
+}
+// Ref: https://cloud.google.com/bigquery/docs/information-schema-partitions
+//   "The INFORMATION_SCHEMA.PARTITIONS view provides one row for each partition."
+if (tableName.EndsWith("PARTITIONS", StringComparison.OrdinalIgnoreCase))
+{
+var rows = new List<RowContext>();
+foreach (var t in ds.Tables.Values)
+{
+if (t.TimePartitioning is null && t.RangePartitioning is null) continue;
+var partitionField = t.TimePartitioning?.Field;
+var groups = new Dictionary<string, long>();
+lock (t.RowLock)
+{
+foreach (var row in t.Rows)
+{
+var partId = "__UNPARTITIONED__";
+if (partitionField is not null &&
+row.Fields.TryGetValue(partitionField, out var val) && val is not null)
+{
+partId = val.ToString()?.Replace("-", "") ?? "__NULL__";
+}
+groups.TryGetValue(partId, out var count);
+groups[partId] = count + 1;
+}
+}
+if (groups.Count == 0)
+groups["__UNPARTITIONED__"] = 0;
+foreach (var (partId, count) in groups)
+{
+rows.Add(new RowContext(new Dictionary<string, object?>
+{
+["table_catalog"] = _store.ProjectId,
+["table_schema"] = dsId,
+["table_name"] = t.TableId,
+["partition_id"] = partId,
+["total_rows"] = count,
+["total_logical_bytes"] = (long)0,
+}, alias));
+}
+}
+return rows;
+}
 return [];
+}
+
+private RowContext MakeTableOptionRow(string dsId, string tableId,
+string optionName, string optionType, string optionValue, string alias)
+{
+return new RowContext(new Dictionary<string, object?>
+{
+["table_catalog"] = _store.ProjectId,
+["table_schema"] = dsId,
+["table_name"] = tableId,
+["option_name"] = optionName,
+["option_type"] = optionType,
+["option_value"] = optionValue,
+}, alias);
+}
+
+private void FlattenFieldPaths(List<RowContext> rows, string dsId, string tableId,
+IList<Google.Apis.Bigquery.v2.Data.TableFieldSchema> fields, string prefix, string alias)
+{
+foreach (var f in fields)
+{
+var path = string.IsNullOrEmpty(prefix) ? f.Name : $"{prefix}.{f.Name}";
+var topColumn = string.IsNullOrEmpty(prefix) ? f.Name : prefix.Split('.')[0];
+rows.Add(new RowContext(new Dictionary<string, object?>
+{
+["table_catalog"] = _store.ProjectId,
+["table_schema"] = dsId,
+["table_name"] = tableId,
+["column_name"] = topColumn,
+["field_path"] = path,
+["data_type"] = f.Type,
+["description"] = (object?)null,
+}, alias));
+if (f.Fields is { Count: > 0 })
+FlattenFieldPaths(rows, dsId, tableId, f.Fields, path, alias);
+}
 }
 
 private List<RowContext> ResolveWildcardTable(string pattern, string alias, string? datasetId)
