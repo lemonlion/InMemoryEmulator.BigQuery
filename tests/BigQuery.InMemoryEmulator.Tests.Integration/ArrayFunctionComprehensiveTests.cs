@@ -132,5 +132,5 @@ public class ArrayFunctionComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- ARRAY() subquery ----
-	[Fact(Skip = "ARRAY() subquery constructor not fully supported")] public async Task ArraySubquery_Basic() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1, 2, 3]) AS x))"));
+	[Fact(Skip = "ARRAY subquery format differs")] public async Task ArraySubquery_Basic() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1, 2, 3]) AS x))"));
 }

@@ -1,6 +1,8 @@
 using Google.Apis.Bigquery.v2;
+using Google.Apis.Json;
 using Google.Apis.Services;
 using Google.Cloud.BigQuery.V2;
+using Newtonsoft.Json;
 
 namespace BigQuery.InMemoryEmulator;
 
@@ -49,6 +51,12 @@ public static class InMemoryBigQuery
 		{
 			HttpClientFactory = factory,
 			ApplicationName = "BigQuery.InMemoryEmulator",
+			// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tabledata/list
+			//   DATETIME/DATE/TIME values are returned as strings.
+			//   Newtonsoft.Json default DateParseHandling.DateTime auto-converts
+			//   date-like strings to DateTime objects, causing InvalidCastException
+			//   in BigQueryRow.ConvertSingleValue which does (string)rawValue.
+			Serializer = CreateSerializer(),
 		};
 		var service = new BigqueryService(initializer);
 		var client = new BigQueryClientImpl(projectId, service);
@@ -60,4 +68,16 @@ public static class InMemoryBigQuery
 	/// Creates a builder for more complex multi-dataset setups.
 	/// </summary>
 	public static InMemoryBigQueryBuilder Builder() => new();
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tabledata/list
+	//   DATETIME/DATE/TIME values are returned as formatted strings in the REST API.
+	//   Newtonsoft.Json default DateParseHandling.DateTime would auto-convert these
+	//   date-formatted strings to DateTime objects during deserialization, causing
+	//   InvalidCastException in BigQueryRow which casts cell values via (string)rawValue.
+	internal static NewtonsoftJsonSerializer CreateSerializer()
+	{
+		var settings = NewtonsoftJsonSerializer.CreateDefaultSettings();
+		settings.DateParseHandling = DateParseHandling.None;
+		return new NewtonsoftJsonSerializer(settings);
+	}
 }

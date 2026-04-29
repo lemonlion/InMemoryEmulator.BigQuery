@@ -97,7 +97,7 @@ public class SubqueryTests : IAsyncLifetime
 		Assert.Empty(rows);
 	}
 
-	[Fact(Skip = "Needs investigation")] public async Task NotInSub_Basic()
+	[Fact] public async Task NotInSub_Basic()
 	{
 		var rows = await Query("SELECT x FROM UNNEST([1,2,3,4,5]) AS x WHERE x NOT IN (SELECT y FROM UNNEST([2,4]) AS y) ORDER BY x");
 		Assert.Equal(3, rows.Count);
@@ -109,10 +109,10 @@ public class SubqueryTests : IAsyncLifetime
 	// ---- EXISTS subquery ----
 	[Fact] public async Task Exists_True() => Assert.Equal("True", await Scalar("SELECT EXISTS(SELECT 1)"));
 	[Fact] public async Task Exists_TrueWithData() => Assert.Equal("True", await Scalar("SELECT EXISTS(SELECT x FROM UNNEST([1,2,3]) AS x)"));
-	[Fact(Skip = "Needs investigation")] public async Task Exists_FalseEmpty() => Assert.Equal("False", await Scalar("SELECT EXISTS(SELECT x FROM UNNEST(CAST([] AS ARRAY<INT64>)) AS x)"));
+	[Fact(Skip = "Empty array CAST in subquery")] public async Task Exists_FalseEmpty() => Assert.Equal("False", await Scalar("SELECT EXISTS(SELECT x FROM UNNEST(CAST([] AS ARRAY<INT64>)) AS x)"));
 	[Fact] public async Task Exists_WithFilter() => Assert.Equal("True", await Scalar("SELECT EXISTS(SELECT x FROM UNNEST([1,2,3]) AS x WHERE x > 2)"));
 	[Fact] public async Task Exists_NoMatchFilter() => Assert.Equal("False", await Scalar("SELECT EXISTS(SELECT x FROM UNNEST([1,2,3]) AS x WHERE x > 10)"));
-	[Fact(Skip = "Needs investigation")] public async Task NotExists_True() => Assert.Equal("True", await Scalar("SELECT NOT EXISTS(SELECT x FROM UNNEST(CAST([] AS ARRAY<INT64>)) AS x)"));
+	[Fact(Skip = "Empty array CAST in subquery")] public async Task NotExists_True() => Assert.Equal("True", await Scalar("SELECT NOT EXISTS(SELECT x FROM UNNEST(CAST([] AS ARRAY<INT64>)) AS x)"));
 	[Fact] public async Task NotExists_False() => Assert.Equal("False", await Scalar("SELECT NOT EXISTS(SELECT 1)"));
 
 	// ---- Nested FROM subqueries ----
@@ -131,13 +131,13 @@ public class SubqueryTests : IAsyncLifetime
 	}
 
 	// ---- ARRAY subquery ----
-	[Fact(Skip = "Needs investigation")] public async Task ArraySub_Length()
+	[Fact(Skip = "ARRAY subquery format differs")] public async Task ArraySub_Length()
 	{
 		var v = await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1,2,3,4,5]) AS x WHERE x > 2))");
 		Assert.Equal("3", v);
 	}
 
-	[Fact(Skip = "Needs investigation")] public async Task ArraySub_ToString()
+	[Fact(Skip = "ARRAY subquery format differs")] public async Task ArraySub_ToString()
 	{
 		var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY(SELECT x FROM UNNEST([3,1,2]) AS x ORDER BY x), ',')");
 		Assert.Equal("1,2,3", v);

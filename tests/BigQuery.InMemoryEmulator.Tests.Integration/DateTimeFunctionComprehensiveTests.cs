@@ -49,7 +49,7 @@ public class DateTimeFunctionComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task CurrentTimestamp_NotNull() { var v = await Scalar("SELECT CURRENT_TIMESTAMP()"); Assert.NotNull(v); }
 	[Fact] public async Task Now_NotNull() { var v = await Scalar("SELECT NOW()"); Assert.NotNull(v); }
 	[Fact] public async Task CurrentDate_NotNull() { var v = await Scalar("SELECT CURRENT_DATE()"); Assert.NotNull(v); }
-	[Fact(Skip = "Needs investigation")] public async Task CurrentDatetime_NotNull() { var v = await Scalar("SELECT CURRENT_DATETIME()"); Assert.NotNull(v); }
+	[Fact] public async Task CurrentDatetime_NotNull() { var v = await Scalar("SELECT CURRENT_DATETIME()"); Assert.NotNull(v); }
 	[Fact] public async Task CurrentTime_NotNull() { var v = await Scalar("SELECT CURRENT_TIME()"); Assert.NotNull(v); }
 
 	// ---- DATE constructor ----
@@ -58,8 +58,8 @@ public class DateTimeFunctionComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task Date_FromString() => Assert.Equal("2024-01-01", await Scalar("SELECT DATE('2024-01-01')"));
 
 	// ---- DATETIME constructor ----
-	[Fact(Skip = "Needs investigation")] public async Task Datetime_FromParts() { var v = await Scalar("SELECT DATETIME(2024, 3, 15, 10, 30, 0)"); Assert.Contains("2024-03-15", v); }
-	[Fact(Skip = "Needs investigation")] public async Task Datetime_FromDateAndTime() { var v = await Scalar("SELECT DATETIME(DATE '2024-03-15', TIME '10:30:00')"); Assert.Contains("2024-03-15", v); }
+	[Fact] public async Task Datetime_FromParts() { var v = await Scalar("SELECT DATETIME(2024, 3, 15, 10, 30, 0)"); Assert.Contains("2024-03-15", v); }
+	[Fact] public async Task Datetime_FromDateAndTime() { var v = await Scalar("SELECT DATETIME(DATE '2024-03-15', TIME '10:30:00')"); Assert.Contains("2024-03-15", v); }
 
 	// ---- TIMESTAMP constructor ----
 	[Fact] public async Task Timestamp_FromString() { var v = await Scalar("SELECT TIMESTAMP('2024-03-15T10:30:00+00:00')"); Assert.Contains("2024-03-15", v); }
@@ -124,18 +124,18 @@ public class DateTimeFunctionComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task TimestampDiff_Seconds() => Assert.Equal("3600", await Scalar("SELECT TIMESTAMP_DIFF(TIMESTAMP '2024-03-15T11:00:00+00:00', TIMESTAMP '2024-03-15T10:00:00+00:00', SECOND)"));
 
 	// ---- TIMESTAMP_TRUNC ----
-	[Fact(Skip = "Not yet supported")] public async Task TimestampTrunc_Day() { var v = await Scalar("SELECT TIMESTAMP_TRUNC(TIMESTAMP '2024-03-15T10:30:00+00:00', DAY)"); Assert.Contains("2024-03-15", v); Assert.Contains("00:00:00", v); }
-	[Fact(Skip = "Not yet supported")] public async Task TimestampTrunc_Hour() { var v = await Scalar("SELECT TIMESTAMP_TRUNC(TIMESTAMP '2024-03-15T10:30:45+00:00', HOUR)"); Assert.Contains("10:00:00", v); }
+	[Fact(Skip = "TIMESTAMP_TRUNC format differs")] public async Task TimestampTrunc_Day() { var v = await Scalar("SELECT TIMESTAMP_TRUNC(TIMESTAMP '2024-03-15T10:30:00+00:00', DAY)"); Assert.Contains("2024-03-15", v); Assert.Contains("00:00:00", v); }
+	[Fact] public async Task TimestampTrunc_Hour() { var v = await Scalar("SELECT TIMESTAMP_TRUNC(TIMESTAMP '2024-03-15T10:30:45+00:00', HOUR)"); Assert.Contains("10:00:00", v); }
 
 	// ---- TIMESTAMP_SECONDS / TIMESTAMP_MILLIS / TIMESTAMP_MICROS ----
-	[Fact(Skip = "Not yet supported")] public async Task TimestampSeconds_Epoch() { var v = await Scalar("SELECT TIMESTAMP_SECONDS(0)"); Assert.Contains("1970-01-01", v); }
-	[Fact(Skip = "Not yet supported")] public async Task TimestampMillis_Basic() { var v = await Scalar("SELECT TIMESTAMP_MILLIS(1000)"); Assert.Contains("1970-01-01", v); }
-	[Fact(Skip = "Not yet supported")] public async Task TimestampMicros_Basic() { var v = await Scalar("SELECT TIMESTAMP_MICROS(1000000)"); Assert.Contains("1970-01-01", v); }
+	[Fact] public async Task TimestampSeconds_Epoch() { var v = await Scalar("SELECT TIMESTAMP_SECONDS(0)"); Assert.Contains("1970-01-01", v); }
+	[Fact] public async Task TimestampMillis_Basic() { var v = await Scalar("SELECT TIMESTAMP_MILLIS(1000)"); Assert.Contains("1970-01-01", v); }
+	[Fact] public async Task TimestampMicros_Basic() { var v = await Scalar("SELECT TIMESTAMP_MICROS(1000000)"); Assert.Contains("1970-01-01", v); }
 
 	// ---- UNIX_SECONDS / UNIX_MILLIS / UNIX_MICROS ----
-	[Fact(Skip = "Not yet supported")] public async Task UnixSeconds_Known() => Assert.Equal("0", await Scalar("SELECT UNIX_SECONDS(TIMESTAMP '1970-01-01T00:00:00+00:00')"));
-	[Fact(Skip = "Not yet supported")] public async Task UnixMillis_Known() => Assert.Equal("0", await Scalar("SELECT UNIX_MILLIS(TIMESTAMP '1970-01-01T00:00:00+00:00')"));
-	[Fact(Skip = "Not yet supported")] public async Task UnixMicros_Known() => Assert.Equal("0", await Scalar("SELECT UNIX_MICROS(TIMESTAMP '1970-01-01T00:00:00+00:00')"));
+	[Fact] public async Task UnixSeconds_Known() => Assert.Equal("0", await Scalar("SELECT UNIX_SECONDS(TIMESTAMP '1970-01-01T00:00:00+00:00')"));
+	[Fact] public async Task UnixMillis_Known() => Assert.Equal("0", await Scalar("SELECT UNIX_MILLIS(TIMESTAMP '1970-01-01T00:00:00+00:00')"));
+	[Fact] public async Task UnixMicros_Known() => Assert.Equal("0", await Scalar("SELECT UNIX_MICROS(TIMESTAMP '1970-01-01T00:00:00+00:00')"));
 
 	// ---- FORMAT_TIMESTAMP / FORMAT_DATE / FORMAT_DATETIME / FORMAT_TIME ----
 	[Fact] public async Task FormatTimestamp_Basic() { var v = await Scalar("SELECT FORMAT_TIMESTAMP('%Y-%m-%d', TIMESTAMP '2024-03-15T10:30:00+00:00')"); Assert.Equal("2024-03-15", v); }
@@ -148,14 +148,14 @@ public class DateTimeFunctionComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task ParseDate_Basic() => Assert.Equal("2024-03-15", await Scalar("SELECT PARSE_DATE('%Y-%m-%d', '2024-03-15')"));
 	[Fact] public async Task ParseDate_DayMonthYear() => Assert.Equal("2024-03-15", await Scalar("SELECT PARSE_DATE('%d/%m/%Y', '15/03/2024')"));
 	[Fact] public async Task ParseTimestamp_Basic() { var v = await Scalar("SELECT PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%S', '2024-03-15T10:30:00')"); Assert.Contains("2024-03-15", v); }
-	[Fact(Skip = "Needs investigation")] public async Task ParseDatetime_Basic() { var v = await Scalar("SELECT PARSE_DATETIME('%Y-%m-%d %H:%M:%S', '2024-03-15 10:30:00')"); Assert.Contains("2024-03-15", v); }
+	[Fact] public async Task ParseDatetime_Basic() { var v = await Scalar("SELECT PARSE_DATETIME('%Y-%m-%d %H:%M:%S', '2024-03-15 10:30:00')"); Assert.Contains("2024-03-15", v); }
 	[Fact] public async Task ParseTime_Basic() { var v = await Scalar("SELECT PARSE_TIME('%H:%M:%S', '10:30:45')"); Assert.Contains("10:30:45", v); }
 
 	// ---- DATETIME_ADD / DATETIME_SUB / DATETIME_DIFF / DATETIME_TRUNC ----
-	[Fact(Skip = "Needs investigation")] public async Task DatetimeAdd_Hours() { var v = await Scalar("SELECT DATETIME_ADD(DATETIME '2024-03-15 10:00:00', INTERVAL 2 HOUR)"); Assert.Contains("12:00:00", v); }
-	[Fact(Skip = "Needs investigation")] public async Task DatetimeSub_Days() { var v = await Scalar("SELECT DATETIME_SUB(DATETIME '2024-03-15 10:00:00', INTERVAL 1 DAY)"); Assert.Contains("2024-03-14", v); }
+	[Fact] public async Task DatetimeAdd_Hours() { var v = await Scalar("SELECT DATETIME_ADD(DATETIME '2024-03-15 10:00:00', INTERVAL 2 HOUR)"); Assert.Contains("12:00:00", v); }
+	[Fact] public async Task DatetimeSub_Days() { var v = await Scalar("SELECT DATETIME_SUB(DATETIME '2024-03-15 10:00:00', INTERVAL 1 DAY)"); Assert.Contains("2024-03-14", v); }
 	[Fact] public async Task DatetimeDiff_Hours() => Assert.Equal("2", await Scalar("SELECT DATETIME_DIFF(DATETIME '2024-03-15 12:00:00', DATETIME '2024-03-15 10:00:00', HOUR)"));
-	[Fact(Skip = "Needs investigation")] public async Task DatetimeTrunc_Day() { var v = await Scalar("SELECT DATETIME_TRUNC(DATETIME '2024-03-15 10:30:00', DAY)"); Assert.Contains("00:00:00", v); }
+	[Fact(Skip = "DATETIME_TRUNC format differs")] public async Task DatetimeTrunc_Day() { var v = await Scalar("SELECT DATETIME_TRUNC(DATETIME '2024-03-15 10:30:00', DAY)"); Assert.Contains("00:00:00", v); }
 
 	// ---- TIME_ADD / TIME_SUB / TIME_DIFF / TIME_TRUNC ----
 	[Fact] public async Task TimeAdd_Hours() { var v = await Scalar("SELECT TIME_ADD(TIME '10:00:00', INTERVAL 2 HOUR)"); Assert.Contains("12:00:00", v); }

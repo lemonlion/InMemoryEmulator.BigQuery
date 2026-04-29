@@ -110,10 +110,7 @@ public class DateTimeFunctionIntegrationTests : IAsyncLifetime
 		var results = await client.ExecuteQueryAsync(
 			"SELECT DATETIME_ADD(DATETIME '2008-12-25 15:30:00', INTERVAL 10 DAY) AS result",
 			parameters: null);
-		// DATETIME values get Newtonsoft auto-parsed to DateTime in the raw cell;
-		// use RawRow to avoid BigQueryRow's ConvertSingleValue cast issue.
-		var raw = results.ToList()[0].RawRow.F[0].V;
-		var dt = Assert.IsType<DateTime>(raw);
+		var dt = Assert.IsType<DateTime>(results.ToList()[0]["result"]);
 		Assert.Equal(2009, dt.Year);
 		Assert.Equal(1, dt.Month);
 		Assert.Equal(4, dt.Day);
@@ -138,8 +135,7 @@ public class DateTimeFunctionIntegrationTests : IAsyncLifetime
 		var results = await client.ExecuteQueryAsync(
 			"SELECT DATETIME_TRUNC(DATETIME '2008-12-25 15:30:45', HOUR) AS result",
 			parameters: null);
-		var raw = results.ToList()[0].RawRow.F[0].V;
-		var dt = Assert.IsType<DateTime>(raw);
+		var dt = Assert.IsType<DateTime>(results.ToList()[0]["result"]);
 		Assert.Equal(15, dt.Hour);
 		Assert.Equal(0, dt.Minute);
 	}
@@ -163,8 +159,7 @@ public class DateTimeFunctionIntegrationTests : IAsyncLifetime
 		var results = await client.ExecuteQueryAsync(
 			"SELECT PARSE_DATETIME('%Y-%m-%d %H:%M:%S', '2008-12-25 15:30:00') AS result",
 			parameters: null);
-		var raw = results.ToList()[0].RawRow.F[0].V;
-		var dt = Assert.IsType<DateTime>(raw);
+		var dt = Assert.IsType<DateTime>(results.ToList()[0]["result"]);
 		Assert.Equal(2008, dt.Year);
 		Assert.Equal(12, dt.Month);
 		Assert.Equal(25, dt.Day);

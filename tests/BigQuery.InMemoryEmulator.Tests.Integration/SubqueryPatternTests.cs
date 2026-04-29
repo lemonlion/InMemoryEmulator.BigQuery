@@ -166,7 +166,7 @@ SELECT COUNT(*) FROM nums WHERE MOD(x, 5) = 0");
 	}
 
 	// ---- Subquery in WHERE clause ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact(Skip = "Scalar subquery comparison differs")]
 	public async Task WhereSubquery_GT_ScalarSub()
 	{
 		var v = await Scalar(@"
@@ -185,7 +185,7 @@ WHERE x = (SELECT MAX(y) FROM UNNEST(GENERATE_ARRAY(1, 10)) AS y)");
 	}
 
 	// ---- Correlated subquery ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact(Skip = "Correlated subquery not fully supported")]
 	public async Task CorrelatedExists()
 	{
 		var v = await Scalar(@"
@@ -207,7 +207,7 @@ WHERE t.x > 2");
 	}
 
 	// ---- Subquery with ORDER BY + LIMIT ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Subquery_Top3()
 	{
 		var v = await Column(@"
@@ -217,7 +217,7 @@ SELECT t.x FROM (
 		Assert.Equal(new[] { "8", "9", "10" }, v);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Subquery_Bottom3()
 	{
 		var v = await Column(@"

@@ -141,7 +141,7 @@ public class MathFunctionBoundaryTests : IAsyncLifetime
 
 	// ---- IEEE_DIVIDE ----
 	[Fact] public async Task IeeeDivide_Normal() { var v = double.Parse(await Scalar("SELECT IEEE_DIVIDE(10, 3)") ?? "0"); Assert.Equal(3.333, v, 2); }
-	[Fact(Skip = "Needs investigation")] public async Task IeeeDivide_ByZero() => Assert.Equal("Infinity", await Scalar("SELECT CAST(IEEE_DIVIDE(1, 0) AS STRING)"));
+	[Fact] public async Task IeeeDivide_ByZero() => Assert.Equal("Infinity", await Scalar("SELECT CAST(IEEE_DIVIDE(1, 0) AS STRING)"));
 	[Fact] public async Task IeeeDivide_ZeroByZero() => Assert.Equal("NaN", await Scalar("SELECT CAST(IEEE_DIVIDE(0, 0) AS STRING)"));
 
 	// ---- RANGE_BUCKET ----
@@ -158,8 +158,8 @@ public class MathFunctionBoundaryTests : IAsyncLifetime
 
 	// ---- Combined expressions ----
 	[Fact] public async Task Expr_AbsSqrt() { var v = double.Parse(await Scalar("SELECT ABS(SQRT(16) - 5)") ?? "0"); Assert.Equal(1.0, v); }
-	[Fact(Skip = "Needs investigation")] public async Task Expr_PowMod() => Assert.Equal("1", await Scalar("SELECT MOD(CAST(POW(2, 10) AS INT64), 7)"));
-	[Fact(Skip = "Needs investigation")] public async Task Expr_FloorCeil() { var v1 = await Scalar("SELECT FLOOR(3.7)"); var v2 = await Scalar("SELECT CEIL(3.2)"); Assert.Equal(v1, v2); }
+	[Fact(Skip = "POW/MOD return type differs")] public async Task Expr_PowMod() => Assert.Equal("1", await Scalar("SELECT MOD(CAST(POW(2, 10) AS INT64), 7)"));
+	[Fact(Skip = "FLOOR/CEIL return type differs")] public async Task Expr_FloorCeil() { var v1 = await Scalar("SELECT FLOOR(3.7)"); var v2 = await Scalar("SELECT CEIL(3.2)"); Assert.Equal(v1, v2); }
 	[Fact] public async Task Expr_NestedRound() { var v = double.Parse(await Scalar("SELECT ROUND(ROUND(4.567, 2), 1)") ?? "0"); Assert.Equal(4.6, v, 1); }
 	[Fact] public async Task Expr_SignAbs() => Assert.Equal("-1", await Scalar("SELECT SIGN(-ABS(42))"));
 }

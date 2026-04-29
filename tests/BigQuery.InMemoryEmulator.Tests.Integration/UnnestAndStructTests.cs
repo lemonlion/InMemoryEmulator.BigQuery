@@ -161,8 +161,8 @@ public class UnnestAndStructTests : IAsyncLifetime
 	[Fact] public async Task GenerateArray_Descending() => Assert.Equal("5", await Scalar("SELECT ARRAY_LENGTH(GENERATE_ARRAY(5, 1, -1))"));
 
 	// ---- ARRAY subquery ----
-	[Fact(Skip = "Not yet supported")] public async Task ArraySubquery_FromUnnest() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([10, 20, 30]) AS x))"));
-	[Fact(Skip = "Not yet supported")] public async Task ArraySubquery_WithFilter() => Assert.Equal("2", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1, 2, 3, 4, 5]) AS x WHERE x > 3))"));
+	[Fact(Skip = "ARRAY subquery format differs")] public async Task ArraySubquery_FromUnnest() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([10, 20, 30]) AS x))"));
+	[Fact(Skip = "ARRAY subquery format differs")] public async Task ArraySubquery_WithFilter() => Assert.Equal("2", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1, 2, 3, 4, 5]) AS x WHERE x > 3))"));
 
 	// ---- Nested arrays (via STRUCT) ----
 	[Fact(Skip = "Not yet supported")] public async Task NestedArraysViaStruct()

@@ -6167,7 +6167,7 @@ DateTime dt when dt.TimeOfDay == TimeSpan.Zero => dt.ToString("yyyy-MM-dd", Cult
 // Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tabledata/list
 //   DATETIME values are returned as "yyyy-MM-ddTHH:mm:ss.FFFFFF" strings.
 //   SDK source: BigQueryRow.DateTimeConverter uses DateTime.ParseExact with this format.
-DateTime dt => dt.ToString("yyyy-MM-dd'T'HH:mm:ss.FFFFFF", CultureInfo.InvariantCulture),
+DateTime dt => dt.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff", CultureInfo.InvariantCulture),
 // Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tabledata/list
 //   TIME values are returned as "HH:mm:ss.FFFFFF" strings.
 TimeSpan ts => ts.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture),
@@ -6313,6 +6313,12 @@ return la2.CompareTo(parsed);
 if (a is string sa && b is long lb2 && long.TryParse(sa, out var parsed2))
 return parsed2.CompareTo(lb2);
 
+// double <-> string (scalar subqueries return formatted strings)
+if (a is double da2 && b is string sb3 && double.TryParse(sb3, System.Globalization.NumberStyles.Any, CultureInfo.InvariantCulture, out var pd))
+return da2.CompareTo(pd);
+if (a is string sa3 && b is double db2 && double.TryParse(sa3, System.Globalization.NumberStyles.Any, CultureInfo.InvariantCulture, out var pd2))
+return pd2.CompareTo(db2);
+
 // string <-> string
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#comparison_operators
 //   "Comparisons on STRING values are case sensitive."
@@ -6323,6 +6329,9 @@ return string.Compare(sa2, sb2, StringComparison.Ordinal);
 if (a is DateTimeOffset dtoa && b is DateTimeOffset dtob) return dtoa.CompareTo(dtob);
 if (a is DateTime dta && b is DateTime dtb) return dta.CompareTo(dtb);
 
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#comparison_operators
+//   "Comparison operators work across numeric types."
+if ((a is long || a is double) && (b is long || b is double)) return ToDouble(a).CompareTo(ToDouble(b));
 if (a is IComparable ca) return ca.CompareTo(b);
 return string.Compare(a.ToString(), b.ToString(), StringComparison.OrdinalIgnoreCase);
 }
@@ -6441,7 +6450,12 @@ return val switch
 {
 null => null,
 bool b => b ? "true" : "false",
-DateTimeOffset dto => dto.ToString("yyyy-MM-dd HH:mm:ss.FFFFFF zzz", CultureInfo.InvariantCulture),
+            // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#ieee_divide
+            //   IEEE_DIVIDE(25.0, 0.0) => +inf; CAST(+inf AS STRING) => "Infinity"
+            double d when double.IsPositiveInfinity(d) => "Infinity",
+            double d when double.IsNegativeInfinity(d) => "-Infinity",
+            double d when double.IsNaN(d) => "NaN",
+DateTimeOffset dto => dto.ToString("yyyy-MM-dd HH:mm:ss.ffffff zzz", CultureInfo.InvariantCulture),
 DateTime dt => dt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
 TimeSpan ts => ts.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture),
 _ => val.ToString()

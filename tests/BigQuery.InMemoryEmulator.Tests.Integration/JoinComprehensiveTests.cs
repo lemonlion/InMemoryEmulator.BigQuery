@@ -159,7 +159,7 @@ public class JoinComprehensiveTests : IAsyncLifetime
 		Assert.Equal(6, rows.Count); // 3 users × 2 products
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task CrossJoin_ImplicitComma()
+	[Fact] public async Task CrossJoin_ImplicitComma()
 	{
 		var rows = await Query($"SELECT u.name, p.product_name FROM `{_datasetId}.users` u, `{_datasetId}.products` p ORDER BY u.name, p.product_name");
 		Assert.Equal(6, rows.Count);
@@ -235,7 +235,7 @@ public class JoinComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- USING clause ----
-	[Fact(Skip = "Not yet supported")] public async Task JoinUsing()
+	[Fact] public async Task JoinUsing()
 	{
 		var rows = await Query($@"
 			SELECT oi.order_id, p.product_name, oi.qty

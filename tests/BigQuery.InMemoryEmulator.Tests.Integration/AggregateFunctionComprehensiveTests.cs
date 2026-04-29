@@ -127,7 +127,7 @@ public class AggregateFunctionComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task ArrayAgg_Distinct() => Assert.Equal("2", await Scalar($"SELECT ARRAY_LENGTH(ARRAY_AGG(DISTINCT grp)) FROM `{_datasetId}.nums`"));
 
 	// ---- ARRAY_CONCAT_AGG ----
-	[Fact(Skip = "FROM subquery not supported")]
+	[Fact(Skip = "ARRAY_CONCAT_AGG format differs")]
 	public async Task ArrayConcatAgg_Basic()
 	{
 		var v = await Scalar("SELECT ARRAY_LENGTH(ARRAY_CONCAT_AGG(arr)) FROM (SELECT [1,2] AS arr UNION ALL SELECT [3,4])");
@@ -177,7 +177,7 @@ public class AggregateFunctionComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task StddevPop_Basic() { var v = double.Parse(await Scalar($"SELECT STDDEV_POP(val) FROM `{_datasetId}.nums`") ?? "0"); Assert.True(v > 0); }
 
 	// ---- CORR / COVAR_POP / COVAR_SAMP ----
-	[Fact(Skip = "FROM subquery not supported")] public async Task Corr_Perfect() => Assert.Equal("1.0", await Scalar("SELECT CORR(x, x) FROM (SELECT 1 AS x UNION ALL SELECT 2 UNION ALL SELECT 3)"));
+	[Fact(Skip = "CORR result format differs")] public async Task Corr_Perfect() => Assert.Equal("1.0", await Scalar("SELECT CORR(x, x) FROM (SELECT 1 AS x UNION ALL SELECT 2 UNION ALL SELECT 3)"));
 	[Fact] public async Task CovarPop_Basic() { var v = double.Parse(await Scalar($"SELECT COVAR_POP(CAST(id AS FLOAT64), val) FROM `{_datasetId}.nums`") ?? "0"); Assert.True(v != 0); }
 	[Fact] public async Task CovarSamp_Basic() { var v = double.Parse(await Scalar($"SELECT COVAR_SAMP(CAST(id AS FLOAT64), val) FROM `{_datasetId}.nums`") ?? "0"); Assert.True(v != 0); }
 

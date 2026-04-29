@@ -65,13 +65,13 @@ public class SubqueryCteSetOpTests : IAsyncLifetime
 	}
 
 	// ==== SCALAR SUBQUERIES ====
-	[Fact(Skip = "Needs investigation")] public async Task ScalarSubquery_InSelect()
+	[Fact(Skip = "Scalar subquery returns formatted string instead of typed value")] public async Task ScalarSubquery_InSelect()
 	{
 		var v = await Scalar($"SELECT (SELECT MAX(price) FROM `{_datasetId}.items`)");
 		Assert.Equal("50.0", v);
 	}
 
-	[Fact(Skip = "Needs investigation")] public async Task ScalarSubquery_InWhere()
+	[Fact] public async Task ScalarSubquery_InWhere()
 	{
 		var rows = await Query($"SELECT id FROM `{_datasetId}.items` WHERE price = (SELECT MAX(price) FROM `{_datasetId}.items`)");
 		Assert.Single(rows);
@@ -97,7 +97,7 @@ public class SubqueryCteSetOpTests : IAsyncLifetime
 		Assert.Equal("False", v);
 	}
 
-	[Fact(Skip = "Needs investigation")] public async Task Exists_InWhere()
+	[Fact(Skip = "Subquery result format differs")] public async Task Exists_InWhere()
 	{
 		var rows = await Query($"SELECT DISTINCT category FROM `{_datasetId}.items` i WHERE EXISTS(SELECT 1 FROM `{_datasetId}.items` WHERE category = i.category AND price > 25) ORDER BY category");
 		Assert.Equal(2, rows.Count); // B (30, 40), C (50)
@@ -110,21 +110,21 @@ public class SubqueryCteSetOpTests : IAsyncLifetime
 		Assert.Contains(rows, r => r["id"]?.ToString() == "3"); // B category
 	}
 
-	[Fact(Skip = "Needs investigation")] public async Task NotInSubquery()
+	[Fact] public async Task NotInSubquery()
 	{
 		var rows = await Query($"SELECT id FROM `{_datasetId}.items` WHERE category NOT IN (SELECT DISTINCT category FROM `{_datasetId}.items` WHERE price >= 30) ORDER BY id");
 		Assert.Equal(2, rows.Count); // A category only
 	}
 
 	// ==== ARRAY subquery ====
-	[Fact(Skip = "Needs investigation")] public async Task ArraySubquery()
+	[Fact(Skip = "ARRAY subquery format differs")] public async Task ArraySubquery()
 	{
 		var v = await Scalar($"SELECT ARRAY_LENGTH(ARRAY(SELECT id FROM `{_datasetId}.items`))");
 		Assert.Equal("5", v);
 	}
 
 	// ==== FROM subquery ====
-	[Fact(Skip = "Needs investigation")] public async Task FromSubquery()
+	[Fact(Skip = "Subquery result format differs")] public async Task FromSubquery()
 	{
 		var rows = await Query($"SELECT t.total FROM (SELECT SUM(price) AS total FROM `{_datasetId}.items`) t");
 		Assert.Equal("150.0", rows[0]["total"]?.ToString());
@@ -248,7 +248,7 @@ public class SubqueryCteSetOpTests : IAsyncLifetime
 	}
 
 	// ==== Nested subqueries ====
-	[Fact(Skip = "Needs investigation")] public async Task NestedSubquery_TwoLevels()
+	[Fact(Skip = "Subquery result format differs")] public async Task NestedSubquery_TwoLevels()
 	{
 		var v = await Scalar($"SELECT (SELECT MAX(price) FROM (SELECT price FROM `{_datasetId}.items` WHERE category = 'A') AS t)");
 		Assert.Equal("20.0", v);

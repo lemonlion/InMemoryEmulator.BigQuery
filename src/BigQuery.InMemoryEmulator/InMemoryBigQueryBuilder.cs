@@ -62,6 +62,7 @@ public class InMemoryBigQueryBuilder
 		{
 			HttpClientFactory = factory,
 			ApplicationName = "BigQuery.InMemoryEmulator",
+			Serializer = InMemoryBigQuery.CreateSerializer(),
 		};
 		var service = new BigqueryService(initializer);
 		var client = new BigQueryClientImpl(_projectId, service);

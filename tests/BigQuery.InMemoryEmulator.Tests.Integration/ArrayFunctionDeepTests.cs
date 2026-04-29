@@ -156,8 +156,8 @@ public class ArrayFunctionDeepTests : IAsyncLifetime
 	}
 
 	// ---- ARRAY in subquery ----
-	[Fact(Skip = "Emulator limitation")] public async Task Array_Subquery() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1,2,3]) AS x))"));
-	[Fact(Skip = "Emulator limitation")] public async Task Array_SubqueryFiltered() => Assert.Equal("2", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1,2,3,4,5]) AS x WHERE x > 3))"));
+	[Fact(Skip = "ARRAY subquery format differs")] public async Task Array_Subquery() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1,2,3]) AS x))"));
+	[Fact(Skip = "ARRAY subquery format differs")] public async Task Array_SubqueryFiltered() => Assert.Equal("2", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1,2,3,4,5]) AS x WHERE x > 3))"));
 
 	// ---- ARRAY_AGG with UNNEST ----
 	[Fact]
