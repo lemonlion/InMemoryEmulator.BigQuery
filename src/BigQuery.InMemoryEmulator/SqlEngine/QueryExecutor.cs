@@ -18,6 +18,7 @@ private readonly string? _defaultDatasetId;
 private IList<QueryParameter>? _parameters;
 // CTE results visible to the current query scope (set during ExecuteSelect, read by scalar subqueries)
 private Dictionary<string, (TableSchema Schema, List<Dictionary<string, object?>> Rows)>? _activeCteResults;
+private (RowContext CurrentRow, List<RowContext> AllRows)? _windowContext;
 
 public QueryExecutor(InMemoryDataStore store, string? defaultDatasetId = null)
 {
@@ -150,7 +151,7 @@ return ExecuteGroupBy(sel, rows);
 }
 
 // Window functions
-bool hasWindow = sel.Columns.Any(c => c.Expr is WindowFunction);
+bool hasWindow = sel.Columns.Any(c => ContainsWindowFunction(c.Expr));
 
 // SELECT projection
 var (schema, tableRows) = hasWindow ? ProjectWithWindows(sel, rows) : Project(sel, rows, cteResults);
@@ -1040,6 +1041,7 @@ var resultRows = new List<TableRow>();
 
 foreach (var row in rows)
 {
+		_windowContext = (row, rows);
 var cells = new Dictionary<string, object?>();
 foreach (var item in stmt.Columns)
 {
@@ -1436,7 +1438,7 @@ CaseExpr caseExpr => EvaluateCase(caseExpr, row),
 ScalarSubquery sub => EvaluateScalarSubquery(sub),
 ExistsExpr exists => EvaluateExists(exists),
 ArraySubquery arraySub => EvaluateArraySubquery(arraySub),
-WindowFunction wf => throw new InvalidOperationException("Window function in non-window context"),
+WindowFunction wf => _windowContext.HasValue ? EvaluateWindow(wf, _windowContext.Value.CurrentRow, _windowContext.Value.AllRows) : throw new InvalidOperationException("Window function in non-window context"),
 StarExpr => throw new InvalidOperationException("Star expression in non-projection context"),
 VariableRef v => _parameters?.FirstOrDefault(p => p.Name == v.Name)?.ParameterValue?.Value,
 LambdaExpr => throw new InvalidOperationException("Lambda expression in non-lambda context"),
@@ -6219,6 +6221,22 @@ private static IReadOnlyList<OrderByItem> ResolveOrderByOrdinals(IReadOnlyList<O
 
 private static bool ContainsWindow(List<SelectItem> items)
 => items.Any(i => i.Expr is WindowFunction);
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls
+//   Window functions can appear in expressions like al * 100.0 / SUM(val) OVER ().
+private static bool ContainsWindowFunction(SqlExpression expr)
+{
+    return expr switch
+    {
+        WindowFunction => true,
+        BinaryExpr bin => ContainsWindowFunction(bin.Left) || ContainsWindowFunction(bin.Right),
+        UnaryExpr un => ContainsWindowFunction(un.Operand),
+        FunctionCall fn => fn.Args.Any(ContainsWindowFunction),
+        CastExpr cast => ContainsWindowFunction(cast.Expr),
+        CaseExpr caseExpr => (caseExpr.Branches?.Any(b => ContainsWindowFunction(b.When) || ContainsWindowFunction(b.Then)) ?? false) || (caseExpr.Else != null && ContainsWindowFunction(caseExpr.Else)),
+        _ => false
+    };
+}
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#order_by_clause
 //   "An alias references the alias of a column in the SELECT list."

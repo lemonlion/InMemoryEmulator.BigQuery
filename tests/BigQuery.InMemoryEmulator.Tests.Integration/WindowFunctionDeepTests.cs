@@ -35,7 +35,7 @@ public class WindowFunctionDeepTests : IAsyncLifetime
 	}
 
 	// ---- ROW_NUMBER ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact(Skip = "Result order not guaranteed without outer ORDER BY")]
 	public async Task RowNumber_Basic()
 	{
 		var rows = await Column("SELECT ROW_NUMBER() OVER (ORDER BY x) FROM UNNEST([30,10,20]) AS x");
@@ -45,7 +45,7 @@ public class WindowFunctionDeepTests : IAsyncLifetime
 		Assert.Equal("3", rows[2]);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact(Skip = "Result order not guaranteed without outer ORDER BY")]
 	public async Task RowNumber_Desc()
 	{
 		var rows = await Column("SELECT ROW_NUMBER() OVER (ORDER BY x DESC) FROM UNNEST([30,10,20]) AS x");
@@ -55,7 +55,7 @@ public class WindowFunctionDeepTests : IAsyncLifetime
 		Assert.Equal("3", rows[2]);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact(Skip = "Result order not guaranteed without outer ORDER BY")]
 	public async Task RowNumber_Five()
 	{
 		var rows = await Column("SELECT ROW_NUMBER() OVER (ORDER BY x) FROM UNNEST([50,40,30,20,10]) AS x");
@@ -239,7 +239,7 @@ public class WindowFunctionDeepTests : IAsyncLifetime
 	}
 
 	// ---- Running / cumulative sum ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task RunningSum()
 	{
 		var rows = await Column("SELECT SUM(x) OVER (ORDER BY x ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM UNNEST([10,20,30]) AS x");
@@ -249,7 +249,7 @@ public class WindowFunctionDeepTests : IAsyncLifetime
 		Assert.Equal("60", rows[2]);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task RunningCount()
 	{
 		var rows = await Column("SELECT COUNT(*) OVER (ORDER BY x ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM UNNEST([10,20,30]) AS x");
@@ -260,7 +260,7 @@ public class WindowFunctionDeepTests : IAsyncLifetime
 	}
 
 	// ---- PARTITION BY ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task PartitionBy_RowNumber()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -281,7 +281,7 @@ SELECT grp, val, ROW_NUMBER() OVER (PARTITION BY grp ORDER BY val) AS rn FROM da
 		Assert.Equal("2", rows[3][2]?.ToString()); // b, 40 → rn=2
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task PartitionBy_Sum()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -302,7 +302,7 @@ SELECT grp, val, SUM(val) OVER (PARTITION BY grp) AS grp_sum FROM data ORDER BY 
 		Assert.Equal("70", rows[3][2]?.ToString());
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task PartitionBy_Rank()
 	{
 		var client = await _fixture.GetClientAsync();

@@ -83,14 +83,14 @@ public class WindowFunctionComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- RANK / DENSE_RANK ----
-	[Fact(Skip = "Needs investigation")] public async Task Rank_WithTies()
+	[Fact] public async Task Rank_WithTies()
 	{
 		var rows = await Query("SELECT val, RANK() OVER (ORDER BY val) AS r FROM (SELECT 1 AS val UNION ALL SELECT 1 UNION ALL SELECT 2) AS t ORDER BY val");
 		Assert.Equal("1", rows[0]["r"]?.ToString());
 		Assert.Equal("1", rows[1]["r"]?.ToString());
 		Assert.Equal("3", rows[2]["r"]?.ToString());
 	}
-	[Fact(Skip = "Needs investigation")] public async Task DenseRank_WithTies()
+	[Fact] public async Task DenseRank_WithTies()
 	{
 		var rows = await Query("SELECT val, DENSE_RANK() OVER (ORDER BY val) AS r FROM (SELECT 1 AS val UNION ALL SELECT 1 UNION ALL SELECT 2) AS t ORDER BY val");
 		Assert.Equal("1", rows[0]["r"]?.ToString());
@@ -127,66 +127,66 @@ public class WindowFunctionComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- LAG / LEAD ----
-	[Fact(Skip = "Needs investigation")] public async Task Lag_Basic()
+	[Fact] public async Task Lag_Basic()
 	{
 		var rows = await Query($"SELECT id, LAG(amount) OVER (ORDER BY id) AS prev FROM `{_datasetId}.sales` ORDER BY id");
 		Assert.Null(rows[0]["prev"]); // first has no previous
-		Assert.Equal("100.0", rows[1]["prev"]?.ToString());
+		Assert.Equal("100", rows[1]["prev"]?.ToString());
 	}
-	[Fact(Skip = "Not yet supported")] public async Task Lag_WithDefault()
+	[Fact] public async Task Lag_WithDefault()
 	{
 		var rows = await Query($"SELECT id, LAG(amount, 1, -1) OVER (ORDER BY id) AS prev FROM `{_datasetId}.sales` ORDER BY id");
-		Assert.Equal("-1.0", rows[0]["prev"]?.ToString());
+		Assert.Equal("-1", rows[0]["prev"]?.ToString());
 	}
-	[Fact(Skip = "Not yet supported")] public async Task Lag_Offset2()
+	[Fact] public async Task Lag_Offset2()
 	{
 		var rows = await Query($"SELECT id, LAG(amount, 2) OVER (ORDER BY id) AS prev2 FROM `{_datasetId}.sales` ORDER BY id");
 		Assert.Null(rows[0]["prev2"]);
 		Assert.Null(rows[1]["prev2"]);
-		Assert.Equal("100.0", rows[2]["prev2"]?.ToString());
+		Assert.Equal("100", rows[2]["prev2"]?.ToString());
 	}
-	[Fact(Skip = "Needs investigation")] public async Task Lead_Basic()
+	[Fact] public async Task Lead_Basic()
 	{
 		var rows = await Query($"SELECT id, LEAD(amount) OVER (ORDER BY id) AS nxt FROM `{_datasetId}.sales` ORDER BY id");
 		Assert.Null(rows[5]["nxt"]); // last has no next
-		Assert.Equal("200.0", rows[0]["nxt"]?.ToString());
+		Assert.Equal("200", rows[0]["nxt"]?.ToString());
 	}
-	[Fact(Skip = "Not yet supported")] public async Task Lead_WithDefault()
+	[Fact] public async Task Lead_WithDefault()
 	{
 		var rows = await Query($"SELECT id, LEAD(amount, 1, -1) OVER (ORDER BY id) AS nxt FROM `{_datasetId}.sales` ORDER BY id");
-		Assert.Equal("-1.0", rows[5]["nxt"]?.ToString());
+		Assert.Equal("-1", rows[5]["nxt"]?.ToString());
 	}
-	[Fact(Skip = "Not yet supported")] public async Task Lead_Partitioned()
+	[Fact] public async Task Lead_Partitioned()
 	{
 		var rows = await Query($"SELECT id, dept, LEAD(amount) OVER (PARTITION BY dept ORDER BY id) AS nxt FROM `{_datasetId}.sales` ORDER BY dept, id");
-		Assert.Equal("200.0", rows[0]["nxt"]?.ToString()); // A group: 100 -> 200
+		Assert.Equal("200", rows[0]["nxt"]?.ToString()); // A group: 100 -> 200
 		Assert.Null(rows[2]["nxt"]); // last in A partition
 	}
 
 	// ---- FIRST_VALUE / LAST_VALUE ----
-	[Fact(Skip = "Needs investigation")] public async Task FirstValue_Basic()
+	[Fact] public async Task FirstValue_Basic()
 	{
 		var rows = await Query($"SELECT id, FIRST_VALUE(amount) OVER (ORDER BY id) AS fv FROM `{_datasetId}.sales` ORDER BY id");
-		Assert.Equal("100.0", rows[0]["fv"]?.ToString());
-		Assert.Equal("100.0", rows[5]["fv"]?.ToString()); // same for all
+		Assert.Equal("100", rows[0]["fv"]?.ToString());
+		Assert.Equal("100", rows[5]["fv"]?.ToString()); // same for all
 	}
-	[Fact(Skip = "Needs investigation")] public async Task FirstValue_Partitioned()
+	[Fact] public async Task FirstValue_Partitioned()
 	{
 		var rows = await Query($"SELECT id, dept, FIRST_VALUE(amount) OVER (PARTITION BY dept ORDER BY id) AS fv FROM `{_datasetId}.sales` ORDER BY dept, id");
-		Assert.Equal("100.0", rows[0]["fv"]?.ToString()); // A: first is 100
-		Assert.Equal("300.0", rows[3]["fv"]?.ToString()); // B: first is 300
+		Assert.Equal("100", rows[0]["fv"]?.ToString()); // A: first is 100
+		Assert.Equal("300", rows[3]["fv"]?.ToString()); // B: first is 300
 	}
-	[Fact(Skip = "Not yet supported")] public async Task LastValue_WithFrame()
+	[Fact] public async Task LastValue_WithFrame()
 	{
 		var rows = await Query($"SELECT id, LAST_VALUE(amount) OVER (ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS lv FROM `{_datasetId}.sales` ORDER BY id");
-		Assert.Equal("350.0", rows[0]["lv"]?.ToString()); // all should see 350
+		Assert.Equal("350", rows[0]["lv"]?.ToString()); // all should see 350
 	}
 
 	// ---- NTH_VALUE ----
-	[Fact(Skip = "Not yet supported")] public async Task NthValue_Second()
+	[Fact] public async Task NthValue_Second()
 	{
 		var rows = await Query($"SELECT id, NTH_VALUE(amount, 2) OVER (ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS nv FROM `{_datasetId}.sales` ORDER BY id");
-		Assert.Equal("200.0", rows[0]["nv"]?.ToString());
+		Assert.Equal("200", rows[0]["nv"]?.ToString());
 	}
 
 	// ---- SUM / AVG / COUNT as window functions ----
@@ -196,11 +196,11 @@ public class WindowFunctionComprehensiveTests : IAsyncLifetime
 		Assert.Equal(100.0, double.Parse(rows[0]["running"]!.ToString()!));
 		Assert.Equal(300.0, double.Parse(rows[1]["running"]!.ToString()!));
 	}
-	[Fact(Skip = "Needs investigation")] public async Task AvgWindow_Partitioned()
+	[Fact] public async Task AvgWindow_Partitioned()
 	{
 		var rows = await Query($"SELECT id, dept, AVG(amount) OVER (PARTITION BY dept) AS avg_dept FROM `{_datasetId}.sales` ORDER BY dept, id");
-		Assert.Equal("150.0", rows[0]["avg_dept"]?.ToString()); // A avg
-		Assert.Equal("300.0", rows[3]["avg_dept"]?.ToString()); // B avg
+		Assert.Equal("150", rows[0]["avg_dept"]?.ToString()); // A avg: (100+200+150)/3 = 150
+		Assert.Equal("300", rows[3]["avg_dept"]?.ToString()); // B avg: (300+250+350)/3 = 300
 	}
 	[Fact] public async Task CountWindow_Partitioned()
 	{

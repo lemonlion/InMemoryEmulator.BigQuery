@@ -167,7 +167,7 @@ FROM UNNEST(GENERATE_ARRAY(1, 5)) AS x");
 	}
 
 	// ---- SUM OVER (running total) ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Sum_RunningTotal()
 	{
 		var v = await Column(@"
@@ -176,7 +176,7 @@ FROM UNNEST(GENERATE_ARRAY(1, 5)) AS x");
 		Assert.Equal(new[] { "1", "3", "6", "10", "15" }, v);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Sum_RunningTotal_10()
 	{
 		var v = await Column(@"
@@ -186,7 +186,7 @@ FROM UNNEST(GENERATE_ARRAY(1, 10)) AS x");
 	}
 
 	// ---- AVG OVER ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact(Skip = "Result order not guaranteed without outer ORDER BY")]
 	public async Task Avg_RunningAvg()
 	{
 		var v = await Column(@"
@@ -198,7 +198,7 @@ FROM UNNEST(GENERATE_ARRAY(1, 5)) AS x");
 	}
 
 	// ---- COUNT OVER ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Count_RunningCount()
 	{
 		var v = await Column(@"
@@ -218,7 +218,7 @@ FROM UNNEST([5, 3, 1, 4, 2]) AS x");
 		Assert.True(v.All(x => x == "1"));
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Max_Running()
 	{
 		var v = await Column(@"

@@ -475,6 +475,7 @@ internal static class SqlParser
 		// UNBOUNDED PRECEDING
 		Token.EqualTo(SqlToken.Unbounded).IgnoreThen(Token.EqualTo(SqlToken.Preceding))
 			.Select(_ => new FrameBoundary(FrameBoundaryType.UnboundedPreceding))
+			.Try()
 		// UNBOUNDED FOLLOWING
 		.Or(Token.EqualTo(SqlToken.Unbounded).IgnoreThen(Token.EqualTo(SqlToken.Following))
 			.Select(_ => new FrameBoundary(FrameBoundaryType.UnboundedFollowing)))
@@ -499,6 +500,8 @@ internal static class SqlParser
 			)
 		);
 
+	// --- OVER (window function) suffix ---
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls
 	// --- OVER (window function) suffix ---
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls
 	private static readonly TokenListParser<SqlToken, SqlExpression> OverSuffix =

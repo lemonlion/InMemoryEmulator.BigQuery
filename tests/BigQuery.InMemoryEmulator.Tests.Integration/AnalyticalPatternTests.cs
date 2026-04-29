@@ -27,7 +27,7 @@ public class AnalyticalPatternTests : IAsyncLifetime
 	}
 
 	// ---- Top-N per group ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task TopN_PerGroup()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -54,7 +54,7 @@ SELECT grp, val FROM ranked WHERE rn <= 2 ORDER BY grp, val DESC", parameters: n
 	}
 
 	// ---- Running total ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task RunningTotal()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -78,7 +78,7 @@ FROM data ORDER BY day", parameters: null);
 	}
 
 	// ---- Percentage of total ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task PercentOfTotal()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -100,7 +100,7 @@ FROM data ORDER BY category", parameters: null);
 	}
 
 	// ---- Year-over-year comparison ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task YoYComparison()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -120,7 +120,7 @@ FROM data ORDER BY yr", parameters: null);
 	}
 
 	// ---- Gap detection ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task GapDetection()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -139,7 +139,7 @@ FROM data ORDER BY id", parameters: null);
 	}
 
 	// ---- Deduplication with ROW_NUMBER ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Dedup_RowNumber()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -218,7 +218,7 @@ ORDER BY name", parameters: null);
 	}
 
 	// ---- Self-referencing CTE pattern ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task CTE_SelfRef()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -264,7 +264,7 @@ ORDER BY x", parameters: null);
 	}
 
 	// ---- Moving average (3-period) ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task MovingAvg()
 	{
 		var client = await _fixture.GetClientAsync();
