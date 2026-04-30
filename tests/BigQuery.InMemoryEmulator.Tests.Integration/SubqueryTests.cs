@@ -109,10 +109,10 @@ public class SubqueryTests : IAsyncLifetime
 	// ---- EXISTS subquery ----
 	[Fact] public async Task Exists_True() => Assert.Equal("True", await Scalar("SELECT EXISTS(SELECT 1)"));
 	[Fact] public async Task Exists_TrueWithData() => Assert.Equal("True", await Scalar("SELECT EXISTS(SELECT x FROM UNNEST([1,2,3]) AS x)"));
-	[Fact(Skip = "CAST([] AS ARRAY<INT64>) not supported")] public async Task Exists_FalseEmpty() => Assert.Equal("False", await Scalar("SELECT EXISTS(SELECT x FROM UNNEST(CAST([] AS ARRAY<INT64>)) AS x)"));
+	[Fact] public async Task Exists_FalseEmpty() => Assert.Equal("False", await Scalar("SELECT EXISTS(SELECT x FROM UNNEST(CAST([] AS ARRAY<INT64>)) AS x)"));
 	[Fact] public async Task Exists_WithFilter() => Assert.Equal("True", await Scalar("SELECT EXISTS(SELECT x FROM UNNEST([1,2,3]) AS x WHERE x > 2)"));
 	[Fact] public async Task Exists_NoMatchFilter() => Assert.Equal("False", await Scalar("SELECT EXISTS(SELECT x FROM UNNEST([1,2,3]) AS x WHERE x > 10)"));
-	[Fact(Skip = "CAST([] AS ARRAY<INT64>) not supported")] public async Task NotExists_True() => Assert.Equal("True", await Scalar("SELECT NOT EXISTS(SELECT x FROM UNNEST(CAST([] AS ARRAY<INT64>)) AS x)"));
+	[Fact] public async Task NotExists_True() => Assert.Equal("True", await Scalar("SELECT NOT EXISTS(SELECT x FROM UNNEST(CAST([] AS ARRAY<INT64>)) AS x)"));
 	[Fact] public async Task NotExists_False() => Assert.Equal("False", await Scalar("SELECT NOT EXISTS(SELECT 1)"));
 
 	// ---- Nested FROM subqueries ----

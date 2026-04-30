@@ -148,12 +148,12 @@ public class UnnestAndStructTests : IAsyncLifetime
 	[Fact] public async Task ArrayLiteral_Strings() => Assert.Equal("2", await Scalar("SELECT ARRAY_LENGTH(['a', 'b'])"));
 
 	// ---- ARRAY subscript: OFFSET, ORDINAL, SAFE_OFFSET, SAFE_ORDINAL ----
-	[Fact(Skip = "Not yet supported")] public async Task Array_Offset() => Assert.Equal("b", await Scalar("SELECT ['a', 'b', 'c'][OFFSET(1)]"));
-	[Fact(Skip = "Not yet supported")] public async Task Array_Ordinal() => Assert.Equal("a", await Scalar("SELECT ['a', 'b', 'c'][ORDINAL(1)]"));
-	[Fact(Skip = "Not yet supported")] public async Task Array_SafeOffset_InBounds() => Assert.Equal("c", await Scalar("SELECT ['a', 'b', 'c'][SAFE_OFFSET(2)]"));
-	[Fact(Skip = "Not yet supported")] public async Task Array_SafeOffset_OutOfBounds() => Assert.Null(await Scalar("SELECT ['a', 'b', 'c'][SAFE_OFFSET(10)]"));
-	[Fact(Skip = "Not yet supported")] public async Task Array_SafeOrdinal_InBounds() => Assert.Equal("b", await Scalar("SELECT ['a', 'b', 'c'][SAFE_ORDINAL(2)]"));
-	[Fact(Skip = "Not yet supported")] public async Task Array_SafeOrdinal_OutOfBounds() => Assert.Null(await Scalar("SELECT ['a', 'b', 'c'][SAFE_ORDINAL(10)]"));
+	[Fact] public async Task Array_Offset() => Assert.Equal("b", await Scalar("SELECT ['a', 'b', 'c'][OFFSET(1)]"));
+	[Fact] public async Task Array_Ordinal() => Assert.Equal("a", await Scalar("SELECT ['a', 'b', 'c'][ORDINAL(1)]"));
+	[Fact] public async Task Array_SafeOffset_InBounds() => Assert.Equal("c", await Scalar("SELECT ['a', 'b', 'c'][SAFE_OFFSET(2)]"));
+	[Fact] public async Task Array_SafeOffset_OutOfBounds() => Assert.Null(await Scalar("SELECT ['a', 'b', 'c'][SAFE_OFFSET(10)]"));
+	[Fact] public async Task Array_SafeOrdinal_InBounds() => Assert.Equal("b", await Scalar("SELECT ['a', 'b', 'c'][SAFE_ORDINAL(2)]"));
+	[Fact] public async Task Array_SafeOrdinal_OutOfBounds() => Assert.Null(await Scalar("SELECT ['a', 'b', 'c'][SAFE_ORDINAL(10)]"));
 
 	// ---- GENERATE_ARRAY ----
 	[Fact] public async Task GenerateArray_Basic() => Assert.Equal("5", await Scalar("SELECT ARRAY_LENGTH(GENERATE_ARRAY(1, 5))"));

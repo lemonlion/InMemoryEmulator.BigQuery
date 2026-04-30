@@ -45,7 +45,7 @@ public class ArrayFunctionDeepTests : IAsyncLifetime
 	[Fact] public async Task ArrayToString_Comma() => Assert.Equal("a,b,c", await Scalar("SELECT ARRAY_TO_STRING(['a','b','c'], ',')"));
 	[Fact] public async Task ArrayToString_Space() => Assert.Equal("hello world", await Scalar("SELECT ARRAY_TO_STRING(['hello','world'], ' ')"));
 	[Fact] public async Task ArrayToString_Pipe() => Assert.Equal("x|y|z", await Scalar("SELECT ARRAY_TO_STRING(['x','y','z'], '|')"));
-	[Fact(Skip = "Empty array literal CAST([] AS ARRAY<type>) not supported")] public async Task ArrayToString_Empty() => Assert.Equal("", await Scalar("SELECT ARRAY_TO_STRING(CAST([] AS ARRAY<STRING>), ',')"));
+	[Fact] public async Task ArrayToString_Empty() => Assert.Equal("", await Scalar("SELECT ARRAY_TO_STRING(CAST([] AS ARRAY<STRING>), ',')"));
 	[Fact] public async Task ArrayToString_Single() => Assert.Equal("one", await Scalar("SELECT ARRAY_TO_STRING(['one'], ',')"));
 	[Fact] public async Task ArrayToString_Dash() => Assert.Equal("2024-01-15", await Scalar("SELECT ARRAY_TO_STRING(['2024','01','15'], '-')"));
 	[Fact] public async Task ArrayToString_NoSep() => Assert.Equal("abc", await Scalar("SELECT ARRAY_TO_STRING(['a','b','c'], '')"));
@@ -81,7 +81,7 @@ public class ArrayFunctionDeepTests : IAsyncLifetime
 	[Fact] public async Task ArrayConcat_TwoArrays() => Assert.Equal("4", await Scalar("SELECT ARRAY_LENGTH(ARRAY_CONCAT([1,2], [3,4]))"));
 	[Fact] public async Task ArrayConcat_ThreeArrays() => Assert.Equal("6", await Scalar("SELECT ARRAY_LENGTH(ARRAY_CONCAT([1,2], [3,4], [5,6]))"));
 	[Fact] public async Task ArrayConcat_Empty() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(ARRAY_CONCAT([], [1,2,3]))"));
-	[Fact(Skip = "Empty array literal CAST([] AS ARRAY<type>) not supported")] public async Task ArrayConcat_BothEmpty() => Assert.Equal("0", await Scalar("SELECT ARRAY_LENGTH(ARRAY_CONCAT(CAST([] AS ARRAY<INT64>), CAST([] AS ARRAY<INT64>)))"));
+	[Fact] public async Task ArrayConcat_BothEmpty() => Assert.Equal("0", await Scalar("SELECT ARRAY_LENGTH(ARRAY_CONCAT(CAST([] AS ARRAY<INT64>), CAST([] AS ARRAY<INT64>)))"));
 	[Fact] public async Task ArrayConcat_Elements()
 	{
 		var rows = await Column("SELECT x FROM UNNEST(ARRAY_CONCAT([1,2], [3,4])) AS x");

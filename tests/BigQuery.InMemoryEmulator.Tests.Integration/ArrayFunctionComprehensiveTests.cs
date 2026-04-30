@@ -107,8 +107,8 @@ public class ArrayFunctionComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task ArrayOffset_Last() => Assert.Equal("30", await Scalar("SELECT ARRAY_LAST([10, 20, 30])"));
 	[Fact] public async Task ArrayOrdinal_First() => Assert.Equal("10", await Scalar("SELECT ARRAY_FIRST([10, 20, 30])"));
 	[Fact] public async Task ArrayOrdinal_Last() => Assert.Equal("30", await Scalar("SELECT ARRAY_LAST([10, 20, 30])"));
-	[Fact(Skip = "Array subscript SAFE_OFFSET not supported")] public async Task ArraySafeOffset_OutOfBounds() => Assert.Null(await Scalar("SELECT [10, 20, 30][SAFE_OFFSET(5)]"));
-	[Fact(Skip = "Array subscript SAFE_ORDINAL not supported")] public async Task ArraySafeOrdinal_OutOfBounds() => Assert.Null(await Scalar("SELECT [10, 20, 30][SAFE_ORDINAL(5)]"));
+	[Fact] public async Task ArraySafeOffset_OutOfBounds() => Assert.Null(await Scalar("SELECT [10, 20, 30][SAFE_OFFSET(5)]"));
+	[Fact] public async Task ArraySafeOrdinal_OutOfBounds() => Assert.Null(await Scalar("SELECT [10, 20, 30][SAFE_ORDINAL(5)]"));
 
 	// ---- UNNEST in subquery ----
 	[Fact] public async Task Unnest_Basic()

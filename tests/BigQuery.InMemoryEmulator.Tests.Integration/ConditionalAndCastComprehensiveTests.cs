@@ -95,7 +95,7 @@ public class ConditionalAndCastComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task Cast_StringToBool_True() => Assert.Equal("True", await Scalar("SELECT CAST('true' AS BOOL)"));
 	[Fact] public async Task Cast_StringToBool_False() => Assert.Equal("False", await Scalar("SELECT CAST('false' AS BOOL)"));
 	[Fact] public async Task Cast_FloatToString() => Assert.NotNull(await Scalar("SELECT CAST(3.14 AS STRING)"));
-	[Fact(Skip = "BYTES type not fully supported")] public async Task Cast_StringToBytes() => Assert.NotNull(await Scalar("SELECT CAST('hello' AS BYTES)"));
+	[Fact(Skip = "SDK cannot deserialize BYTES type from query result")] public async Task Cast_StringToBytes() => Assert.NotNull(await Scalar("SELECT CAST('hello' AS BYTES)"));
 
 	// ---- SAFE_CAST ----
 	[Fact] public async Task SafeCast_ValidConversion() => Assert.Equal("42", await Scalar("SELECT SAFE_CAST('42' AS INT64)"));

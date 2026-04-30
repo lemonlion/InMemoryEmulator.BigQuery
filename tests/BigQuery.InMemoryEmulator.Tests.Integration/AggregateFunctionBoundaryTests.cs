@@ -119,6 +119,6 @@ public class AggregateFunctionBoundaryTests : IAsyncLifetime
 	[Fact] public async Task MaxWhere_Filter() => Assert.Equal("5", await Scalar("SELECT MAX(x) FROM UNNEST([1,2,3,4,5]) AS x WHERE x > 2"));
 
 	// ---- Aggregate with DISTINCT ----
-	[Fact(Skip = "DISTINCT in aggregate not supported")] public async Task SumDistinct() => Assert.Equal("6", await Scalar("SELECT SUM(DISTINCT x) FROM UNNEST([1,1,2,2,3]) AS x"));
-	[Fact(Skip = "DISTINCT in aggregate not supported")] public async Task AvgDistinct() { var v = double.Parse(await Scalar("SELECT AVG(DISTINCT x) FROM UNNEST([1,1,2,2,3]) AS x") ?? "0"); Assert.Equal(2.0, v); }
+	[Fact] public async Task SumDistinct() => Assert.Equal("6", await Scalar("SELECT SUM(DISTINCT x) FROM UNNEST([1,1,2,2,3]) AS x"));
+	[Fact] public async Task AvgDistinct() { var v = double.Parse(await Scalar("SELECT AVG(DISTINCT x) FROM UNNEST([1,1,2,2,3]) AS x") ?? "0"); Assert.Equal(2.0, v); }
 }

@@ -1016,7 +1016,12 @@ foreach (var item in items)
 if (item.Expr is StarExpr star)
 {
 var expanded = ExpandStar(row, star.TableAlias);
-foreach (var kv in expanded) cells[kv.Key] = kv.Value;
+foreach (var kv in expanded)
+{
+if (star.ExceptColumns is not null && star.ExceptColumns.Contains(kv.Key, StringComparer.OrdinalIgnoreCase)) continue;
+var replaceExpr = star.ReplaceColumns?.Where(r => r.Alias.Equals(kv.Key, StringComparison.OrdinalIgnoreCase)).Select(r => r.Expr).FirstOrDefault();
+cells[kv.Key] = replaceExpr is not null ? Evaluate(replaceExpr, row) : kv.Value;
+}
 }
 else
 {
@@ -1048,7 +1053,12 @@ foreach (var item in stmt.Columns)
 if (item.Expr is StarExpr star)
 {
 var expanded = ExpandStar(row, star.TableAlias);
-foreach (var kv in expanded) cells[kv.Key] = kv.Value;
+foreach (var kv in expanded)
+{
+if (star.ExceptColumns is not null && star.ExceptColumns.Contains(kv.Key, StringComparer.OrdinalIgnoreCase)) continue;
+var replaceExpr = star.ReplaceColumns?.Where(r => r.Alias.Equals(kv.Key, StringComparison.OrdinalIgnoreCase)).Select(r => r.Expr).FirstOrDefault();
+cells[kv.Key] = replaceExpr is not null ? Evaluate(replaceExpr, row) : kv.Value;
+}
 }
 else if (item.Expr is WindowFunction wf)
 {
@@ -1434,6 +1444,7 @@ InExpr inExpr => EvaluateIn(inExpr, row),
 InSubqueryExpr inSub => EvaluateInSubquery(inSub, row),
 LikeExpr like => EvaluateLike(like, row),
 CastExpr cast => EvaluateCast(cast, row),
+ArraySubscriptExpr sub => EvaluateArraySubscript(sub, row),
 CaseExpr caseExpr => EvaluateCase(caseExpr, row),
 ScalarSubquery sub => EvaluateScalarSubquery(sub),
 ExistsExpr exists => EvaluateExists(exists),
@@ -1621,6 +1632,28 @@ var result = System.Text.RegularExpressions.Regex.IsMatch(val, regex, RegexOptio
 return like.IsNot ? !result : result;
 }
 
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_subscript_operator
+//   OFFSET(n) = zero-based, ORDINAL(n) = one-based, SAFE_ variants return null for out-of-bounds.
+private object? EvaluateArraySubscript(ArraySubscriptExpr sub, RowContext row)
+{
+    var arrayVal = Evaluate(sub.Array, row);
+    var indexVal = Evaluate(sub.Index, row);
+    if (arrayVal is not IList<object?> list || indexVal is null) return null;
+    var idx = (int)ToLong(indexVal);
+    var actualIndex = sub.AccessMode switch
+    {
+        "OFFSET" or "SAFE_OFFSET" => idx,
+        "ORDINAL" or "SAFE_ORDINAL" => idx - 1,
+        _ => idx
+    };
+    var isSafe = sub.AccessMode.StartsWith("SAFE_", StringComparison.Ordinal);
+    if (actualIndex < 0 || actualIndex >= list.Count)
+    {
+        if (isSafe) return null;
+        throw new InvalidOperationException("Array index out of bounds");
+    }
+    return list[actualIndex];
+}
 private object? EvaluateCast(CastExpr cast, RowContext row)
 {
 var val = Evaluate(cast.Expr, row);
@@ -6068,6 +6101,7 @@ private object? EvaluateWithAggregates(SqlExpression expr, List<RowContext> grou
                                      (SqlExpression)new LiteralExpr(EvaluateWithAggregates(b.Then, groupRows)))).ToList(),
             ce.Else is not null ? new LiteralExpr(EvaluateWithAggregates(ce.Else, groupRows)) : null), groupRows[0]),
         CastExpr cast => CastValue(EvaluateWithAggregates(cast.Expr, groupRows), cast.TargetType, cast.Safe),
+ArraySubscriptExpr sub => EvaluateArraySubscript(sub, groupRows[0]),
         IsNullExpr isNull => EvaluateWithAggregates(isNull.Expr, groupRows) is null == !isNull.IsNot,
         IsBoolExpr isBool => EvaluateIsBool(isBool, groupRows[0]),
         _ => Evaluate(expr, groupRows[0])
@@ -6256,6 +6290,7 @@ private static bool ContainsWindowFunction(SqlExpression expr)
         UnaryExpr un => ContainsWindowFunction(un.Operand),
         FunctionCall fn => fn.Args.Any(ContainsWindowFunction),
         CastExpr cast => ContainsWindowFunction(cast.Expr),
+ArraySubscriptExpr sub => ContainsWindowFunction(sub.Array) || ContainsWindowFunction(sub.Index),
         CaseExpr caseExpr => (caseExpr.Branches?.Any(b => ContainsWindowFunction(b.When) || ContainsWindowFunction(b.Then)) ?? false) || (caseExpr.Else != null && ContainsWindowFunction(caseExpr.Else)),
         _ => false
     };
@@ -6405,6 +6440,7 @@ UnaryExpr un => ContainsAggregate(un.Operand),
 CaseExpr ce => ce.Branches.Any(w => ContainsAggregate(w.When) || ContainsAggregate(w.Then))
 || (ce.Else is not null && ContainsAggregate(ce.Else)),
 CastExpr c => ContainsAggregate(c.Expr),
+ArraySubscriptExpr sub => ContainsAggregate(sub.Array) || ContainsAggregate(sub.Index),
 _ => false
 };
 }
@@ -6418,6 +6454,7 @@ FunctionCall fnc => fnc.FunctionName,
 AggregateCall agc => agc.FunctionName,
 WindowFunction wf => DeriveColumnName(wf.Function),
 CastExpr c => DeriveColumnName(c.Expr),
+ArraySubscriptExpr _ => "f0_",
 LiteralExpr lit => "f0_",
 _ => "f0_"
 };

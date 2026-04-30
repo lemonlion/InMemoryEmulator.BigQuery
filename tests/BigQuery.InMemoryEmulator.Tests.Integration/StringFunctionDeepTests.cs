@@ -149,8 +149,8 @@ public class StringFunctionDeepTests : IAsyncLifetime
 	[Fact] public async Task Split_Single() => Assert.Equal("1", await Scalar("SELECT ARRAY_LENGTH(SPLIT('hello', ','))"));
 	[Fact] public async Task Split_Empty() => Assert.Equal("1", await Scalar("SELECT ARRAY_LENGTH(SPLIT('', ','))"));
 	[Fact] public async Task Split_Multi() => Assert.Equal("4", await Scalar("SELECT ARRAY_LENGTH(SPLIT('a|b|c|d', '|'))"));
-	[Fact(Skip = "Array subscript [OFFSET] not supported in parser")] public async Task Split_FirstElem() => Assert.Equal("a", await Scalar("SELECT SPLIT('a,b,c', ',')[OFFSET(0)]"));
-	[Fact(Skip = "Array subscript [OFFSET] not supported in parser")] public async Task Split_LastElem() => Assert.Equal("c", await Scalar("SELECT SPLIT('a,b,c', ',')[OFFSET(2)]"));
+	[Fact] public async Task Split_FirstElem() => Assert.Equal("a", await Scalar("SELECT SPLIT('a,b,c', ',')[OFFSET(0)]"));
+	[Fact] public async Task Split_LastElem() => Assert.Equal("c", await Scalar("SELECT SPLIT('a,b,c', ',')[OFFSET(2)]"));
 
 	// ---- STARTS_WITH / ENDS_WITH ----
 	[Fact] public async Task StartsWith_True2() => Assert.Equal("True", await Scalar("SELECT STARTS_WITH('bigquery', 'big')"));

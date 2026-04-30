@@ -82,7 +82,7 @@ internal record LiteralExpr(object? Value) : SqlExpression;
 internal record ParameterRef(string Name) : SqlExpression;
 
 /// <summary>SELECT * or alias.*</summary>
-internal record StarExpr(string? TableAlias) : SqlExpression;
+internal record StarExpr(string? TableAlias, IReadOnlyList<string>? ExceptColumns = null, IReadOnlyList<(SqlExpression Expr, string Alias)>? ReplaceColumns = null) : SqlExpression;
 
 /// <summary>A binary operation.</summary>
 internal record BinaryExpr(SqlExpression Left, BinaryOp Op, SqlExpression Right) : SqlExpression;
@@ -94,6 +94,10 @@ internal record UnaryExpr(UnaryOp Op, SqlExpression Operand) : SqlExpression;
 internal record FunctionCall(string FunctionName, IReadOnlyList<SqlExpression> Args) : SqlExpression;
 
 /// <summary>An aggregate call: COUNT(x), SUM(x), etc.</summary>
+/// <summary>Array subscript: expr[OFFSET(n)], expr[ORDINAL(n)], expr[SAFE_OFFSET(n)], expr[SAFE_ORDINAL(n)].</summary>
+/// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_subscript_operator
+internal record ArraySubscriptExpr(SqlExpression Array, string AccessMode, SqlExpression Index) : SqlExpression;
+
 internal record AggregateCall(string FunctionName, SqlExpression? Arg, bool Distinct, IReadOnlyList<SqlExpression>? ExtraArgs = null, IReadOnlyList<OrderByItem>? AggOrderBy = null) : SqlExpression;
 
 /// <summary>IS [NOT] NULL check.</summary>

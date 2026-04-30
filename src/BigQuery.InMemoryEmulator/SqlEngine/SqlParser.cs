@@ -264,7 +264,23 @@ internal static class SqlParser
 	// --- Star expression ---
 
 	private static readonly TokenListParser<SqlToken, SqlExpression> Star =
-		Token.EqualTo(SqlToken.Star).Select(_ => (SqlExpression)new StarExpr(null));
+		Token.EqualTo(SqlToken.Star).IgnoreThen(Token.EqualTo(SqlToken.Except))
+                        .IgnoreThen(Token.EqualTo(SqlToken.LParen))
+                        .IgnoreThen(Identifier.ManyDelimitedBy(Token.EqualTo(SqlToken.Comma)))
+                        .Then(cols => Token.EqualTo(SqlToken.RParen)
+                                .Select(x => (SqlExpression)new StarExpr(null, cols.ToList())))
+                        .Try()
+                .Or(Token.EqualTo(SqlToken.Star).IgnoreThen(Token.EqualTo(SqlToken.Replace))
+                        .IgnoreThen(Token.EqualTo(SqlToken.LParen))
+                        .IgnoreThen(
+                                SP.Ref(() => Expression!).Then(expr =>
+                                        Token.EqualTo(SqlToken.As).IgnoreThen(Identifier)
+                                                .Select(name => (Expr: expr, Alias: name)))
+                                .ManyDelimitedBy(Token.EqualTo(SqlToken.Comma)))
+                        .Then(items => Token.EqualTo(SqlToken.RParen)
+                                .Select(x => (SqlExpression)new StarExpr(null, null, items.ToList())))
+                        .Try())
+                .Or(Token.EqualTo(SqlToken.Star).Select(x => (SqlExpression)new StarExpr(null)));
 
 	// --- Column reference: identifier or alias.identifier ---
 
@@ -346,7 +362,28 @@ internal static class SqlParser
 			.Then(expr => Token.EqualTo(SqlToken.RParen).Select(_ =>
 				(SqlExpression)new AggregateCall("COUNT", expr, true)));
 
-	// --- CAST(expr AS type) ---
+	        // Custom parser for CAST target types (handles parameterized types like ARRAY<STRING>, STRUCT<x INT64>)
+        private static readonly TokenListParser<SqlToken, string> CastTypeName =
+            input =>
+            {
+                var sb = new System.Text.StringBuilder();
+                var position = input;
+                int angleDepth = 0;
+                while (!position.IsAtEnd)
+                {
+                    var token = position.ConsumeToken();
+                    if (!token.HasValue) break;
+                    if (token.Value.Kind == SqlToken.RParen && angleDepth == 0)
+                        return TokenListParserResult.Value(sb.ToString().Trim(), input, position);
+                    if (token.Value.Kind == SqlToken.Lt) angleDepth++;
+                    if (token.Value.Kind == SqlToken.Gt) angleDepth--;
+                    sb.Append(token.Value.ToStringValue());
+                    position = token.Remainder;
+                }
+                return TokenListParserResult.Empty<SqlToken, string>(input);
+            };
+
+        // --- CAST(expr AS type) ---
 	private static readonly TokenListParser<SqlToken, SqlExpression> CastExprParser =
 		Token.EqualTo(SqlToken.Cast)
 			.Or(Token.EqualTo(SqlToken.SafeCast))
@@ -354,7 +391,7 @@ internal static class SqlParser
 				Token.EqualTo(SqlToken.LParen)
 					.IgnoreThen(SP.Ref(() => Expression!))
 					.Then(expr => Token.EqualTo(SqlToken.As)
-						.IgnoreThen(IdentifierOrKeyword)
+						.IgnoreThen(CastTypeName)
 						.Then(type => Token.EqualTo(SqlToken.RParen).Select(_ =>
 							(SqlExpression)new CastExpr(expr, type.ToUpperInvariant(),
 								tok.ToStringValue().Equals("SAFE_CAST", StringComparison.OrdinalIgnoreCase))
@@ -504,8 +541,24 @@ internal static class SqlParser
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls
 	// --- OVER (window function) suffix ---
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls
+// --- Array subscript: expr[OFFSET(n)] / expr[ORDINAL(n)] / expr[SAFE_OFFSET(n)] / expr[SAFE_ORDINAL(n)] ---
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_subscript_operator
+private static readonly TokenListParser<SqlToken, SqlExpression> SubscriptSuffix =
+Atom.Then(expr =>
+Token.EqualTo(SqlToken.LBracket)
+.IgnoreThen(FunctionNameOrIdentifier.Or(Token.EqualTo(SqlToken.Offset).Select(t => t.ToStringValue())))
+.Then(mode =>
+Token.EqualTo(SqlToken.LParen)
+.IgnoreThen(SP.Ref(() => Expression!))
+.Then(idx => Token.EqualTo(SqlToken.RParen)
+.IgnoreThen(Token.EqualTo(SqlToken.RBracket))
+.Select(_ => (SqlExpression)new ArraySubscriptExpr(expr, mode.ToUpperInvariant(), idx))
+)
+).Try()
+.Or(Constant(expr))
+);
 	private static readonly TokenListParser<SqlToken, SqlExpression> OverSuffix =
-		Atom.Then(expr =>
+		SubscriptSuffix.Then(expr =>
 			Token.EqualTo(SqlToken.Over).IgnoreThen(Token.EqualTo(SqlToken.LParen)).IgnoreThen(
 				// PARTITION BY
 				Token.EqualTo(SqlToken.Partition).IgnoreThen(Token.EqualTo(SqlToken.By))
