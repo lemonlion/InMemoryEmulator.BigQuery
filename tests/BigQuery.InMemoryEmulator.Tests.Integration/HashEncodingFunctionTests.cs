@@ -36,12 +36,12 @@ public class HashEncodingFunctionTests : IAsyncLifetime
 	[Fact] public async Task Md5_EmptyString() => Assert.NotNull(await Scalar("SELECT MD5(b'')"));
 	[Fact] public async Task Md5_HelloWorld() => Assert.NotNull(await Scalar("SELECT MD5(b'Hello, World!')"));
 	[Fact] public async Task Md5_Null_ReturnsNull() => Assert.Null(await Scalar("SELECT MD5(NULL)"));
-	[Fact(Skip = "Not yet supported")] public async Task Md5_KnownHash() { var v = await Scalar("SELECT TO_HEX(MD5(b'abc'))"); Assert.Equal("900150983cd24fb0d6963f7d28e17f72", v); }
+	[Fact] public async Task Md5_KnownHash() { var v = await Scalar("SELECT TO_HEX(MD5(b'abc'))"); Assert.Equal("900150983cd24fb0d6963f7d28e17f72", v); }
 
 	// ---- SHA1 ----
 	[Fact] public async Task Sha1_Basic() => Assert.NotNull(await Scalar("SELECT SHA1(b'test')"));
 	[Fact] public async Task Sha1_Null_ReturnsNull() => Assert.Null(await Scalar("SELECT SHA1(NULL)"));
-	[Fact(Skip = "Not yet supported")] public async Task Sha1_KnownHash() { var v = await Scalar("SELECT TO_HEX(SHA1(b'abc'))"); Assert.Equal("a9993e364706816aba3e25717850c26c9cd0d89d", v); }
+	[Fact] public async Task Sha1_KnownHash() { var v = await Scalar("SELECT TO_HEX(SHA1(b'abc'))"); Assert.Equal("a9993e364706816aba3e25717850c26c9cd0d89d", v); }
 
 	// ---- SHA256 ----
 	[Fact] public async Task Sha256_Basic() => Assert.NotNull(await Scalar("SELECT SHA256(b'test')"));
@@ -60,12 +60,12 @@ public class HashEncodingFunctionTests : IAsyncLifetime
 	[Fact] public async Task FarmFingerprint_DifferentInputs() { var v1 = await Scalar("SELECT FARM_FINGERPRINT('a')"); var v2 = await Scalar("SELECT FARM_FINGERPRINT('b')"); Assert.NotEqual(v1, v2); }
 
 	// ---- TO_HEX / FROM_HEX ----
-	[Fact(Skip = "Needs investigation")] public async Task ToHex_Basic() => Assert.Equal("48656c6c6f", await Scalar("SELECT TO_HEX(b'Hello')"));
+	[Fact] public async Task ToHex_Basic() => Assert.Equal("48656c6c6f", await Scalar("SELECT TO_HEX(b'Hello')"));
 	[Fact] public async Task FromHex_Basic() => Assert.NotNull(await Scalar("SELECT FROM_HEX('48656c6c6f')"));
 	[Fact] public async Task ToHex_RoundTrip() => Assert.Equal("48656c6c6f", await Scalar("SELECT TO_HEX(FROM_HEX('48656c6c6f'))"));
 	[Fact] public async Task ToHex_Null() => Assert.Null(await Scalar("SELECT TO_HEX(NULL)"));
 	[Fact] public async Task FromHex_Null() => Assert.Null(await Scalar("SELECT FROM_HEX(NULL)"));
-	[Fact(Skip = "Needs investigation")] public async Task ToHex_EmptyBytes() => Assert.Equal("", await Scalar("SELECT TO_HEX(b'')"));
+	[Fact] public async Task ToHex_EmptyBytes() => Assert.Equal("", await Scalar("SELECT TO_HEX(b'')"));
 
 	// ---- TO_BASE64 / FROM_BASE64 ----
 	[Fact] public async Task ToBase64_Basic() => Assert.Equal("SGVsbG8=", await Scalar("SELECT TO_BASE64(b'Hello')"));

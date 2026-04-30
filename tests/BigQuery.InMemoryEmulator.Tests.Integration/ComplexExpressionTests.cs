@@ -99,7 +99,7 @@ SELECT SUM(CASE WHEN x > 3 THEN x * 2 ELSE x END) FROM UNNEST([1,2,3,4,5]) AS x"
 	[Fact] public async Task DeepNest5() => Assert.Equal("42", await Scalar("SELECT CAST(ROUND(SQRT(POW(42, 2))) AS INT64)"));
 
 	// ---- Multi-column expressions ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task MultiColExpr()
 	{
 		var client = await _fixture.GetClientAsync();

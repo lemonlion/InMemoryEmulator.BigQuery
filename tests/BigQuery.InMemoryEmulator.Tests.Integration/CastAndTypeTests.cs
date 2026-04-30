@@ -22,7 +22,13 @@ public class CastAndTypeTests : IAsyncLifetime
 		var client = await _fixture.GetClientAsync();
 		var result = await client.ExecuteQueryAsync(sql, parameters: null);
 		var rows = result.ToList();
-		return rows.Count > 0 ? rows[0][0]?.ToString() : null;
+		if (rows.Count == 0) return null;
+		var val = rows[0][0];
+		return val switch
+		{
+			DateTime dt => dt.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+			_ => val?.ToString()
+		};
 	}
 
 	// ---- CAST to INT64 ----
@@ -55,14 +61,14 @@ public class CastAndTypeTests : IAsyncLifetime
 	[Fact] public async Task Cast_StrToBool_False() => Assert.Equal("False", await Scalar("SELECT CAST('false' AS BOOL)"));
 
 	// ---- CAST to DATE ----
-	[Fact(Skip = "Emulator limitation")] public async Task Cast_StrToDate()
+	[Fact] public async Task Cast_StrToDate()
 	{
 		var v = await Scalar("SELECT CAST('2024-01-15' AS DATE)");
 		Assert.NotNull(v);
 		Assert.Contains("2024-01-15", v!);
 	}
 
-	[Fact(Skip = "Emulator limitation")] public async Task Cast_TimestampToDate()
+	[Fact] public async Task Cast_TimestampToDate()
 	{
 		var v = await Scalar("SELECT CAST(TIMESTAMP '2024-01-15T10:30:00+00:00' AS DATE)");
 		Assert.NotNull(v);
@@ -81,7 +87,7 @@ public class CastAndTypeTests : IAsyncLifetime
 	[Fact] public async Task SafeCast_FloatInvalid() => Assert.Null(await Scalar("SELECT SAFE_CAST('xyz' AS FLOAT64)"));
 	[Fact] public async Task SafeCast_BoolValid() => Assert.Equal("True", await Scalar("SELECT SAFE_CAST('true' AS BOOL)"));
 	[Fact] public async Task SafeCast_BoolInvalid() => Assert.Null(await Scalar("SELECT SAFE_CAST('maybe' AS BOOL)"));
-	[Fact(Skip = "Emulator limitation")] public async Task SafeCast_DateValid()
+	[Fact] public async Task SafeCast_DateValid()
 	{
 		var v = await Scalar("SELECT SAFE_CAST('2024-01-15' AS DATE)");
 		Assert.NotNull(v);

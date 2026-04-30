@@ -104,7 +104,7 @@ public class WindowFunctionComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- NTILE ----
-	[Fact(Skip = "Not yet supported")] public async Task Ntile_Basic()
+	[Fact] public async Task Ntile_Basic()
 	{
 		var rows = await Query($"SELECT id, NTILE(3) OVER (ORDER BY id) AS tile FROM `{_datasetId}.sales` ORDER BY id");
 		Assert.Equal(6, rows.Count);
@@ -114,12 +114,12 @@ public class WindowFunctionComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- PERCENT_RANK / CUME_DIST ----
-	[Fact(Skip = "Not yet supported")] public async Task PercentRank_Basic()
+	[Fact] public async Task PercentRank_Basic()
 	{
 		var rows = await Query($"SELECT id, PERCENT_RANK() OVER (ORDER BY amount) AS pr FROM `{_datasetId}.sales` ORDER BY id");
-		Assert.Equal("0.0", rows[0]["pr"]?.ToString()); // first always 0
+		Assert.Equal(0.0, double.Parse(rows[0]["pr"]?.ToString() ?? "0")); // first always 0
 	}
-	[Fact(Skip = "Not yet supported")] public async Task CumeDist_Basic()
+	[Fact] public async Task CumeDist_Basic()
 	{
 		var rows = await Query($"SELECT id, CUME_DIST() OVER (ORDER BY amount) AS cd FROM `{_datasetId}.sales` ORDER BY amount");
 		var lastCd = double.Parse(rows[5]["cd"]?.ToString() ?? "0");
@@ -224,19 +224,19 @@ public class WindowFunctionComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- QUALIFY ----
-	[Fact(Skip = "Not yet supported")] public async Task Qualify_FilterByRowNumber()
+	[Fact] public async Task Qualify_FilterByRowNumber()
 	{
 		var rows = await Query($"SELECT id, dept, amount FROM `{_datasetId}.sales` QUALIFY ROW_NUMBER() OVER (PARTITION BY dept ORDER BY amount DESC) = 1 ORDER BY dept");
 		Assert.Equal(2, rows.Count);
 	}
 
 	// ---- PERCENTILE_CONT / PERCENTILE_DISC ----
-	[Fact(Skip = "Not yet supported")] public async Task PercentileCont_Median()
+	[Fact] public async Task PercentileCont_Median()
 	{
 		var v = await Scalar($"SELECT PERCENTILE_CONT(amount, 0.5) OVER () FROM `{_datasetId}.sales` LIMIT 1");
 		Assert.NotNull(v);
 	}
-	[Fact(Skip = "Not yet supported")] public async Task PercentileDisc_Median()
+	[Fact] public async Task PercentileDisc_Median()
 	{
 		var v = await Scalar($"SELECT PERCENTILE_DISC(amount, 0.5) OVER () FROM `{_datasetId}.sales` LIMIT 1");
 		Assert.NotNull(v);
@@ -253,7 +253,7 @@ public class WindowFunctionComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- Named window ----
-	[Fact(Skip = "Not yet supported")] public async Task NamedWindow()
+	[Fact(Skip = "WINDOW w AS (...) named window syntax not yet supported")] public async Task NamedWindow()
 	{
 		var rows = await Query($"SELECT id, ROW_NUMBER() OVER w AS rn FROM `{_datasetId}.sales` WINDOW w AS (ORDER BY id) ORDER BY id");
 		Assert.Equal("1", rows[0]["rn"]?.ToString());

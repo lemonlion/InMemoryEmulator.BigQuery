@@ -34,7 +34,7 @@ public class AggregateFunctionDeepTests : IAsyncLifetime
 	}
 
 	// ---- COUNT ----
-	[Fact(Skip = "Emulator limitation")] public async Task Count_Empty() => Assert.Equal("0", await Scalar("SELECT COUNT(*) FROM UNNEST(CAST([] AS ARRAY<INT64>))"));
+	[Fact(Skip = "UNNEST in FROM without parent table not supported in parser")] public async Task Count_Empty() => Assert.Equal("0", await Scalar("SELECT COUNT(*) FROM UNNEST(CAST([] AS ARRAY<INT64>))"));
 	[Fact] public async Task Count_One() => Assert.Equal("1", await Scalar("SELECT COUNT(*) FROM UNNEST([1]) AS x"));
 	[Fact] public async Task Count_Three() => Assert.Equal("3", await Scalar("SELECT COUNT(*) FROM UNNEST([1,2,3]) AS x"));
 	[Fact] public async Task Count_Five() => Assert.Equal("5", await Scalar("SELECT COUNT(*) FROM UNNEST([1,2,3,4,5]) AS x"));

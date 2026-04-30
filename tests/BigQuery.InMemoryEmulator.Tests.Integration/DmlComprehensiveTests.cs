@@ -102,7 +102,7 @@ public class DmlComprehensiveTests : IAsyncLifetime
 		Assert.Equal("1", rows[0][0]?.ToString());
 	}
 
-	[Fact(Skip = "Needs investigation")] public async Task Insert_Select_WithTransformation()
+	[Fact] public async Task Insert_Select_WithTransformation()
 	{
 		await CreateSimpleTable("t5a");
 		await CreateSimpleTable("t5b");
@@ -111,7 +111,7 @@ public class DmlComprehensiveTests : IAsyncLifetime
 		var rows = await Query($"SELECT * FROM `{_datasetId}.t5b`");
 		Assert.Equal("11", rows[0]["id"]?.ToString());
 		Assert.Equal("HELLO", rows[0]["name"]?.ToString());
-		Assert.Equal("10.0", rows[0]["value"]?.ToString());
+		Assert.Equal(10.0, double.Parse(rows[0]["value"]?.ToString() ?? "0"));
 	}
 
 	[Fact] public async Task Insert_DuplicateRows()
@@ -132,14 +132,14 @@ public class DmlComprehensiveTests : IAsyncLifetime
 		Assert.Equal("new", await Scalar($"SELECT name FROM `{_datasetId}.t7` WHERE id = 1"));
 	}
 
-	[Fact(Skip = "Needs investigation")] public async Task Update_MultipleColumns()
+	[Fact] public async Task Update_MultipleColumns()
 	{
 		await CreateSimpleTable("t8");
 		await Exec($"INSERT INTO `{_datasetId}.t8` (id, name, value) VALUES (1, 'old', 1.0)");
 		await Exec($"UPDATE `{_datasetId}.t8` SET name = 'new', value = 99.0 WHERE id = 1");
 		var rows = await Query($"SELECT name, value FROM `{_datasetId}.t8` WHERE id = 1");
 		Assert.Equal("new", rows[0]["name"]?.ToString());
-		Assert.Equal("99.0", rows[0]["value"]?.ToString());
+		Assert.Equal(99.0, double.Parse(rows[0]["value"]?.ToString() ?? "0"));
 	}
 
 	[Fact] public async Task Update_NoMatchingRows()
@@ -159,14 +159,14 @@ public class DmlComprehensiveTests : IAsyncLifetime
 		Assert.All(rows, r => Assert.True(r["value"]?.ToString() == "0" || r["value"]?.ToString() == "0.0"));
 	}
 
-	[Fact(Skip = "Needs investigation")] public async Task Update_WithExpression()
+	[Fact] public async Task Update_WithExpression()
 	{
 		await CreateSimpleTable("t11");
 		await Exec($"INSERT INTO `{_datasetId}.t11` (id, name, value) VALUES (1, 'hello', 10.0)");
 		await Exec($"UPDATE `{_datasetId}.t11` SET value = value * 2, name = UPPER(name) WHERE id = 1");
 		var rows = await Query($"SELECT name, value FROM `{_datasetId}.t11` WHERE id = 1");
 		Assert.Equal("HELLO", rows[0]["name"]?.ToString());
-		Assert.Equal("20.0", rows[0]["value"]?.ToString());
+		Assert.Equal(20.0, double.Parse(rows[0]["value"]?.ToString() ?? "0"));
 	}
 
 	// ---- DELETE ----
@@ -236,7 +236,7 @@ public class DmlComprehensiveTests : IAsyncLifetime
 		Assert.Equal("1", await Scalar($"SELECT COUNT(*) FROM `{_datasetId}.target2`"));
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task Merge_ConditionalMatch()
+	[Fact] public async Task Merge_ConditionalMatch()
 	{
 		await CreateSimpleTable("target3");
 		await CreateSimpleTable("source3");
@@ -250,7 +250,7 @@ public class DmlComprehensiveTests : IAsyncLifetime
 		");
 		var rows = await Query($"SELECT * FROM `{_datasetId}.target3` ORDER BY id");
 		Assert.Equal("X", rows[0]["name"]?.ToString());
-		Assert.Equal("200.0", rows[1]["value"]?.ToString());
+		Assert.Equal(200.0, double.Parse(rows[1]["value"]?.ToString() ?? "0"));
 	}
 
 	// ---- INSERT with expression computations ----
@@ -264,13 +264,13 @@ public class DmlComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- UPDATE with subquery ----
-	[Fact(Skip = "Not yet supported")] public async Task Update_WithSubquery()
+	[Fact] public async Task Update_WithSubquery()
 	{
 		await CreateSimpleTable("t17a");
 		await CreateSimpleTable("t17b");
 		await Exec($"INSERT INTO `{_datasetId}.t17a` (id, name, value) VALUES (1, 'A', 0.0)");
 		await Exec($"INSERT INTO `{_datasetId}.t17b` (id, name, value) VALUES (1, 'B', 99.0)");
 		await Exec($"UPDATE `{_datasetId}.t17a` SET value = (SELECT MAX(value) FROM `{_datasetId}.t17b`) WHERE id = 1");
-		Assert.Equal("99.0", await Scalar($"SELECT value FROM `{_datasetId}.t17a` WHERE id = 1"));
+		Assert.Equal(99.0, double.Parse(await Scalar($"SELECT value FROM `{_datasetId}.t17a` WHERE id = 1") ?? "0"));
 	}
 }

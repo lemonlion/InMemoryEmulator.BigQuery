@@ -166,7 +166,7 @@ SELECT COUNT(*) FROM nums WHERE MOD(x, 5) = 0");
 	}
 
 	// ---- Subquery in WHERE clause ----
-	[Fact(Skip = "Scalar subquery comparison differs")]
+	[Fact(Skip = "Correlated subquery comparison not supported")]
 	public async Task WhereSubquery_GT_ScalarSub()
 	{
 		var v = await Scalar(@"
@@ -185,7 +185,7 @@ WHERE x = (SELECT MAX(y) FROM UNNEST(GENERATE_ARRAY(1, 10)) AS y)");
 	}
 
 	// ---- Correlated subquery ----
-	[Fact(Skip = "Correlated subquery not fully supported")]
+	[Fact(Skip = "Correlated EXISTS subquery not supported")]
 	public async Task CorrelatedExists()
 	{
 		var v = await Scalar(@"

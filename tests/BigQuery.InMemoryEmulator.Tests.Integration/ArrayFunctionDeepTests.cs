@@ -45,7 +45,7 @@ public class ArrayFunctionDeepTests : IAsyncLifetime
 	[Fact] public async Task ArrayToString_Comma() => Assert.Equal("a,b,c", await Scalar("SELECT ARRAY_TO_STRING(['a','b','c'], ',')"));
 	[Fact] public async Task ArrayToString_Space() => Assert.Equal("hello world", await Scalar("SELECT ARRAY_TO_STRING(['hello','world'], ' ')"));
 	[Fact] public async Task ArrayToString_Pipe() => Assert.Equal("x|y|z", await Scalar("SELECT ARRAY_TO_STRING(['x','y','z'], '|')"));
-	[Fact(Skip = "Emulator limitation")] public async Task ArrayToString_Empty() => Assert.Equal("", await Scalar("SELECT ARRAY_TO_STRING(CAST([] AS ARRAY<STRING>), ',')"));
+	[Fact(Skip = "Empty array literal CAST([] AS ARRAY<type>) not supported")] public async Task ArrayToString_Empty() => Assert.Equal("", await Scalar("SELECT ARRAY_TO_STRING(CAST([] AS ARRAY<STRING>), ',')"));
 	[Fact] public async Task ArrayToString_Single() => Assert.Equal("one", await Scalar("SELECT ARRAY_TO_STRING(['one'], ',')"));
 	[Fact] public async Task ArrayToString_Dash() => Assert.Equal("2024-01-15", await Scalar("SELECT ARRAY_TO_STRING(['2024','01','15'], '-')"));
 	[Fact] public async Task ArrayToString_NoSep() => Assert.Equal("abc", await Scalar("SELECT ARRAY_TO_STRING(['a','b','c'], '')"));
@@ -81,7 +81,7 @@ public class ArrayFunctionDeepTests : IAsyncLifetime
 	[Fact] public async Task ArrayConcat_TwoArrays() => Assert.Equal("4", await Scalar("SELECT ARRAY_LENGTH(ARRAY_CONCAT([1,2], [3,4]))"));
 	[Fact] public async Task ArrayConcat_ThreeArrays() => Assert.Equal("6", await Scalar("SELECT ARRAY_LENGTH(ARRAY_CONCAT([1,2], [3,4], [5,6]))"));
 	[Fact] public async Task ArrayConcat_Empty() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(ARRAY_CONCAT([], [1,2,3]))"));
-	[Fact(Skip = "Emulator limitation")] public async Task ArrayConcat_BothEmpty() => Assert.Equal("0", await Scalar("SELECT ARRAY_LENGTH(ARRAY_CONCAT(CAST([] AS ARRAY<INT64>), CAST([] AS ARRAY<INT64>)))"));
+	[Fact(Skip = "Empty array literal CAST([] AS ARRAY<type>) not supported")] public async Task ArrayConcat_BothEmpty() => Assert.Equal("0", await Scalar("SELECT ARRAY_LENGTH(ARRAY_CONCAT(CAST([] AS ARRAY<INT64>), CAST([] AS ARRAY<INT64>)))"));
 	[Fact] public async Task ArrayConcat_Elements()
 	{
 		var rows = await Column("SELECT x FROM UNNEST(ARRAY_CONCAT([1,2], [3,4])) AS x");
@@ -140,7 +140,7 @@ public class ArrayFunctionDeepTests : IAsyncLifetime
 		Assert.Equal("5", rows[1]);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact(Skip = "UNNEST WITH OFFSET not supported")]
 	public async Task Unnest_WithOffset()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -156,8 +156,8 @@ public class ArrayFunctionDeepTests : IAsyncLifetime
 	}
 
 	// ---- ARRAY in subquery ----
-	[Fact(Skip = "ARRAY subquery format differs")] public async Task Array_Subquery() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1,2,3]) AS x))"));
-	[Fact(Skip = "ARRAY subquery format differs")] public async Task Array_SubqueryFiltered() => Assert.Equal("2", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1,2,3,4,5]) AS x WHERE x > 3))"));
+	[Fact(Skip = "ARRAY subquery not supported")] public async Task Array_Subquery() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1,2,3]) AS x))"));
+	[Fact(Skip = "ARRAY subquery not supported")] public async Task Array_SubqueryFiltered() => Assert.Equal("2", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1,2,3,4,5]) AS x WHERE x > 3))"));
 
 	// ---- ARRAY_AGG with UNNEST ----
 	[Fact]

@@ -187,7 +187,7 @@ public class JoinComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- JOIN with GROUP BY ----
-	[Fact(Skip = "Needs investigation")] public async Task JoinWithGroupBy()
+	[Fact] public async Task JoinWithGroupBy()
 	{
 		var rows = await Query($@"
 			SELECT u.name, SUM(o.amount) AS total
@@ -198,7 +198,7 @@ public class JoinComprehensiveTests : IAsyncLifetime
 		");
 		Assert.Equal(2, rows.Count);
 		Assert.Equal("Alice", rows[0]["name"]?.ToString());
-		Assert.Equal("80.0", rows[0]["total"]?.ToString());
+		Assert.Equal(80.0, double.Parse(rows[0]["total"]?.ToString()!), 0.01);
 	}
 
 	// ---- JOIN with WHERE ----
@@ -209,7 +209,7 @@ public class JoinComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- JOIN with HAVING ----
-	[Fact(Skip = "Not yet supported")] public async Task JoinWithHaving()
+	[Fact] public async Task JoinWithHaving()
 	{
 		var rows = await Query($@"
 			SELECT u.name, COUNT(*) AS order_count
@@ -254,7 +254,7 @@ public class JoinComprehensiveTests : IAsyncLifetime
 		Assert.Equal("1", rows[0]["val"]?.ToString());
 	}
 
-	[Fact(Skip = "Needs investigation")] public async Task UnnestCrossJoin()
+	[Fact] public async Task UnnestCrossJoin()
 	{
 		var rows = await Query("SELECT n, v FROM (SELECT 'test' AS n), UNNEST([10, 20, 30]) AS v ORDER BY v");
 		Assert.Equal(3, rows.Count);

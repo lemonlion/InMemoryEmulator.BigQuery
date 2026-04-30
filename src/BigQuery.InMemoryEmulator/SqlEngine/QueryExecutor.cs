@@ -1514,7 +1514,9 @@ BinaryOp.Mul => ArithmeticOp(left, right, (a, b) => a * b, (a, b) => a * b),
 BinaryOp.Div => ArithmeticOp(left, right, (a, b) => b == 0 ? throw new DivideByZeroException() : a / b,
 (a, b) => b == 0.0 ? throw new DivideByZeroException() : a / b),
 BinaryOp.Mod => ArithmeticOp(left, right, (a, b) => a % b, (a, b) => a % b),
-BinaryOp.Concat => (left?.ToString() ?? "") + (right?.ToString() ?? ""),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#concatenation_operator
+//   "If one of the operands is NULL, the result is NULL."
+BinaryOp.Concat => left is null || right is null ? null : left.ToString() + right.ToString(),
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#bitwise_operators
 BinaryOp.BitAnd => BitwiseOp(left, right, (a, b) => a & b),
 BinaryOp.BitOr => BitwiseOp(left, right, (a, b) => a | b),
@@ -1588,8 +1590,14 @@ var val = Evaluate(inExpr.Expr, row);
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
 //   "Returns NULL if search_value is NULL."
 if (val is null) return null;
-var found = inExpr.Values.Any(v => Equals(val, Evaluate(v, row)));
-return found;
+bool hasNull = false;
+foreach (var v in inExpr.Values)
+{
+	var item = Evaluate(v, row);
+	if (item is null) { hasNull = true; continue; }
+	if (Equals(val, item)) return true;
+}
+return hasNull ? null : false;
 }
 
 private object? EvaluateInSubquery(InSubqueryExpr inSub, RowContext row)
@@ -1646,7 +1654,9 @@ string s when s.Equals("nan", StringComparison.OrdinalIgnoreCase) => double.NaN,
 string s => double.Parse(s, CultureInfo.InvariantCulture),
 _ => Convert.ToDouble(val, CultureInfo.InvariantCulture)
 },
-"STRING" => ConvertToString(val),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_string
+//   "CAST(bytes AS STRING) decodes using UTF-8 encoding."
+"STRING" => val is byte[] bytesVal ? System.Text.Encoding.UTF8.GetString(bytesVal) : ConvertToString(val),
 "BOOL" or "BOOLEAN" => val switch
 {
 bool b => b,
@@ -1802,7 +1812,9 @@ return name switch
 "REVERSE" => Evaluate(args[0], row)?.ToString() is string s ? new string(s.Reverse().ToArray()) : null,
 "REPLACE" => EvaluateReplace(args, row),
 "SUBSTR" or "SUBSTRING" => EvaluateSubstr(args, row),
-"CONCAT" => string.Concat(args.Select(a => Evaluate(a, row)?.ToString() ?? "")),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#concat
+//   "If any input argument is NULL, CONCAT returns NULL."
+"CONCAT" => EvaluateConcatString(args, row),
 "STARTS_WITH" => Evaluate(args[0], row)?.ToString()?.StartsWith(Evaluate(args[1], row)?.ToString() ?? "", StringComparison.Ordinal),
 "ENDS_WITH" => Evaluate(args[0], row)?.ToString()?.EndsWith(Evaluate(args[1], row)?.ToString() ?? "", StringComparison.Ordinal),
 "CONTAINS_SUBSTR" => Evaluate(args[0], row)?.ToString()?.Contains(Evaluate(args[1], row)?.ToString() ?? "", StringComparison.OrdinalIgnoreCase),
@@ -2194,6 +2206,15 @@ or "ST_BUFFER" or "ST_SIMPLIFY" or "ST_DUMP"
 
 _ => EvaluateUdf(name, args, row)
 };
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#concat
+//   "If any input argument is NULL, CONCAT returns NULL."
+private object? EvaluateConcatString(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var parts = args.Select(a => Evaluate(a, row)).ToList();
+if (parts.Any(p => p is null)) return null;
+return string.Concat(parts.Select(p => p!.ToString()));
 }
 
 private object? EvaluateReplace(IReadOnlyList<SqlExpression> args, RowContext row)
@@ -3529,6 +3550,8 @@ private object? EvaluateToHex(IReadOnlyList<SqlExpression> args, RowContext row)
 {
 var val = Evaluate(args[0], row);
 if (val is byte[] bytes) return Convert.ToHexString(bytes).ToLowerInvariant();
+// Byte literals b'...' are normalized to strings by NormalizeSql; treat as UTF-8 bytes.
+if (val is string s) return Convert.ToHexString(System.Text.Encoding.UTF8.GetBytes(s)).ToLowerInvariant();
 return null;
 }
 

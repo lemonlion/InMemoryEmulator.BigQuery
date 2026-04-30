@@ -22,7 +22,13 @@ public class CastAndConversionTests : IAsyncLifetime
 		var client = await _fixture.GetClientAsync();
 		var result = await client.ExecuteQueryAsync(sql, parameters: null);
 		var rows = result.ToList();
-		return rows.Count > 0 ? rows[0][0]?.ToString() : null;
+		if (rows.Count == 0) return null;
+		var val = rows[0][0];
+		return val switch
+		{
+			DateTime dt => dt.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+			_ => val?.ToString()
+		};
 	}
 
 	// ---- INT64 casts ----
@@ -57,7 +63,7 @@ public class CastAndConversionTests : IAsyncLifetime
 	[Fact] public async Task Cast_NullToBool() => Assert.Null(await Scalar("SELECT CAST(NULL AS BOOL)"));
 
 	// ---- DATE casts ----
-	[Fact(Skip = "Needs investigation")] public async Task Cast_StringToDate() { var v = await Scalar("SELECT CAST('2024-01-15' AS DATE)"); Assert.Contains("2024-01-15", v); }
+	[Fact(Skip = "Date format differs")] public async Task Cast_StringToDate() { var v = await Scalar("SELECT CAST('2024-01-15' AS DATE)"); Assert.Contains("2024-01-15", v); }
 	[Fact] public async Task Cast_NullToDate() => Assert.Null(await Scalar("SELECT CAST(NULL AS DATE)"));
 
 	// ---- SAFE_CAST ----
@@ -83,14 +89,14 @@ public class CastAndConversionTests : IAsyncLifetime
 	[Fact] public async Task Cast_BoolToIntToString() { var v = await Scalar("SELECT CAST(CAST(TRUE AS INT64) AS STRING)"); Assert.Equal("1", v); }
 
 	// ---- BYTES casts ----
-	[Fact(Skip = "Needs investigation")] public async Task Cast_StringToBytes() { var v = await Scalar("SELECT CAST(CAST('hello' AS BYTES) AS STRING)"); Assert.Equal("hello", v); }
+	[Fact(Skip = "BYTES cast not supported")] public async Task Cast_StringToBytes() { var v = await Scalar("SELECT CAST(CAST('hello' AS BYTES) AS STRING)"); Assert.Equal("hello", v); }
 
 	// ---- Numeric type edge cases ----
 	[Fact] public async Task Cast_LargeIntToString() => Assert.Equal("9999999999", await Scalar("SELECT CAST(9999999999 AS STRING)"));
 	[Fact] public async Task Cast_NegIntToFloat() { var v = double.Parse(await Scalar("SELECT CAST(-42 AS FLOAT64)") ?? "0"); Assert.Equal(-42.0, v); }
 	[Fact] public async Task Cast_ZeroToFloat() { var v = double.Parse(await Scalar("SELECT CAST(0 AS FLOAT64)") ?? "0"); Assert.Equal(0.0, v); }
 	[Fact] public async Task Cast_ZeroToString() => Assert.Equal("0", await Scalar("SELECT CAST(0 AS STRING)"));
-	[Fact(Skip = "Needs investigation")] public async Task Cast_EmptyStringToBytes() { var v = await Scalar("SELECT CAST(CAST('' AS BYTES) AS STRING)"); Assert.Equal("", v); }
+	[Fact(Skip = "BYTES cast not supported")] public async Task Cast_EmptyStringToBytes() { var v = await Scalar("SELECT CAST(CAST('' AS BYTES) AS STRING)"); Assert.Equal("", v); }
 
 	// ---- FORMAT function ----
 	[Fact] public async Task Format_Int() => Assert.Equal("42", await Scalar("SELECT FORMAT('%d', 42)"));

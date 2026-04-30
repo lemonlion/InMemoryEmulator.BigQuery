@@ -168,7 +168,7 @@ ORDER BY x");
 	[Fact] public async Task Concat_Function_WithInt() => Assert.Equal("num42", await Scalar("SELECT CONCAT('num', CAST(42 AS STRING))"));
 
 	// ---- Complex expressions combining multiple operations ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Complex_IfWithConcat() => Assert.Equal("Hello World!", await Scalar("SELECT IF(LENGTH('Hello') > 3, CONCAT('Hello', ' World!'), 'Short')"));
 
 	[Fact]
@@ -188,7 +188,7 @@ ORDER BY x");
 	}
 
 	// ---- GROUP BY with HAVING ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task GroupBy_WithHaving()
 	{
 		var v = await Scalar(@"
@@ -201,7 +201,7 @@ LIMIT 1");
 		Assert.Equal("0", v);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task GroupBy_Count()
 	{
 		var v = await Scalar(@"

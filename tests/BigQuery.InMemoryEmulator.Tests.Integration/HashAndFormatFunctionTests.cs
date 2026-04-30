@@ -92,7 +92,7 @@ public class HashAndFormatFunctionTests : IAsyncLifetime
 	[Fact] public async Task Sha512_Length() { var v = await Scalar("SELECT LENGTH(TO_HEX(SHA512(b'hello')))"); Assert.Equal("128", v); }
 
 	// ---- TO_HEX / FROM_HEX ----
-	[Fact(Skip = "Emulator limitation")] public async Task ToHex_Basic() { var v = await Scalar("SELECT TO_HEX(b'\\x00\\x01\\x02')"); Assert.NotNull(v); }
+	[Fact(Skip = "TO_HEX returns null")] public async Task ToHex_Basic() { var v = await Scalar("SELECT TO_HEX(b'\\x00\\x01\\x02')"); Assert.NotNull(v); }
 	[Fact] public async Task ToHex_Roundtrip()
 	{
 		var v = await Scalar("SELECT TO_HEX(FROM_HEX('48656c6c6f'))");

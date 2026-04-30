@@ -209,7 +209,7 @@ public class SetOperationTests : IAsyncLifetime
 	}
 
 	// ---- Empty set operations ----
-	[Fact(Skip = "Needs investigation")] public async Task UnionAll_EmptyFirst()
+	[Fact(Skip = "UNNEST in FROM without parent table not supported")] public async Task UnionAll_EmptyFirst()
 	{
 		var rows = await Query(@"
 			SELECT x FROM UNNEST(CAST([] AS ARRAY<INT64>)) AS x

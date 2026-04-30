@@ -216,7 +216,7 @@ public class RestApiComprehensiveTests : IAsyncLifetime
 	}
 
 	// ==== JOB OPERATIONS ====
-	[Fact(Skip = "Not yet supported")] public async Task DryRun_ReturnsSchemaWithoutData()
+	[Fact(Skip = "Dry run not supported")] public async Task DryRun_ReturnsSchemaWithoutData()
 	{
 		var client = await GetClient();
 		await client.CreateTableAsync(_datasetId, "dr_t1", new TableSchema
@@ -307,7 +307,7 @@ public class RestApiComprehensiveTests : IAsyncLifetime
 	}
 
 	// ==== ROUTINE OPERATIONS ====
-	[Fact(Skip = "Not yet supported")] public async Task CreateFunction_SqlUdf()
+	[Fact(Skip = "CREATE FUNCTION not supported")] public async Task CreateFunction_SqlUdf()
 	{
 		var client = await GetClient();
 		await client.ExecuteQueryAsync($"CREATE FUNCTION `{_datasetId}.add_one`(x INT64) RETURNS INT64 AS (x + 1)", parameters: null);
@@ -315,7 +315,7 @@ public class RestApiComprehensiveTests : IAsyncLifetime
 		Assert.Equal("6", result.ToList()[0][0]?.ToString());
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task DropFunction_RemovesRoutine()
+	[Fact(Skip = "DROP FUNCTION not supported")] public async Task DropFunction_RemovesRoutine()
 	{
 		var client = await GetClient();
 		await client.ExecuteQueryAsync($"CREATE FUNCTION `{_datasetId}.to_drop`(x INT64) RETURNS INT64 AS (x)", parameters: null);
@@ -340,7 +340,7 @@ public class RestApiComprehensiveTests : IAsyncLifetime
 	}
 
 	// ==== COPY JOB ====
-	[Fact(Skip = "Not yet supported")] public async Task CopyJob_DuplicatesTable()
+	[Fact(Skip = "Copy job not supported")] public async Task CopyJob_DuplicatesTable()
 	{
 		var client = await GetClient();
 		await client.CreateTableAsync(_datasetId, "cp_src", new TableSchema

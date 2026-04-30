@@ -87,23 +87,23 @@ public class MathFunctionBoundaryTests : IAsyncLifetime
 	[Fact] public async Task Sqrt_Zero() { var v = double.Parse(await Scalar("SELECT SQRT(0)") ?? "0"); Assert.Equal(0.0, v); }
 	[Fact] public async Task Sqrt_One() { var v = double.Parse(await Scalar("SELECT SQRT(1)") ?? "0"); Assert.Equal(1.0, v); }
 	[Fact] public async Task Sqrt_Large() { var v = double.Parse(await Scalar("SELECT SQRT(10000)") ?? "0"); Assert.Equal(100.0, v); }
-	[Fact(Skip = "Needs investigation")] public async Task Sqrt_Null() => Assert.Null(await Scalar("SELECT SQRT(NULL)"));
+	[Fact] public async Task Sqrt_Null() => Assert.Null(await Scalar("SELECT SQRT(NULL)"));
 
 	// ---- LOG / LOG10 / LN ----
 	[Fact] public async Task Ln_E() { var v = double.Parse(await Scalar("SELECT LN(EXP(1))") ?? "0"); Assert.Equal(1.0, v, 5); }
 	[Fact] public async Task Ln_One() { var v = double.Parse(await Scalar("SELECT LN(1)") ?? "0"); Assert.Equal(0.0, v); }
-	[Fact(Skip = "Needs investigation")] public async Task Ln_Null() => Assert.Null(await Scalar("SELECT LN(NULL)"));
+	[Fact] public async Task Ln_Null() => Assert.Null(await Scalar("SELECT LN(NULL)"));
 	[Fact] public async Task Log_Base10() { var v = double.Parse(await Scalar("SELECT LOG(100, 10)") ?? "0"); Assert.Equal(2.0, v, 5); }
 	[Fact] public async Task Log_Base2() { var v = double.Parse(await Scalar("SELECT LOG(8, 2)") ?? "0"); Assert.Equal(3.0, v, 5); }
 	[Fact] public async Task Log10_100() { var v = double.Parse(await Scalar("SELECT LOG10(100)") ?? "0"); Assert.Equal(2.0, v, 5); }
 	[Fact] public async Task Log10_1() { var v = double.Parse(await Scalar("SELECT LOG10(1)") ?? "0"); Assert.Equal(0.0, v); }
-	[Fact(Skip = "Needs investigation")] public async Task Log10_Null() => Assert.Null(await Scalar("SELECT LOG10(NULL)"));
+	[Fact] public async Task Log10_Null() => Assert.Null(await Scalar("SELECT LOG10(NULL)"));
 
 	// ---- EXP ----
 	[Fact] public async Task Exp_Zero() { var v = double.Parse(await Scalar("SELECT EXP(0)") ?? "0"); Assert.Equal(1.0, v); }
 	[Fact] public async Task Exp_One() { var v = double.Parse(await Scalar("SELECT EXP(1)") ?? "0"); Assert.Equal(2.71828, v, 3); }
 	[Fact] public async Task Exp_Neg() { var v = double.Parse(await Scalar("SELECT EXP(-1)") ?? "0"); Assert.Equal(0.36788, v, 3); }
-	[Fact(Skip = "Needs investigation")] public async Task Exp_Null() => Assert.Null(await Scalar("SELECT EXP(NULL)"));
+	[Fact] public async Task Exp_Null() => Assert.Null(await Scalar("SELECT EXP(NULL)"));
 
 	// ---- Trigonometric ----
 	[Fact] public async Task Sin_Zero() { var v = double.Parse(await Scalar("SELECT SIN(0)") ?? "0"); Assert.Equal(0.0, v, 5); }
@@ -148,7 +148,7 @@ public class MathFunctionBoundaryTests : IAsyncLifetime
 	[Fact] public async Task RangeBucket_Mid() => Assert.Equal("2", await Scalar("SELECT RANGE_BUCKET(15, [0, 10, 20, 30])"));
 	[Fact] public async Task RangeBucket_Low() => Assert.Equal("0", await Scalar("SELECT RANGE_BUCKET(-5, [0, 10, 20, 30])"));
 	[Fact] public async Task RangeBucket_High() => Assert.Equal("4", await Scalar("SELECT RANGE_BUCKET(35, [0, 10, 20, 30])"));
-	[Fact(Skip = "Needs investigation")] public async Task RangeBucket_Exact() => Assert.Equal("2", await Scalar("SELECT RANGE_BUCKET(20, [0, 10, 20, 30])"));
+	[Fact] public async Task RangeBucket_Exact() => Assert.Equal("3", await Scalar("SELECT RANGE_BUCKET(20, [0, 10, 20, 30])"));
 
 	// ---- IS_NAN / IS_INF ----
 	[Fact] public async Task IsNan_True() => Assert.Equal("True", await Scalar("SELECT IS_NAN(IEEE_DIVIDE(0, 0))"));
@@ -158,8 +158,8 @@ public class MathFunctionBoundaryTests : IAsyncLifetime
 
 	// ---- Combined expressions ----
 	[Fact] public async Task Expr_AbsSqrt() { var v = double.Parse(await Scalar("SELECT ABS(SQRT(16) - 5)") ?? "0"); Assert.Equal(1.0, v); }
-	[Fact(Skip = "POW/MOD return type differs")] public async Task Expr_PowMod() => Assert.Equal("1", await Scalar("SELECT MOD(CAST(POW(2, 10) AS INT64), 7)"));
-	[Fact(Skip = "FLOOR/CEIL return type differs")] public async Task Expr_FloorCeil() { var v1 = await Scalar("SELECT FLOOR(3.7)"); var v2 = await Scalar("SELECT CEIL(3.2)"); Assert.Equal(v1, v2); }
+	[Fact] public async Task Expr_PowMod() => Assert.Equal("2", await Scalar("SELECT MOD(CAST(POW(2, 10) AS INT64), 7)"));
+	[Fact] public async Task Expr_FloorCeil() { Assert.Equal("3", await Scalar("SELECT FLOOR(3.7)")); Assert.Equal("4", await Scalar("SELECT CEIL(3.2)")); }
 	[Fact] public async Task Expr_NestedRound() { var v = double.Parse(await Scalar("SELECT ROUND(ROUND(4.567, 2), 1)") ?? "0"); Assert.Equal(4.6, v, 1); }
 	[Fact] public async Task Expr_SignAbs() => Assert.Equal("-1", await Scalar("SELECT SIGN(-ABS(42))"));
 }

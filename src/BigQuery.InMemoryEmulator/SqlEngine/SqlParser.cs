@@ -240,7 +240,7 @@ internal static class SqlParser
 
 	private static readonly TokenListParser<SqlToken, SqlExpression> StringLiteral =
 		Token.EqualTo(SqlToken.StringLiteral)
-			.Select(t => (SqlExpression)new LiteralExpr(t.ToStringValue().Trim('\'')));
+			.Select(t => (SqlExpression)new LiteralExpr(UnescapeSqlString(t.ToStringValue().Trim('\''))));
 
 	private static readonly TokenListParser<SqlToken, SqlExpression> BoolLiteral =
 		Token.EqualTo(SqlToken.True).Select(_ => (SqlExpression)new LiteralExpr(true))
@@ -1525,4 +1525,30 @@ internal static class SqlParser
 		.Or(DropTableStmt.Try())
 		.Or(DropViewStmt.Try())
 		.Or(AlterTableStmt.Try());
+
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#string_and_bytes_literals
+    private static string UnescapeSqlString(string s)
+    {
+        if (!s.Contains('\\')) return s;
+        var sb = new System.Text.StringBuilder(s.Length);
+        for (int i = 0; i < s.Length; i++)
+        {
+            if (s[i] == '\\' && i + 1 < s.Length)
+            {
+                switch (s[i + 1])
+                {
+                    case '\\': sb.Append('\\'); i++; break;
+                    case '\'': sb.Append('\''); i++; break;
+                    case '"': sb.Append('"'); i++; break;
+                    case 'n': sb.Append('\n'); i++; break;
+                    case 't': sb.Append('\t'); i++; break;
+                    case 'r': sb.Append('\r'); i++; break;
+                    default: sb.Append(s[i]); break;
+                }
+            }
+            else sb.Append(s[i]);
+        }
+        return sb.ToString();
+    }
+
 }

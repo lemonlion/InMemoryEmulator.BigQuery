@@ -81,7 +81,7 @@ public class OrderByLimitTests : IAsyncLifetime
 	}
 
 	// ---- ORDER BY with expression ----
-	[Fact(Skip = "Expression in ORDER BY not supported")]
+	[Fact]
 	public async Task OrderBy_Expression()
 	{
 		var rows = await Query("SELECT x FROM UNNEST([-3, 2, -1, 4]) AS x ORDER BY ABS(x)");
@@ -176,7 +176,7 @@ public class OrderByLimitTests : IAsyncLifetime
 	}
 
 	// ---- Pagination pattern ----
-	[Fact(Skip = "GENERATE_ARRAY in UNNEST not supported")]
+	[Fact]
 	public async Task Pagination_Page1()
 	{
 		var rows = await Query("SELECT x FROM UNNEST(GENERATE_ARRAY(1,20)) AS x ORDER BY x LIMIT 5 OFFSET 0");
@@ -185,7 +185,7 @@ public class OrderByLimitTests : IAsyncLifetime
 		Assert.Equal("5", rows[4][0]?.ToString());
 	}
 
-	[Fact(Skip = "GENERATE_ARRAY in UNNEST not supported")]
+	[Fact]
 	public async Task Pagination_Page2()
 	{
 		var rows = await Query("SELECT x FROM UNNEST(GENERATE_ARRAY(1,20)) AS x ORDER BY x LIMIT 5 OFFSET 5");
@@ -224,14 +224,16 @@ public class OrderByLimitTests : IAsyncLifetime
 	}
 
 	// ---- ORDER BY with NULLS ----
-	[Fact(Skip = "NULL sort order differs from BigQuery")]
-	public async Task OrderBy_NullsLast_Asc()
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#order_by_clause
+	//   "NULLs appear first when the sort order is ascending"
+	[Fact]
+	public async Task OrderBy_NullsFirst_Asc()
 	{
 		var rows = await Query(@"
 			SELECT x FROM UNNEST([3, CAST(NULL AS INT64), 1, 2]) AS x ORDER BY x ASC");
-		Assert.Equal("1", rows[0][0]?.ToString());
-		// In BigQuery, NULLs sort first in ASC; emulator may differ
 		Assert.Equal(4, rows.Count);
+		Assert.Null(rows[0][0]);
+		Assert.Equal("1", rows[1][0]?.ToString());
 	}
 
 	// ---- DISTINCT ----

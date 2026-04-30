@@ -165,6 +165,6 @@ public class MathFunctionDeepTests : IAsyncLifetime
 	[Fact] public async Task RangeBucket_Mid() => Assert.Equal("2", await Scalar("SELECT RANGE_BUCKET(15, [0, 10, 20, 30])"));
 	[Fact] public async Task RangeBucket_Low() => Assert.Equal("0", await Scalar("SELECT RANGE_BUCKET(-5, [0, 10, 20])"));
 	[Fact] public async Task RangeBucket_High() => Assert.Equal("3", await Scalar("SELECT RANGE_BUCKET(50, [0, 10, 20])"));
-	[Fact(Skip = "Emulator limitation")] public async Task RangeBucket_Exact() => Assert.Equal("1", await Scalar("SELECT RANGE_BUCKET(10, [0, 10, 20])"));
+	[Fact] public async Task RangeBucket_Exact() => Assert.Equal("2", await Scalar("SELECT RANGE_BUCKET(10, [0, 10, 20])"));
 	[Fact] public async Task RangeBucket_Zero() => Assert.Equal("1", await Scalar("SELECT RANGE_BUCKET(0, [0, 10, 20])"));
 }

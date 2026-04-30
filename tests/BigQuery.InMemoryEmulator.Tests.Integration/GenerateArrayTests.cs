@@ -167,14 +167,14 @@ WHERE d > DATE '2024-01-15'");
 	}
 
 	// ---- LIMIT on GENERATE_ARRAY ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task GA_Limit3()
 	{
 		var v = await Column("SELECT x FROM UNNEST(GENERATE_ARRAY(1, 10)) AS x ORDER BY x LIMIT 3");
 		Assert.Equal(new[] { "1", "2", "3" }, v);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task GA_OffsetLimit()
 	{
 		var v = await Column("SELECT x FROM UNNEST(GENERATE_ARRAY(1, 10)) AS x ORDER BY x LIMIT 3 OFFSET 2");

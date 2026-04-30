@@ -41,12 +41,12 @@ public class NullHandlingDeepTests : IAsyncLifetime
 	[Fact] public async Task Null_UnaryMinus() => Assert.Null(await Scalar("SELECT -(CAST(NULL AS INT64))"));
 
 	// ---- NULL comparison ----
-	[Fact(Skip = "Needs investigation")] public async Task Null_EqNull() => Assert.Null(await Scalar("SELECT NULL = NULL"));
-	[Fact(Skip = "Needs investigation")] public async Task Null_NeqNull() => Assert.Null(await Scalar("SELECT NULL != NULL"));
+	[Fact] public async Task Null_EqNull() => Assert.Null(await Scalar("SELECT NULL = NULL"));
+	[Fact] public async Task Null_NeqNull() => Assert.Null(await Scalar("SELECT NULL != NULL"));
 	[Fact] public async Task Null_LtNull() => Assert.Null(await Scalar("SELECT NULL < NULL"));
 	[Fact] public async Task Null_GtNull() => Assert.Null(await Scalar("SELECT NULL > NULL"));
-	[Fact(Skip = "Needs investigation")] public async Task Null_EqValue() => Assert.Null(await Scalar("SELECT NULL = 1"));
-	[Fact(Skip = "Needs investigation")] public async Task Null_NeqValue() => Assert.Null(await Scalar("SELECT NULL != 1"));
+	[Fact] public async Task Null_EqValue() => Assert.Null(await Scalar("SELECT NULL = 1"));
+	[Fact] public async Task Null_NeqValue() => Assert.Null(await Scalar("SELECT NULL != 1"));
 	[Fact] public async Task Null_LtValue() => Assert.Null(await Scalar("SELECT NULL < 1"));
 	[Fact] public async Task Null_GtValue() => Assert.Null(await Scalar("SELECT NULL > 1"));
 
@@ -72,7 +72,7 @@ public class NullHandlingDeepTests : IAsyncLifetime
 
 	// ---- NULL in math functions ----
 	[Fact] public async Task Null_Abs() => Assert.Null(await Scalar("SELECT ABS(CAST(NULL AS INT64))"));
-	[Fact(Skip = "Needs investigation")] public async Task Null_Sqrt() => Assert.Null(await Scalar("SELECT SQRT(CAST(NULL AS FLOAT64))"));
+	[Fact] public async Task Null_Sqrt() => Assert.Null(await Scalar("SELECT SQRT(CAST(NULL AS FLOAT64))"));
 	[Fact] public async Task Null_Round() => Assert.Null(await Scalar("SELECT ROUND(CAST(NULL AS FLOAT64))"));
 	[Fact] public async Task Null_Floor() => Assert.Null(await Scalar("SELECT FLOOR(CAST(NULL AS FLOAT64))"));
 	[Fact] public async Task Null_Ceil() => Assert.Null(await Scalar("SELECT CEIL(CAST(NULL AS FLOAT64))"));
@@ -117,8 +117,8 @@ public class NullHandlingDeepTests : IAsyncLifetime
 	[Fact] public async Task Between_NullHigh() => Assert.Null(await Scalar("SELECT 5 BETWEEN 1 AND NULL"));
 
 	// ---- NULL in IN ----
-	[Fact(Skip = "Needs investigation")] public async Task In_NullValue() => Assert.Null(await Scalar("SELECT NULL IN (1, 2, 3)"));
-	[Fact(Skip = "Needs investigation")] public async Task In_NullInList() => Assert.Null(await Scalar("SELECT 4 IN (1, 2, NULL)"));
+	[Fact] public async Task In_NullValue() => Assert.Null(await Scalar("SELECT NULL IN (1, 2, 3)"));
+	[Fact] public async Task In_NullInList() => Assert.Null(await Scalar("SELECT 4 IN (1, 2, NULL)"));
 	[Fact] public async Task In_FoundWithNull() => Assert.Equal("True", await Scalar("SELECT 2 IN (1, 2, NULL)"));
 
 	// ---- NULL in IF ----
@@ -128,6 +128,6 @@ public class NullHandlingDeepTests : IAsyncLifetime
 
 	// ---- NULL propagation in nested expressions ----
 	[Fact] public async Task NullProp_Nested() => Assert.Null(await Scalar("SELECT ABS(NULL + 1)"));
-	[Fact(Skip = "Needs investigation")] public async Task NullProp_Concat() => Assert.Null(await Scalar("SELECT CONCAT(CAST(NULL AS STRING), CAST(NULL AS STRING))"));
+	[Fact] public async Task NullProp_Concat() => Assert.Null(await Scalar("SELECT CONCAT(CAST(NULL AS STRING), CAST(NULL AS STRING))"));
 	[Fact] public async Task NullProp_DoubleNegate() => Assert.Null(await Scalar("SELECT -(-(CAST(NULL AS INT64)))"));
 }

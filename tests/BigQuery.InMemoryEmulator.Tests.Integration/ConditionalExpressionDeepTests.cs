@@ -73,7 +73,7 @@ SELECT CASE
 END"));
 
 	// ---- CASE in aggregate context via CTE ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Case_InAggregate()
 	{
 		var v = await Scalar(@"
@@ -84,7 +84,7 @@ SELECT SUM(CASE WHEN x > 3 THEN 1 ELSE 0 END) FROM data");
 		Assert.Equal("2", v);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Case_InGroupBy()
 	{
 		var client = await _fixture.GetClientAsync();

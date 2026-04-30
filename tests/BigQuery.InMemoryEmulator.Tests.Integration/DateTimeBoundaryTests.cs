@@ -98,7 +98,7 @@ public class DateTimeBoundaryTests : IAsyncLifetime
 
 	// ---- DATETIME_TRUNC ----
 	[Fact] public async Task DatetimeTrunc_Hour() { var v = await Scalar("SELECT DATETIME_TRUNC(DATETIME '2024-03-15 14:30:45', HOUR)"); Assert.Contains("14:00:00", v); }
-	[Fact(Skip = "DATETIME_TRUNC format differs")] public async Task DatetimeTrunc_Day() { var v = await Scalar("SELECT DATETIME_TRUNC(DATETIME '2024-03-15 14:30:45', DAY)"); Assert.Equal("2024-03-15", v); }
+	[Fact] public async Task DatetimeTrunc_Day() { var v = await Scalar("SELECT DATETIME_TRUNC(DATETIME '2024-03-15 14:30:45', DAY)"); Assert.Equal("2024-03-15", v); }
 
 	// ---- TIMESTAMP functions ----
 	[Fact] public async Task Timestamp_Literal() { var v = await Scalar("SELECT TIMESTAMP '2024-03-15 10:30:00+00:00'"); Assert.NotNull(v); }
@@ -107,7 +107,7 @@ public class DateTimeBoundaryTests : IAsyncLifetime
 	[Fact] public async Task TimestampSub_Minute() { var v = await Scalar("SELECT TIMESTAMP_SUB(TIMESTAMP '2024-03-15 10:30:00+00:00', INTERVAL 30 MINUTE)"); Assert.NotNull(v); }
 	[Fact] public async Task TimestampDiff_Second() => Assert.Equal("3600", await Scalar("SELECT TIMESTAMP_DIFF(TIMESTAMP '2024-03-15 11:00:00+00:00', TIMESTAMP '2024-03-15 10:00:00+00:00', SECOND)"));
 	[Fact] public async Task TimestampDiff_Hour() => Assert.Equal("1", await Scalar("SELECT TIMESTAMP_DIFF(TIMESTAMP '2024-03-15 11:00:00+00:00', TIMESTAMP '2024-03-15 10:00:00+00:00', HOUR)"));
-	[Fact(Skip = "TIMESTAMP_TRUNC format differs")] public async Task TimestampTrunc_Day() { var v = await Scalar("SELECT TIMESTAMP_TRUNC(TIMESTAMP '2024-03-15 14:30:00+00:00', DAY)"); Assert.NotNull(v); }
+	[Fact] public async Task TimestampTrunc_Day() { var v = await Scalar("SELECT TIMESTAMP_TRUNC(TIMESTAMP '2024-03-15 14:30:00+00:00', DAY)"); Assert.NotNull(v); }
 
 	// ---- FORMAT_DATE / FORMAT_DATETIME / FORMAT_TIMESTAMP / PARSE_DATE ----
 	[Fact] public async Task FormatDate_Basic() => Assert.Equal("2024-03-15", await Scalar("SELECT FORMAT_DATE('%Y-%m-%d', DATE '2024-03-15')"));

@@ -163,7 +163,7 @@ SELECT x FROM nums ORDER BY x LIMIT 1 OFFSET 2"));
 	[Fact]
 	public async Task Subquery_Scalar() => Assert.Equal("3", await Scalar("SELECT (SELECT MAX(x) FROM UNNEST([1,2,3]) AS x)"));
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Subquery_InWhere()
 	{
 		var rows = await Column(@"

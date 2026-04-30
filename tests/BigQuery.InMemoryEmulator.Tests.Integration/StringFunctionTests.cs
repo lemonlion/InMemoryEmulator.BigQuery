@@ -71,7 +71,7 @@ public class StringFunctionTests : IAsyncLifetime
 
 	// ---- TRIM / LTRIM / RTRIM ----
 	[Fact] public async Task Trim_Spaces() => Assert.Equal("hello", await Scalar("SELECT TRIM('  hello  ')"));
-	[Fact(Skip = "Not yet supported")] public async Task Trim_CustomChars() => Assert.Equal("hello", await Scalar("SELECT TRIM('xxhelloxx', 'x')"));
+	[Fact] public async Task Trim_CustomChars() => Assert.Equal("hello", await Scalar("SELECT TRIM('xxhelloxx', 'x')"));
 	[Fact] public async Task Trim_Empty() => Assert.Equal("", await Scalar("SELECT TRIM('')"));
 	[Fact] public async Task Trim_Null() => Assert.Null(await Scalar("SELECT TRIM(NULL)"));
 	[Fact] public async Task Ltrim_Spaces() => Assert.Equal("hello  ", await Scalar("SELECT LTRIM('  hello  ')"));
@@ -150,8 +150,8 @@ public class StringFunctionTests : IAsyncLifetime
 
 	// ---- FORMAT ----
 	[Fact] public async Task Format_String() => Assert.Equal("val=42", await Scalar("SELECT FORMAT('%s=%d', 'val', 42)"));
-	[Fact(Skip = "Needs investigation")] public async Task Format_Float() { var v = await Scalar("SELECT FORMAT('%.2f', 3.14159)"); Assert.True(v == "3.14" || v == "3.14159", $"Got {v}"); }
-	[Fact(Skip = "Needs investigation")] public async Task Format_Integer() { var v = await Scalar("SELECT FORMAT('%03d', 42)"); Assert.True(v == "042" || v == "42", $"Got {v}"); }
+	[Fact] public async Task Format_Float() { var v = await Scalar("SELECT FORMAT('%.2f', 3.14159)"); Assert.True(v == "3.14" || v == "3.14159", $"Got {v}"); }
+	[Fact] public async Task Format_Integer() { var v = await Scalar("SELECT FORMAT('%03d', 42)"); Assert.True(v == "042" || v == "42", $"Got {v}"); }
 
 	// ---- REGEXP_CONTAINS ----
 	[Fact] public async Task RegexpContains_Match() => Assert.Equal("True", await Scalar("SELECT REGEXP_CONTAINS('hello123', '\\d+')"));
@@ -170,8 +170,8 @@ public class StringFunctionTests : IAsyncLifetime
 	[Fact] public async Task RegexpExtractAll_Basic() { var v = await Scalar("SELECT ARRAY_LENGTH(REGEXP_EXTRACT_ALL('a1b2c3', '\\d'))"); Assert.Equal("3", v); }
 
 	// ---- REGEXP_INSTR ----
-	[Fact(Skip = "Not yet supported")] public async Task RegexpInstr_Found() => Assert.Equal("6", await Scalar("SELECT REGEXP_INSTR('hello123', '\\d+')"));
-	[Fact(Skip = "Not yet supported")] public async Task RegexpInstr_NotFound() => Assert.Equal("0", await Scalar("SELECT REGEXP_INSTR('hello', '\\d+')"));
+	[Fact] public async Task RegexpInstr_Found() => Assert.Equal("6", await Scalar("SELECT REGEXP_INSTR('hello123', '\\d+')"));
+	[Fact] public async Task RegexpInstr_NotFound() => Assert.Equal("0", await Scalar("SELECT REGEXP_INSTR('hello', '\\d+')"));
 
 	// ---- INITCAP ----
 	[Fact] public async Task Initcap_Basic() => Assert.Equal("Hello World", await Scalar("SELECT INITCAP('hello world')"));

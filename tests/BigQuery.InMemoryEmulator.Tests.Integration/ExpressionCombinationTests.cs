@@ -115,7 +115,7 @@ public class ExpressionCombinationTests : IAsyncLifetime
 	[Fact] public async Task Literal_String() => Assert.Equal("hello", await Scalar("SELECT 'hello'"));
 	[Fact] public async Task Literal_EmptyString() => Assert.Equal("", await Scalar("SELECT ''"));
 	[Fact] public async Task Literal_StringWithSpaces() => Assert.Equal("hello world", await Scalar("SELECT 'hello world'"));
-	[Fact(Skip = "Backslash string escape not supported")] public async Task Literal_StringWithEscape() => Assert.Equal("it's", await Scalar("SELECT 'it\\'s'"));
+	[Fact(Skip = "Tokenizer does not support backslash-escaped quotes in string literals")] public async Task Literal_StringWithEscape() => Assert.Equal("it's", await Scalar("SELECT 'it\\'s'"));
 	[Fact] public async Task Literal_BoolTrue() => Assert.Equal("True", await Scalar("SELECT TRUE"));
 	[Fact] public async Task Literal_BoolFalse() => Assert.Equal("False", await Scalar("SELECT FALSE"));
 	[Fact] public async Task Literal_Null() => Assert.Null(await Scalar("SELECT NULL"));
@@ -156,7 +156,7 @@ public class ExpressionCombinationTests : IAsyncLifetime
 	[Fact] public async Task NullCoalesce_Null() => Assert.Equal("10", await Scalar("SELECT IFNULL(CAST(NULL AS INT64), 10)"));
 
 	// ---- STRUCT construction ----
-	[Fact(Skip = "STRUCT access syntax not supported")]
+	[Fact(Skip = "STRUCT type not supported")]
 	public async Task Struct_Access()
 	{
 		var rows = await Query("SELECT t.a, t.b FROM (SELECT STRUCT(1 AS a, 'hello' AS b) AS t) AS s");
@@ -164,7 +164,7 @@ public class ExpressionCombinationTests : IAsyncLifetime
 		Assert.Equal("hello", rows[0]["b"]?.ToString());
 	}
 
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact(Skip = "STRUCT type not supported")]
 	public async Task Struct_InUnnest()
 	{
 		var rows = await Query("SELECT t.name, t.age FROM UNNEST([STRUCT('Alice' AS name, 30 AS age), STRUCT('Bob', 25)]) AS t ORDER BY t.age");

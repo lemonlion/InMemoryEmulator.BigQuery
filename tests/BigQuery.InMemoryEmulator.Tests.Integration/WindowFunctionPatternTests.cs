@@ -186,7 +186,7 @@ FROM UNNEST(GENERATE_ARRAY(1, 10)) AS x");
 	}
 
 	// ---- AVG OVER ----
-	[Fact(Skip = "Result order not guaranteed without outer ORDER BY")]
+	[Fact]
 	public async Task Avg_RunningAvg()
 	{
 		var v = await Column(@"

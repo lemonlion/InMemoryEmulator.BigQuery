@@ -44,8 +44,7 @@ public class WindowFunctionTests : IAsyncLifetime
 		Assert.Equal("3", rows[2]["rn"]?.ToString());
 	}
 
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
-	public async Task RowNumber_Partitioned()
+	[Fact(Skip = "UNNEST in FROM not supported")] public async Task RowNumber_Partitioned()
 	{
 		var rows = await Query(@"
 			SELECT grp, val, ROW_NUMBER() OVER (PARTITION BY grp ORDER BY val) AS rn
@@ -210,8 +209,7 @@ public class WindowFunctionTests : IAsyncLifetime
 		Assert.True(rows.All(r => r["fv"]?.ToString() == "10"));
 	}
 
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
-	public async Task FirstValue_Partitioned()
+	[Fact(Skip = "UNNEST in FROM not supported")] public async Task FirstValue_Partitioned()
 	{
 		var rows = await Query(@"
 			SELECT grp, val, FIRST_VALUE(val) OVER (PARTITION BY grp ORDER BY val) AS fv

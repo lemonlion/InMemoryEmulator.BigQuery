@@ -148,7 +148,7 @@ public class StringFunctionEdgeCaseTests : IAsyncLifetime
 	// ---- FORMAT ----
 	[Fact] public async Task Format_Basic() { var v = await Scalar("SELECT FORMAT('%d items', 5)"); Assert.Contains("5", v); }
 	[Fact] public async Task Format_String() { var v = await Scalar("SELECT FORMAT('Hello %s', 'World')"); Assert.Equal("Hello World", v); }
-	[Fact(Skip = "Needs investigation")] public async Task Format_Float() { var v = await Scalar("SELECT FORMAT('%.2f', 3.14159)"); Assert.True(v == "3.14" || v!.Contains("3.14"), $"Got {v}"); }
+	[Fact] public async Task Format_Float() { var v = await Scalar("SELECT FORMAT('%.2f', 3.14159)"); Assert.True(v == "3.14" || v!.Contains("3.14"), $"Got {v}"); }
 
 	// ---- BYTE_LENGTH / OCTET_LENGTH ----
 	[Fact] public async Task ByteLength_Ascii() => Assert.Equal("5", await Scalar("SELECT BYTE_LENGTH('hello')"));
@@ -188,5 +188,5 @@ public class StringFunctionEdgeCaseTests : IAsyncLifetime
 	[Fact] public async Task SafeConvertBytesToString_Ascii() => Assert.Equal("hello", await Scalar("SELECT SAFE_CONVERT_BYTES_TO_STRING(b'hello')"));
 
 	// ---- COLLATE ----
-	[Fact(Skip = "Not yet supported")] public async Task Collate_ReturnsValue() => Assert.NotNull(await Scalar("SELECT COLLATE('hello', '')"));
+	[Fact] public async Task Collate_ReturnsValue() => Assert.NotNull(await Scalar("SELECT COLLATE('hello', '')"));
 }

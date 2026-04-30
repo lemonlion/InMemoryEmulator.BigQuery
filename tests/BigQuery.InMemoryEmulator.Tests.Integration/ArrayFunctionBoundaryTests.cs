@@ -37,7 +37,7 @@ public class ArrayFunctionBoundaryTests : IAsyncLifetime
 	[Fact] public async Task ArrayToString_Comma() => Assert.Equal("1,2,3", await Scalar("SELECT ARRAY_TO_STRING([1, 2, 3], ',')"));
 	[Fact] public async Task ArrayToString_Dash() => Assert.Equal("a-b-c", await Scalar("SELECT ARRAY_TO_STRING(['a', 'b', 'c'], '-')"));
 	[Fact] public async Task ArrayToString_Space() => Assert.Equal("hello world", await Scalar("SELECT ARRAY_TO_STRING(['hello', 'world'], ' ')"));
-	[Fact(Skip = "Needs investigation")] public async Task ArrayToString_Empty() => Assert.Equal("", await Scalar("SELECT ARRAY_TO_STRING(CAST([] AS ARRAY<STRING>), ',')"));
+	[Fact(Skip = "CAST([] AS ARRAY<T>) empty array literal not supported")] public async Task ArrayToString_Empty() => Assert.Equal("", await Scalar("SELECT ARRAY_TO_STRING(CAST([] AS ARRAY<STRING>), ',')"));
 	[Fact] public async Task ArrayToString_Single() => Assert.Equal("one", await Scalar("SELECT ARRAY_TO_STRING(['one'], ',')"));
 	[Fact] public async Task ArrayToString_Pipe() => Assert.Equal("x|y|z", await Scalar("SELECT ARRAY_TO_STRING(['x', 'y', 'z'], '|')"));
 
@@ -45,12 +45,12 @@ public class ArrayFunctionBoundaryTests : IAsyncLifetime
 	[Fact] public async Task ArrayReverse_Ints() { var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY_REVERSE([1, 2, 3]), ',')"); Assert.Equal("3,2,1", v); }
 	[Fact] public async Task ArrayReverse_Strings() { var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY_REVERSE(['a', 'b', 'c']), ',')"); Assert.Equal("c,b,a", v); }
 	[Fact] public async Task ArrayReverse_Single() { var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY_REVERSE([42]), ',')"); Assert.Equal("42", v); }
-	[Fact(Skip = "Needs investigation")] public async Task ArrayReverse_Empty() { var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY_REVERSE(CAST([] AS ARRAY<INT64>)), ',')"); Assert.Equal("", v); }
+	[Fact(Skip = "CAST([] AS ARRAY<T>) empty array literal not supported")] public async Task ArrayReverse_Empty() { var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY_REVERSE(CAST([] AS ARRAY<INT64>)), ',')"); Assert.Equal("", v); }
 
 	// ---- ARRAY_CONCAT ----
 	[Fact] public async Task ArrayConcat_TwoArrays() { var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY_CONCAT([1, 2], [3, 4]), ',')"); Assert.Equal("1,2,3,4", v); }
 	[Fact] public async Task ArrayConcat_ThreeArrays() { var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY_CONCAT([1], [2], [3]), ',')"); Assert.Equal("1,2,3", v); }
-	[Fact(Skip = "Needs investigation")] public async Task ArrayConcat_EmptyFirst() { var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY_CONCAT(CAST([] AS ARRAY<INT64>), [1, 2]), ',')"); Assert.Equal("1,2", v); }
+	[Fact(Skip = "CAST([] AS ARRAY<T>) empty array literal not supported")] public async Task ArrayConcat_EmptyFirst() { var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY_CONCAT(CAST([] AS ARRAY<INT64>), [1, 2]), ',')"); Assert.Equal("1,2", v); }
 	[Fact] public async Task ArrayConcat_Strings() { var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY_CONCAT(['a', 'b'], ['c']), ',')"); Assert.Equal("a,b,c", v); }
 
 	// ---- GENERATE_ARRAY ----
@@ -67,12 +67,12 @@ public class ArrayFunctionBoundaryTests : IAsyncLifetime
 	[Fact] public async Task GenerateDateArray_Weeks() { var v = await Scalar("SELECT ARRAY_LENGTH(GENERATE_DATE_ARRAY(DATE '2024-01-01', DATE '2024-02-01', INTERVAL 1 WEEK))"); Assert.NotNull(v); var n = int.Parse(v!); Assert.True(n > 0); }
 
 	// ---- Array subscript operator ----
-	[Fact(Skip = "Needs investigation")] public async Task ArraySubscript_First() => Assert.Equal("10", await Scalar("SELECT [10, 20, 30][OFFSET(0)]"));
-	[Fact(Skip = "Needs investigation")] public async Task ArraySubscript_Last() => Assert.Equal("30", await Scalar("SELECT [10, 20, 30][OFFSET(2)]"));
-	[Fact(Skip = "Needs investigation")] public async Task ArraySubscript_Ordinal1() => Assert.Equal("10", await Scalar("SELECT [10, 20, 30][ORDINAL(1)]"));
-	[Fact(Skip = "Needs investigation")] public async Task ArraySubscript_Ordinal3() => Assert.Equal("30", await Scalar("SELECT [10, 20, 30][ORDINAL(3)]"));
-	[Fact(Skip = "Needs investigation")] public async Task ArraySubscript_SafeOffset() => Assert.Null(await Scalar("SELECT [10, 20, 30][SAFE_OFFSET(5)]"));
-	[Fact(Skip = "Needs investigation")] public async Task ArraySubscript_SafeOrdinal() => Assert.Null(await Scalar("SELECT [10, 20, 30][SAFE_ORDINAL(5)]"));
+	[Fact(Skip = "Array subscript [OFFSET/ORDINAL] syntax not supported in parser")] public async Task ArraySubscript_First() => Assert.Equal("10", await Scalar("SELECT [10, 20, 30][OFFSET(0)]"));
+	[Fact(Skip = "Array subscript [OFFSET/ORDINAL] syntax not supported in parser")] public async Task ArraySubscript_Last() => Assert.Equal("30", await Scalar("SELECT [10, 20, 30][OFFSET(2)]"));
+	[Fact(Skip = "Array subscript [OFFSET/ORDINAL] syntax not supported in parser")] public async Task ArraySubscript_Ordinal1() => Assert.Equal("10", await Scalar("SELECT [10, 20, 30][ORDINAL(1)]"));
+	[Fact(Skip = "Array subscript [OFFSET/ORDINAL] syntax not supported in parser")] public async Task ArraySubscript_Ordinal3() => Assert.Equal("30", await Scalar("SELECT [10, 20, 30][ORDINAL(3)]"));
+	[Fact(Skip = "Array subscript [OFFSET/ORDINAL] syntax not supported in parser")] public async Task ArraySubscript_SafeOffset() => Assert.Null(await Scalar("SELECT [10, 20, 30][SAFE_OFFSET(5)]"));
+	[Fact(Skip = "Array subscript [OFFSET/ORDINAL] syntax not supported in parser")] public async Task ArraySubscript_SafeOrdinal() => Assert.Null(await Scalar("SELECT [10, 20, 30][SAFE_ORDINAL(5)]"));
 
 	// ---- Array in expressions ----
 	[Fact] public async Task Array_InSelect() { var v = await Scalar("SELECT ARRAY_LENGTH([1, 2, 3]) + ARRAY_LENGTH([4, 5])"); Assert.Equal("5", v); }
@@ -82,6 +82,6 @@ public class ArrayFunctionBoundaryTests : IAsyncLifetime
 	[Fact] public async Task Array_LiteralStrings() { var v = await Scalar("SELECT ARRAY_TO_STRING(['hello', 'world'], ' ')"); Assert.Equal("hello world", v); }
 
 	// ---- ARRAY with subquery (inline) ----
-	[Fact(Skip = "ARRAY subquery format differs")] public async Task Array_SubqueryGenerate() { var v = await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST(GENERATE_ARRAY(1,10)) AS x))"); Assert.Equal("10", v); }
-	[Fact(Skip = "ARRAY subquery format differs")] public async Task Array_SubqueryFiltered() { var v = await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1,2,3,4,5]) AS x WHERE x > 2))"); Assert.Equal("3", v); }
+	[Fact(Skip = "ARRAY(SELECT ...) subquery syntax not supported")] public async Task Array_SubqueryGenerate() { var v = await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST(GENERATE_ARRAY(1,10)) AS x))"); Assert.Equal("10", v); }
+	[Fact(Skip = "ARRAY(SELECT ...) subquery syntax not supported")] public async Task Array_SubqueryFiltered() { var v = await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1,2,3,4,5]) AS x WHERE x > 2))"); Assert.Equal("3", v); }
 }

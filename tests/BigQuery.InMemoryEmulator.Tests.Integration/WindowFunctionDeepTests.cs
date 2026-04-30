@@ -35,30 +35,30 @@ public class WindowFunctionDeepTests : IAsyncLifetime
 	}
 
 	// ---- ROW_NUMBER ----
-	[Fact(Skip = "Result order not guaranteed without outer ORDER BY")]
+	[Fact(Skip = "ORDER BY on window function alias not applied correctly")]
 	public async Task RowNumber_Basic()
 	{
-		var rows = await Column("SELECT ROW_NUMBER() OVER (ORDER BY x) FROM UNNEST([30,10,20]) AS x");
+		var rows = await Column("SELECT ROW_NUMBER() OVER (ORDER BY x) FROM UNNEST([30,10,20]) AS x ORDER BY 1");
 		Assert.Equal(3, rows.Count);
 		Assert.Equal("1", rows[0]);
 		Assert.Equal("2", rows[1]);
 		Assert.Equal("3", rows[2]);
 	}
 
-	[Fact(Skip = "Result order not guaranteed without outer ORDER BY")]
+	[Fact(Skip = "ORDER BY on window function alias not applied correctly")]
 	public async Task RowNumber_Desc()
 	{
-		var rows = await Column("SELECT ROW_NUMBER() OVER (ORDER BY x DESC) FROM UNNEST([30,10,20]) AS x");
+		var rows = await Column("SELECT ROW_NUMBER() OVER (ORDER BY x DESC) FROM UNNEST([30,10,20]) AS x ORDER BY 1");
 		Assert.Equal(3, rows.Count);
 		Assert.Equal("1", rows[0]);
 		Assert.Equal("2", rows[1]);
 		Assert.Equal("3", rows[2]);
 	}
 
-	[Fact(Skip = "Result order not guaranteed without outer ORDER BY")]
+	[Fact(Skip = "ORDER BY on window function alias not applied correctly")]
 	public async Task RowNumber_Five()
 	{
-		var rows = await Column("SELECT ROW_NUMBER() OVER (ORDER BY x) FROM UNNEST([50,40,30,20,10]) AS x");
+		var rows = await Column("SELECT ROW_NUMBER() OVER (ORDER BY x) FROM UNNEST([50,40,30,20,10]) AS x ORDER BY 1");
 		Assert.Equal(5, rows.Count);
 		Assert.Equal("1", rows[0]);
 		Assert.Equal("5", rows[4]);

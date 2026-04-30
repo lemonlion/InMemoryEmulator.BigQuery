@@ -89,8 +89,8 @@ public class SelectClauseComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task OrderBy_AscDefault() { var rows = await Query($"SELECT id FROM `{_datasetId}.data` ORDER BY id"); Assert.Equal("1", rows[0]["id"]?.ToString()); Assert.Equal("8", rows[7]["id"]?.ToString()); }
 	[Fact] public async Task OrderBy_Desc() { var rows = await Query($"SELECT id FROM `{_datasetId}.data` ORDER BY id DESC"); Assert.Equal("8", rows[0]["id"]?.ToString()); }
 	[Fact] public async Task OrderBy_MultiColumn() { var rows = await Query($"SELECT * FROM `{_datasetId}.data` ORDER BY category, value DESC"); Assert.Equal("X", rows[0]["category"]?.ToString()); }
-	[Fact(Skip = "Not yet supported")] public async Task OrderBy_Alias() { var rows = await Query($"SELECT id, value * 2 AS dbl FROM `{_datasetId}.data` ORDER BY dbl DESC"); Assert.Equal("100.0", rows[0]["dbl"]?.ToString()); }
-	[Fact(Skip = "Not yet supported")] public async Task OrderBy_OrdinalPosition() { var rows = await Query($"SELECT id, value FROM `{_datasetId}.data` ORDER BY 2 DESC"); Assert.Equal("50.0", rows[0]["value"]?.ToString()); }
+	[Fact] public async Task OrderBy_Alias() { var rows = await Query($"SELECT id, value * 2 AS dbl FROM `{_datasetId}.data` ORDER BY dbl DESC"); Assert.Equal(100.0, double.Parse(rows[0]["dbl"]?.ToString() ?? "0")); }
+	[Fact] public async Task OrderBy_OrdinalPosition() { var rows = await Query($"SELECT id, value FROM `{_datasetId}.data` ORDER BY 2 DESC"); Assert.Equal(50.0, double.Parse(rows[0]["value"]?.ToString() ?? "0")); }
 
 	// ---- LIMIT ----
 	[Fact] public async Task Limit_Restricts() { var rows = await Query($"SELECT * FROM `{_datasetId}.data` ORDER BY id LIMIT 3"); Assert.Equal(3, rows.Count); }
@@ -118,7 +118,7 @@ public class SelectClauseComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task GroupBy_MultipleColumns() { var rows = await Query($"SELECT category, flag, COUNT(*) AS cnt FROM `{_datasetId}.data` GROUP BY category, flag ORDER BY category, flag"); Assert.True(rows.Count >= 3); }
 
 	// ---- HAVING ----
-	[Fact(Skip = "Needs investigation")] public async Task Having_FilterGroups() { var rows = await Query($"SELECT category, COUNT(*) AS cnt FROM `{_datasetId}.data` GROUP BY category HAVING COUNT(*) = 3 ORDER BY category"); Assert.Equal(3, rows.Count); }
+	[Fact] public async Task Having_FilterGroups() { var rows = await Query($"SELECT category, COUNT(*) AS cnt FROM `{_datasetId}.data` GROUP BY category HAVING COUNT(*) = 3 ORDER BY category"); Assert.Equal(2, rows.Count); }
 	[Fact] public async Task Having_WithSum() { var rows = await Query($"SELECT category, SUM(value) AS total FROM `{_datasetId}.data` GROUP BY category HAVING SUM(value) > 50 ORDER BY total"); Assert.True(rows.Count >= 1); }
 
 	// ---- SELECT with STRUCT ----
@@ -138,7 +138,7 @@ public class SelectClauseComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task TableAlias_InSelect() { var rows = await Query($"SELECT d.id, d.category FROM `{_datasetId}.data` d ORDER BY d.id LIMIT 1"); Assert.NotNull(rows[0]["id"]); }
 
 	// ---- Wildcard table ----
-	[Fact(Skip = "Not yet supported")] public async Task WildcardTable_MatchesAll()
+	[Fact(Skip = "Wildcard table FROM dataset.* not supported")] public async Task WildcardTable_MatchesAll()
 	{
 		var client = await _fixture.GetClientAsync();
 		await client.CreateTableAsync(_datasetId, "wt_alpha", new TableSchema { Fields = [new TableFieldSchema { Name = "id", Type = "INTEGER" }] });
@@ -150,10 +150,10 @@ public class SelectClauseComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- Except columns ----
-	[Fact(Skip = "Not yet supported")] public async Task SelectExcept() { var rows = await Query($"SELECT * EXCEPT(flag) FROM `{_datasetId}.data` LIMIT 1"); Assert.NotNull(rows[0]["id"]); }
+	[Fact(Skip = "SELECT * EXCEPT not supported")] public async Task SelectExcept() { var rows = await Query($"SELECT * EXCEPT(flag) FROM `{_datasetId}.data` LIMIT 1"); Assert.NotNull(rows[0]["id"]); }
 
 	// ---- Replace columns ----
-	[Fact(Skip = "Not yet supported")] public async Task SelectReplace() { var rows = await Query($"SELECT * REPLACE(value * 2 AS value) FROM `{_datasetId}.data` ORDER BY id LIMIT 1"); Assert.Equal("20.0", rows[0]["value"]?.ToString()); }
+	[Fact(Skip = "SELECT * REPLACE not supported")] public async Task SelectReplace() { var rows = await Query($"SELECT * REPLACE(value * 2 AS value) FROM `{_datasetId}.data` ORDER BY id LIMIT 1"); Assert.Equal("20.0", rows[0]["value"]?.ToString()); }
 
 	// ---- COUNT DISTINCT ----
 	[Fact] public async Task CountDistinct() { var v = await Scalar($"SELECT COUNT(DISTINCT category) FROM `{_datasetId}.data`"); Assert.Equal("3", v); }
