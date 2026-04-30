@@ -56,9 +56,9 @@ internal record TableRef(string? DatasetId, string TableId, string? Alias) : Fro
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#join_types
 internal record JoinClause(FromClause Left, JoinType Type, FromClause Right, SqlExpression? On) : FromClause;
 
-/// <summary>UNNEST(expr) [AS alias]</summary>
+/// <summary>UNNEST(expr) [AS alias] [WITH OFFSET [AS offset_alias]]</summary>
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#unnest_operator
-internal record UnnestClause(SqlExpression Expr, string? Alias) : FromClause;
+internal record UnnestClause(SqlExpression Expr, string? Alias, string? OffsetAlias = null) : FromClause;
 
 /// <summary>Subquery in FROM: (SELECT ...) [AS alias]</summary>
 internal record SubqueryFrom(SqlStatement Subquery, string? Alias) : FromClause;
@@ -189,6 +189,14 @@ internal record TablesampleFrom(FromClause Source, double Percent) : FromClause;
 
 internal record RollupExpr(IReadOnlyList<SqlExpression> Exprs) : SqlExpression;
 internal record ArraySubquery(SelectStatement Subquery) : SqlExpression;
+
+/// <summary>STRUCT(expr AS name, ...) literal construction.</summary>
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#constructing_a_struct
+internal record StructLiteralExpr(IReadOnlyList<(SqlExpression Value, string? Name)> Fields) : SqlExpression;
+
+/// <summary>Field access on an expression: (expr).fieldname or expr.fieldname.</summary>
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#field_access_operator
+internal record FieldAccessExpr(SqlExpression Object, string FieldName) : SqlExpression;
 
 // --- Enums ---
 

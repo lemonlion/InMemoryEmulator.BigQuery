@@ -131,13 +131,13 @@ public class SubqueryTests : IAsyncLifetime
 	}
 
 	// ---- ARRAY subquery ----
-	[Fact(Skip = "ARRAY subquery not supported")] public async Task ArraySub_Length()
+	[Fact] public async Task ArraySub_Length()
 	{
 		var v = await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1,2,3,4,5]) AS x WHERE x > 2))");
 		Assert.Equal("3", v);
 	}
 
-	[Fact(Skip = "ARRAY subquery not supported")] public async Task ArraySub_ToString()
+	[Fact] public async Task ArraySub_ToString()
 	{
 		var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY(SELECT x FROM UNNEST([3,1,2]) AS x ORDER BY x), ',')");
 		Assert.Equal("1,2,3", v);

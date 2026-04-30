@@ -127,7 +127,7 @@ public class AggregateFunctionComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task ArrayAgg_Distinct() => Assert.Equal("2", await Scalar($"SELECT ARRAY_LENGTH(ARRAY_AGG(DISTINCT grp)) FROM `{_datasetId}.nums`"));
 
 	// ---- ARRAY_CONCAT_AGG ----
-	[Fact(Skip = "ARRAY_CONCAT_AGG doubles results from subquery")]
+	[Fact(Skip = "ARRAY_CONCAT_AGG doubles results from correlated subquery")]
 	public async Task ArrayConcatAgg_Basic()
 	{
 		var v = await Scalar("SELECT ARRAY_LENGTH(ARRAY_CONCAT_AGG(arr)) FROM (SELECT [1,2] AS arr UNION ALL SELECT [3,4])");

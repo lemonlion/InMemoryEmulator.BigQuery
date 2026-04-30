@@ -150,7 +150,7 @@ WHERE x IN (SELECT y FROM UNNEST(GENERATE_ARRAY(5, 15)) AS y)");
 		Assert.Equal("11", v);
 	}
 
-	[Fact(Skip = "WHERE EXISTS subquery not supported")]
+	[Fact]
 	public async Task Where_ExistsSubquery()
 	{
 		var v = await Scalar(@"

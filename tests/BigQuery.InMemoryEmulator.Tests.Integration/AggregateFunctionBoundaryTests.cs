@@ -29,7 +29,7 @@ public class AggregateFunctionBoundaryTests : IAsyncLifetime
 	[Fact] public async Task Count_Star() => Assert.Equal("5", await Scalar("SELECT COUNT(*) FROM UNNEST([1,2,3,4,5]) AS x"));
 	[Fact] public async Task Count_Column() => Assert.Equal("5", await Scalar("SELECT COUNT(x) FROM UNNEST([1,2,3,4,5]) AS x"));
 	[Fact] public async Task Count_Distinct() => Assert.Equal("3", await Scalar("SELECT COUNT(DISTINCT x) FROM UNNEST([1,2,2,3,3]) AS x"));
-	[Fact(Skip = "UNNEST without parent table not supported in parser")] public async Task Count_Empty() => Assert.Equal("0", await Scalar("SELECT COUNT(*) FROM UNNEST(CAST([] AS ARRAY<INT64>)) AS x"));
+	[Fact] public async Task Count_Empty() => Assert.Equal("0", await Scalar("SELECT COUNT(*) FROM UNNEST(CAST([] AS ARRAY<INT64>)) AS x"));
 	[Fact] public async Task Count_Single() => Assert.Equal("1", await Scalar("SELECT COUNT(*) FROM UNNEST([42]) AS x"));
 	[Fact] public async Task Count_Large() => Assert.Equal("100", await Scalar("SELECT COUNT(*) FROM UNNEST(GENERATE_ARRAY(1,100)) AS x"));
 	[Fact] public async Task Count_AllSame() => Assert.Equal("1", await Scalar("SELECT COUNT(DISTINCT x) FROM UNNEST([5,5,5,5]) AS x"));

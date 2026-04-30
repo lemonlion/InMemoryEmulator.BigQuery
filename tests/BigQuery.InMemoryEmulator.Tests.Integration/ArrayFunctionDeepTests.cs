@@ -140,7 +140,7 @@ public class ArrayFunctionDeepTests : IAsyncLifetime
 		Assert.Equal("5", rows[1]);
 	}
 
-	[Fact(Skip = "UNNEST WITH OFFSET not supported")]
+	[Fact]
 	public async Task Unnest_WithOffset()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -156,8 +156,8 @@ public class ArrayFunctionDeepTests : IAsyncLifetime
 	}
 
 	// ---- ARRAY in subquery ----
-	[Fact(Skip = "ARRAY subquery not supported")] public async Task Array_Subquery() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1,2,3]) AS x))"));
-	[Fact(Skip = "ARRAY subquery not supported")] public async Task Array_SubqueryFiltered() => Assert.Equal("2", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1,2,3,4,5]) AS x WHERE x > 3))"));
+	[Fact] public async Task Array_Subquery() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1,2,3]) AS x))"));
+	[Fact] public async Task Array_SubqueryFiltered() => Assert.Equal("2", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1,2,3,4,5]) AS x WHERE x > 3))"));
 
 	// ---- ARRAY_AGG with UNNEST ----
 	[Fact]

@@ -45,27 +45,27 @@ public class UnnestAndStructTests : IAsyncLifetime
 	}
 
 	// ---- Basic UNNEST ----
-	[Fact(Skip = "Not yet supported")] public async Task Unnest_IntegerArray()
+	[Fact] public async Task Unnest_IntegerArray()
 	{
 		var rows = await Query("SELECT x FROM UNNEST([1, 2, 3]) AS x ORDER BY x");
 		Assert.Equal(3, rows.Count);
 		Assert.Equal("1", rows[0]["x"]?.ToString());
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task Unnest_StringArray()
+	[Fact] public async Task Unnest_StringArray()
 	{
 		var rows = await Query("SELECT s FROM UNNEST(['a', 'b', 'c']) AS s ORDER BY s");
 		Assert.Equal(3, rows.Count);
 		Assert.Equal("a", rows[0]["s"]?.ToString());
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task Unnest_EmptyArray()
+	[Fact] public async Task Unnest_EmptyArray()
 	{
 		var rows = await Query("SELECT x FROM UNNEST(CAST([] AS ARRAY<INT64>)) AS x");
 		Assert.Empty(rows);
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task Unnest_WithOffset()
+	[Fact] public async Task Unnest_WithOffset()
 	{
 		var rows = await Query("SELECT x, off FROM UNNEST([10, 20, 30]) AS x WITH OFFSET AS off ORDER BY off");
 		Assert.Equal(3, rows.Count);
@@ -74,7 +74,7 @@ public class UnnestAndStructTests : IAsyncLifetime
 	}
 
 	// ---- UNNEST with cross join ----
-	[Fact(Skip = "Not yet supported")] public async Task Unnest_CrossJoinInline()
+	[Fact] public async Task Unnest_CrossJoinInline()
 	{
 		var rows = await Query("SELECT n, v FROM (SELECT 'row' AS n), UNNEST([1, 2, 3]) AS v ORDER BY v");
 		Assert.Equal(3, rows.Count);
@@ -82,7 +82,7 @@ public class UnnestAndStructTests : IAsyncLifetime
 	}
 
 	// ---- UNNEST from table column ----
-	[Fact(Skip = "Not yet supported")] public async Task Unnest_FromTableArrayColumn()
+	[Fact] public async Task Unnest_FromTableArrayColumn()
 	{
 		var client = await _fixture.GetClientAsync();
 		await client.CreateTableAsync(_datasetId, "arr_tab", new TableSchema
@@ -103,14 +103,14 @@ public class UnnestAndStructTests : IAsyncLifetime
 	}
 
 	// ---- UNNEST with WHERE ----
-	[Fact(Skip = "Not yet supported")] public async Task Unnest_WithWhere()
+	[Fact] public async Task Unnest_WithWhere()
 	{
 		var rows = await Query("SELECT x FROM UNNEST([1, 2, 3, 4, 5]) AS x WHERE x > 3 ORDER BY x");
 		Assert.Equal(2, rows.Count);
 	}
 
 	// ---- UNNEST in subquery ----
-	[Fact(Skip = "Not yet supported")] public async Task Unnest_InExists()
+	[Fact] public async Task Unnest_InExists()
 	{
 		var v = await Scalar("SELECT EXISTS(SELECT 1 FROM UNNEST([5, 10, 15]) AS x WHERE x = 10)");
 		Assert.Equal("True", v);
@@ -123,19 +123,19 @@ public class UnnestAndStructTests : IAsyncLifetime
 		Assert.Single(rows);
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task Struct_FieldAccess()
+	[Fact] public async Task Struct_FieldAccess()
 	{
 		var v = await Scalar("SELECT (STRUCT(42 AS val)).val");
 		Assert.Equal("42", v);
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task Struct_NestedFieldAccess()
+	[Fact] public async Task Struct_NestedFieldAccess()
 	{
 		var v = await Scalar("SELECT (STRUCT(STRUCT('inner' AS msg) AS nested)).nested.msg");
 		Assert.Equal("inner", v);
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task Struct_InArray()
+	[Fact] public async Task Struct_InArray()
 	{
 		var rows = await Query("SELECT s.x, s.y FROM UNNEST([STRUCT(1 AS x, 'a' AS y), STRUCT(2, 'b')]) AS s ORDER BY s.x");
 		Assert.Equal(2, rows.Count);
@@ -161,24 +161,24 @@ public class UnnestAndStructTests : IAsyncLifetime
 	[Fact] public async Task GenerateArray_Descending() => Assert.Equal("5", await Scalar("SELECT ARRAY_LENGTH(GENERATE_ARRAY(5, 1, -1))"));
 
 	// ---- ARRAY subquery ----
-	[Fact(Skip = "ARRAY subquery format differs")] public async Task ArraySubquery_FromUnnest() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([10, 20, 30]) AS x))"));
-	[Fact(Skip = "ARRAY subquery format differs")] public async Task ArraySubquery_WithFilter() => Assert.Equal("2", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1, 2, 3, 4, 5]) AS x WHERE x > 3))"));
+	[Fact] public async Task ArraySubquery_FromUnnest() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([10, 20, 30]) AS x))"));
+	[Fact] public async Task ArraySubquery_WithFilter() => Assert.Equal("2", await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1, 2, 3, 4, 5]) AS x WHERE x > 3))"));
 
 	// ---- Nested arrays (via STRUCT) ----
-	[Fact(Skip = "Not yet supported")] public async Task NestedArraysViaStruct()
+	[Fact] public async Task NestedArraysViaStruct()
 	{
 		var rows = await Query("SELECT s.items FROM UNNEST([STRUCT([1,2] AS items), STRUCT([3,4])]) AS s");
 		Assert.Equal(2, rows.Count);
 	}
 
 	// ---- UNNEST + aggregation ----
-	[Fact(Skip = "Not yet supported")] public async Task Unnest_WithAggregation()
+	[Fact] public async Task Unnest_WithAggregation()
 	{
 		var v = await Scalar("SELECT SUM(x) FROM UNNEST([1, 2, 3, 4, 5]) AS x");
 		Assert.Equal("15", v);
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task Unnest_CountDistinct()
+	[Fact] public async Task Unnest_CountDistinct()
 	{
 		var v = await Scalar("SELECT COUNT(DISTINCT x) FROM UNNEST([1, 1, 2, 2, 3]) AS x");
 		Assert.Equal("3", v);

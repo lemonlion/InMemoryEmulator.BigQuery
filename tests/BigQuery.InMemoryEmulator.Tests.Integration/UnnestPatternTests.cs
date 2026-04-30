@@ -79,7 +79,7 @@ public class UnnestPatternTests : IAsyncLifetime
 	[Fact] public async Task Unnest_WhereOr() => Assert.Equal("2", await Scalar("SELECT COUNT(*) FROM UNNEST([1,2,3,4,5]) AS x WHERE x = 1 OR x = 5"));
 
 	// ---- UNNEST with WITH OFFSET ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Unnest_WithOffset_Values()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -96,7 +96,7 @@ public class UnnestPatternTests : IAsyncLifetime
 		Assert.Equal("2", rows[2][1]?.ToString());
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Unnest_WithOffset_Filter()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -109,7 +109,7 @@ public class UnnestPatternTests : IAsyncLifetime
 		Assert.Equal("30", rows[2][0]?.ToString());
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Unnest_WithOffset_EvenOnly()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -132,14 +132,14 @@ public class UnnestPatternTests : IAsyncLifetime
 	[Fact] public async Task Unnest_Distinct_Str() { var rows = await Column("SELECT DISTINCT x FROM UNNEST(['a','a','b','b','c']) AS x ORDER BY x"); Assert.Equal(3, rows.Count); }
 
 	// ---- UNNEST cross join ----
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Unnest_CrossJoin()
 	{
 		var v = await Scalar("SELECT COUNT(*) FROM UNNEST([1,2]) AS a, UNNEST([10,20,30]) AS b");
 		Assert.Equal("6", v);
 	}
 
-	[Fact(Skip = "Emulator limitation")]
+	[Fact]
 	public async Task Unnest_CrossJoin_Sum()
 	{
 		var v = await Scalar("SELECT SUM(a + b) FROM UNNEST([1,2]) AS a, UNNEST([10,20]) AS b");
@@ -185,7 +185,7 @@ public class UnnestPatternTests : IAsyncLifetime
 	public async Task Unnest_GenerateArray_Sum() => Assert.Equal("55", await Scalar("SELECT SUM(x) FROM UNNEST(GENERATE_ARRAY(1, 10)) AS x"));
 
 	// ---- Empty UNNEST ----
-	[Fact(Skip = "Emulator limitation")] public async Task Unnest_Empty() => Assert.Equal("0", await Scalar("SELECT COUNT(*) FROM UNNEST(CAST([] AS ARRAY<INT64>)) AS x"));
+	[Fact] public async Task Unnest_Empty() => Assert.Equal("0", await Scalar("SELECT COUNT(*) FROM UNNEST(CAST([] AS ARRAY<INT64>)) AS x"));
 
 	// ---- UNNEST booleans ----
 	[Fact] public async Task Unnest_Booleans()

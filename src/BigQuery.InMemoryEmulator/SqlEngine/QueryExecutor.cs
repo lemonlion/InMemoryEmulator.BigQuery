@@ -18,6 +18,10 @@ private readonly string? _defaultDatasetId;
 private IList<QueryParameter>? _parameters;
 // CTE results visible to the current query scope (set during ExecuteSelect, read by scalar subqueries)
 private Dictionary<string, (TableSchema Schema, List<Dictionary<string, object?>> Rows)>? _activeCteResults;
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/subqueries#correlated_subqueries
+//   "A correlated subquery references a column from outside the subquery."
+// Outer row context for correlated subqueries (EXISTS, scalar subquery, IN subquery).
+private RowContext? _outerRowContext;
 private (RowContext CurrentRow, List<RowContext> AllRows)? _windowContext;
 
 public QueryExecutor(InMemoryDataStore store, string? defaultDatasetId = null)
@@ -869,6 +873,11 @@ private List<RowContext> ResolveJoin(JoinClause join,
 Dictionary<string, (TableSchema, List<Dictionary<string, object?>>)>? cteResults)
 {
 var left = ResolveFrom(join.Left, cteResults);
+// For cross join with UNNEST, the UNNEST expression may reference columns from the left side
+if (join.Type == JoinType.Cross && join.Right is UnnestClause unnest)
+{
+return CorrelatedCrossJoinUnnest(left, unnest);
+}
 var right = ResolveFrom(join.Right, cteResults);
 return join.Type switch
 {
@@ -879,6 +888,17 @@ JoinType.Right => RightJoin(left, right, join.On!),
 JoinType.Full => FullJoin(left, right, join.On!),
 _ => throw new NotSupportedException("Unsupported join type: " + join.Type)
 };
+}
+
+private List<RowContext> CorrelatedCrossJoinUnnest(List<RowContext> left, UnnestClause unnest)
+{
+var result = new List<RowContext>();
+foreach (var l in left)
+{
+var rightRows = ResolveUnnest(unnest, l);
+foreach (var r in rightRows) result.Add(MergeRows(l, r));
+}
+return result;
 }
 
 private static List<RowContext> CrossJoin(List<RowContext> left, List<RowContext> right)
@@ -987,13 +1007,35 @@ return new RowContext(allFields, alias);
 }).ToList();
 }
 
-private List<RowContext> ResolveUnnest(UnnestClause unnest)
+private List<RowContext> ResolveUnnest(UnnestClause unnest, RowContext? parentRow = null)
 {
 var alias = unnest.Alias ?? "unnest";
-var value = Evaluate(unnest.Expr, new RowContext(new Dictionary<string, object?>(), null));
+var evalRow = parentRow ?? new RowContext(new Dictionary<string, object?>(), null);
+var value = Evaluate(unnest.Expr, evalRow);
 if (value is IEnumerable<object?> list)
-return list.Select(item => new RowContext(
-new Dictionary<string, object?> { [alias] = item, [alias + "." + alias] = item }, alias)).ToList();
+{
+int idx = 0;
+return list.Select(item =>
+{
+var fields = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+if (item is IDictionary<string, object?> structFields)
+{
+foreach (var kv in structFields)
+{
+fields[kv.Key] = kv.Value;
+fields[alias + "." + kv.Key] = kv.Value;
+}
+}
+fields[alias] = item;
+if (unnest.OffsetAlias is not null)
+{
+fields[unnest.OffsetAlias] = (long)idx;
+fields[alias + "." + unnest.OffsetAlias] = (long)idx;
+}
+idx++;
+return new RowContext(fields, alias);
+}).ToList();
+}
 return [];
 }
 
@@ -1446,9 +1488,11 @@ LikeExpr like => EvaluateLike(like, row),
 CastExpr cast => EvaluateCast(cast, row),
 ArraySubscriptExpr sub => EvaluateArraySubscript(sub, row),
 CaseExpr caseExpr => EvaluateCase(caseExpr, row),
-ScalarSubquery sub => EvaluateScalarSubquery(sub),
-ExistsExpr exists => EvaluateExists(exists),
+ScalarSubquery sub => EvaluateScalarSubquery(sub, row),
+ExistsExpr exists => EvaluateExists(exists, row),
 ArraySubquery arraySub => EvaluateArraySubquery(arraySub),
+StructLiteralExpr structLit => EvaluateStructLiteral(structLit, row),
+FieldAccessExpr fa => EvaluateFieldAccess(fa, row),
 WindowFunction wf => _windowContext.HasValue ? EvaluateWindow(wf, _windowContext.Value.CurrentRow, _windowContext.Value.AllRows) : throw new InvalidOperationException("Window function in non-window context"),
 StarExpr => throw new InvalidOperationException("Star expression in non-projection context"),
 VariableRef v => _parameters?.FirstOrDefault(p => p.Name == v.Name)?.ParameterValue?.Value,
@@ -1466,6 +1510,16 @@ if (col.TableAlias is not null)
 {
 var qualified = col.TableAlias + "." + name;
 if (row.Fields.TryGetValue(qualified, out var qVal)) return qVal;
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/subqueries#correlated_subqueries
+//   When table alias does not match current scope, delegate to outer row context.
+if (_outerRowContext is not null)
+{
+var prevOuter = _outerRowContext;
+_outerRowContext = null;
+try { return EvaluateColumnRef(col, prevOuter); }
+finally { _outerRowContext = prevOuter; }
+}
+return null;
 }
 if (row.Fields.TryGetValue(name, out var val)) return val;
 // Try any qualified match
@@ -1479,6 +1533,14 @@ foreach (var kv in row.Fields)
 {
 if (kv.Key.Equals(name, StringComparison.OrdinalIgnoreCase))
 return kv.Value;
+}
+// Fall back to outer row context for correlated subqueries (unqualified columns).
+if (_outerRowContext is not null)
+{
+var prevOuter = _outerRowContext;
+_outerRowContext = null;
+try { return EvaluateColumnRef(col, prevOuter); }
+finally { _outerRowContext = prevOuter; }
 }
 return null;
 }
@@ -1770,7 +1832,11 @@ if (IsTruthy(Evaluate(when, row))) return Evaluate(then, row);
 return caseExpr.Else is not null ? Evaluate(caseExpr.Else, row) : null;
 }
 
-private object? EvaluateScalarSubquery(ScalarSubquery sub)
+private object? EvaluateScalarSubquery(ScalarSubquery sub, RowContext row)
+{
+var prevOuter = _outerRowContext;
+_outerRowContext = row;
+try
 {
 var result = sub.Subquery switch
 {
@@ -1779,19 +1845,57 @@ var result = sub.Subquery switch
     _ => throw new NotSupportedException($"Unsupported subquery type: {sub.Subquery.GetType().Name}")
 };
 if (result.Rows.Count == 0) return null;
-return result.Rows[0].F?[0]?.V;
+// Re-parse the formatted value back to its typed form using the schema
+// so comparisons with typed values (long, double) work correctly.
+var rawVal = result.Rows[0].F?[0]?.V;
+var fieldType = result.Schema?.Fields?.Count > 0 ? result.Schema.Fields[0].Type : null;
+return ParseTypedValue(rawVal, fieldType);
+}
+finally { _outerRowContext = prevOuter; }
 }
 
-private object? EvaluateExists(ExistsExpr exists)
+private object? EvaluateExists(ExistsExpr exists, RowContext row)
+{
+var prevOuter = _outerRowContext;
+_outerRowContext = row;
+try
 {
 var result = ExecuteSelect(exists.Subquery, _activeCteResults);
 return result.Rows.Count > 0;
+}
+finally { _outerRowContext = prevOuter; }
 }
 
 private object? EvaluateArraySubquery(ArraySubquery arraySub)
 {
 var result = ExecuteSelect(arraySub.Subquery, _activeCteResults);
 return result.Rows.Select(r => r.F?[0]?.V).Cast<object?>().ToList();
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#constructing_a_struct
+private object? EvaluateStructLiteral(StructLiteralExpr structLit, RowContext row)
+{
+var dict = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+for (int i = 0; i < structLit.Fields.Count; i++)
+{
+var (value, name) = structLit.Fields[i];
+var key = name ?? $"_field_{i}";
+dict[key] = Evaluate(value, row);
+}
+return dict;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#field_access_operator
+private object? EvaluateFieldAccess(FieldAccessExpr fa, RowContext row)
+{
+var obj = Evaluate(fa.Object, row);
+if (obj is IDictionary<string, object?> dict)
+{
+if (dict.TryGetValue(fa.FieldName, out var val)) return val;
+foreach (var kv in dict)
+if (kv.Key.Equals(fa.FieldName, StringComparison.OrdinalIgnoreCase)) return kv.Value;
+}
+return null;
 }
 
 private object? ResolveParameter(string name)
@@ -2069,7 +2173,7 @@ return name switch
 
 // Type functions
 "STRUCT" => args.Select(a => Evaluate(a, row)).ToList(),
-"ARRAY" => args.Select(a => Evaluate(a, row)).ToList(),
+"ARRAY" => EvaluateArrayLiteral(args, row),
 
 // Hash/Encoding
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/hash_functions
@@ -3168,6 +3272,38 @@ return DateTimeOffset.Parse(str, CultureInfo.InvariantCulture);
 
 #endregion
 #region Remaining function helpers
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#declaring_an_array_type
+// When an array contains structs, propagate field names from the first named struct to all unnamed ones.
+private object? EvaluateArrayLiteral(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+var items = args.Select(a => Evaluate(a, row)).ToList();
+// Propagate struct field names from the first named struct
+IReadOnlyList<string>? fieldNames = null;
+foreach (var item in items)
+{
+if (item is IDictionary<string, object?> d && d.Keys.Any(k => !k.StartsWith("_field_")))
+{
+fieldNames = d.Keys.ToList();
+break;
+}
+}
+if (fieldNames != null)
+{
+for (int i = 0; i < items.Count; i++)
+{
+if (items[i] is IDictionary<string, object?> d && d.Keys.All(k => k.StartsWith("_field_")))
+{
+var renamed = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+var vals = d.Values.ToList();
+for (int j = 0; j < Math.Min(fieldNames.Count, vals.Count); j++)
+renamed[fieldNames[j]] = vals[j];
+items[i] = renamed;
+}
+}
+}
+return items;
+}
 
 private object? EvaluateArrayLength(IReadOnlyList<SqlExpression> args, RowContext row)
 {

@@ -31,7 +31,7 @@ public class StructTests : IAsyncLifetime
 	}
 
 	// ---- STRUCT in UNNEST ----
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task Struct_UnnestBasic()
 	{
 		var rows = await Query("SELECT t.name, t.age FROM UNNEST([STRUCT('Alice' AS name, 30 AS age), STRUCT('Bob', 25)]) AS t ORDER BY t.age");
@@ -42,7 +42,7 @@ public class StructTests : IAsyncLifetime
 		Assert.Equal("30", rows[1]["age"]?.ToString());
 	}
 
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task Struct_ThreeFields()
 	{
 		var rows = await Query(@"
@@ -54,7 +54,7 @@ public class StructTests : IAsyncLifetime
 		Assert.Equal("True", rows[0]["c"]?.ToString());
 	}
 
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task Struct_SingleRow()
 	{
 		var rows = await Query("SELECT t.id, t.val FROM UNNEST([STRUCT(42 AS id, 'hello' AS val)]) AS t");
@@ -64,7 +64,7 @@ public class StructTests : IAsyncLifetime
 	}
 
 	// ---- STRUCT filter ----
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task Struct_WhereFilter()
 	{
 		var rows = await Query(@"
@@ -78,7 +78,7 @@ public class StructTests : IAsyncLifetime
 		Assert.Equal("Charlie", rows[1]["name"]?.ToString());
 	}
 
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task Struct_WhereString()
 	{
 		var rows = await Query(@"
@@ -93,7 +93,7 @@ public class StructTests : IAsyncLifetime
 	}
 
 	// ---- STRUCT aggregate ----
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task Struct_GroupBy()
 	{
 		var rows = await Query(@"
@@ -110,7 +110,7 @@ public class StructTests : IAsyncLifetime
 		Assert.Equal("40", rows[1]["total"]?.ToString());
 	}
 
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task Struct_CountPerGroup()
 	{
 		var rows = await Query(@"
@@ -125,7 +125,7 @@ public class StructTests : IAsyncLifetime
 	}
 
 	// ---- STRUCT ordering ----
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task Struct_OrderByField()
 	{
 		var rows = await Query(@"
@@ -140,7 +140,7 @@ public class StructTests : IAsyncLifetime
 	}
 
 	// ---- STRUCT with expressions ----
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task Struct_ComputedField()
 	{
 		var rows = await Query(@"
@@ -153,7 +153,7 @@ public class StructTests : IAsyncLifetime
 	}
 
 	// ---- STRUCT with LIMIT/OFFSET ----
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task Struct_LimitOffset()
 	{
 		var rows = await Query(@"
@@ -166,7 +166,7 @@ public class StructTests : IAsyncLifetime
 	}
 
 	// ---- STRUCT with DISTINCT ----
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task Struct_DistinctField()
 	{
 		var rows = await Query(@"
@@ -177,7 +177,7 @@ public class StructTests : IAsyncLifetime
 	}
 
 	// ---- STRUCT with NULL fields ----
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task Struct_NullField()
 	{
 		var rows = await Query(@"
@@ -191,7 +191,7 @@ public class StructTests : IAsyncLifetime
 	}
 
 	// ---- STRUCT with boolean fields ----
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task Struct_BoolFilter()
 	{
 		var rows = await Query(@"
@@ -206,7 +206,7 @@ public class StructTests : IAsyncLifetime
 	}
 
 	// ---- STRUCT with string operations ----
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task Struct_ConcatFields()
 	{
 		var rows = await Query(@"
@@ -219,7 +219,7 @@ public class StructTests : IAsyncLifetime
 	}
 
 	// ---- Many STRUCTs ----
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task Struct_ManyRows()
 	{
 		var v = await Scalar(@"
@@ -231,7 +231,7 @@ public class StructTests : IAsyncLifetime
 	}
 
 	// ---- STRUCT with window function ----
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task Struct_WindowRowNumber()
 	{
 		var rows = await Query(@"

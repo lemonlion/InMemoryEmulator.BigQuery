@@ -58,7 +58,7 @@ public class JoinTests : IAsyncLifetime
 	}
 
 	// ---- INNER JOIN ----
-	[Fact(Skip = "UNNEST with STRUCT arrays in JOINs not supported")]
+	[Fact]
 	public async Task InnerJoin_Basic()
 	{
 		var rows = await Query(@"
@@ -74,7 +74,7 @@ public class JoinTests : IAsyncLifetime
 		Assert.Equal("80", rows[1]["score"]?.ToString());
 	}
 
-	[Fact(Skip = "UNNEST with STRUCT arrays in JOINs not supported")]
+	[Fact]
 	public async Task InnerJoin_NoMatch()
 	{
 		var rows = await Query(@"
@@ -83,7 +83,7 @@ public class JoinTests : IAsyncLifetime
 		Assert.Empty(rows);
 	}
 
-	[Fact(Skip = "UNNEST with STRUCT arrays in JOINs not supported")]
+	[Fact]
 	public async Task InnerJoin_MultipleMatches()
 	{
 		var rows = await Query(@"
@@ -94,7 +94,7 @@ public class JoinTests : IAsyncLifetime
 	}
 
 	// ---- LEFT JOIN ----
-	[Fact(Skip = "UNNEST with STRUCT arrays in JOINs not supported")]
+	[Fact]
 	public async Task LeftJoin_AllMatch()
 	{
 		var rows = await Query(@"
@@ -106,7 +106,7 @@ public class JoinTests : IAsyncLifetime
 		Assert.Equal("b", rows[1]["val"]?.ToString());
 	}
 
-	[Fact(Skip = "UNNEST with STRUCT arrays in JOINs not supported")]
+	[Fact]
 	public async Task LeftJoin_PartialMatch()
 	{
 		var rows = await Query(@"
@@ -119,7 +119,7 @@ public class JoinTests : IAsyncLifetime
 		Assert.Null(rows[2]["val"]);
 	}
 
-	[Fact(Skip = "UNNEST with STRUCT arrays in JOINs not supported")]
+	[Fact]
 	public async Task LeftJoin_NoMatch()
 	{
 		var rows = await Query(@"
@@ -130,7 +130,7 @@ public class JoinTests : IAsyncLifetime
 	}
 
 	// ---- RIGHT JOIN ----
-	[Fact(Skip = "UNNEST with STRUCT arrays in JOINs not supported")]
+	[Fact]
 	public async Task RightJoin_AllMatch()
 	{
 		var rows = await Query(@"
@@ -140,7 +140,7 @@ public class JoinTests : IAsyncLifetime
 		Assert.Equal(2, rows.Count);
 	}
 
-	[Fact(Skip = "UNNEST with STRUCT arrays in JOINs not supported")]
+	[Fact]
 	public async Task RightJoin_PartialMatch()
 	{
 		var rows = await Query(@"
@@ -154,7 +154,7 @@ public class JoinTests : IAsyncLifetime
 	}
 
 	// ---- FULL OUTER JOIN ----
-	[Fact(Skip = "UNNEST with STRUCT arrays in JOINs not supported")]
+	[Fact]
 	public async Task FullJoin_AllMatch()
 	{
 		var rows = await Query(@"
@@ -165,7 +165,7 @@ public class JoinTests : IAsyncLifetime
 		Assert.Equal(2, rows.Count);
 	}
 
-	[Fact(Skip = "UNNEST with STRUCT arrays in JOINs not supported")]
+	[Fact]
 	public async Task FullJoin_NoOverlap()
 	{
 		var rows = await Query(@"
@@ -176,7 +176,7 @@ public class JoinTests : IAsyncLifetime
 		Assert.Equal(4, rows.Count);
 	}
 
-	[Fact(Skip = "UNNEST with STRUCT arrays in JOINs not supported")]
+	[Fact]
 	public async Task FullJoin_Partial()
 	{
 		var rows = await Query(@"
@@ -197,7 +197,7 @@ public class JoinTests : IAsyncLifetime
 	}
 
 	// ---- JOIN with aggregate ----
-	[Fact(Skip = "UNNEST with STRUCT arrays in JOINs not supported")]
+	[Fact]
 	public async Task JoinAggregate()
 	{
 		var v = await Scalar(@"
@@ -208,7 +208,7 @@ public class JoinTests : IAsyncLifetime
 	}
 
 	// ---- JOIN with filter ----
-	[Fact(Skip = "UNNEST with STRUCT arrays in JOINs not supported")]
+	[Fact]
 	public async Task JoinWithWhere()
 	{
 		var rows = await Query(@"
@@ -221,7 +221,7 @@ public class JoinTests : IAsyncLifetime
 	}
 
 	// ---- USING clause ----
-	[Fact(Skip = "UNNEST with STRUCT arrays in JOINs not supported")]
+	[Fact]
 	public async Task Join_Using()
 	{
 		var rows = await Query(@"

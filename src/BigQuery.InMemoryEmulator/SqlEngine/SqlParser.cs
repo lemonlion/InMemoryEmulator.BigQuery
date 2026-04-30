@@ -485,6 +485,32 @@ internal static class SqlParser
 				.Select(body => (SqlExpression)new LambdaExpr(paramName, body))
 		);
 
+	// --- STRUCT(expr [AS name], ...) ---
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#constructing_a_struct
+	private static readonly TokenListParser<SqlToken, SqlExpression> StructLiteralParser =
+		Token.EqualTo(SqlToken.Identifier)
+			.Where(t => t.ToStringValue().Equals("STRUCT", StringComparison.OrdinalIgnoreCase))
+			.IgnoreThen(Token.EqualTo(SqlToken.LParen))
+			.IgnoreThen(
+				SP.Ref(() => Expression!).Then(expr =>
+					Token.EqualTo(SqlToken.As).IgnoreThen(IdentifierOrKeyword)
+						.Select(n => (string?)n).OptionalOrDefault()
+						.Select(name => (Value: expr, Name: name))
+				).ManyDelimitedBy(Token.EqualTo(SqlToken.Comma))
+			)
+			.Then(fields => Token.EqualTo(SqlToken.RParen).Select(_ =>
+				(SqlExpression)new StructLiteralExpr(fields.Select(f => (f.Value, f.Name)).ToList())));
+
+	// --- ARRAY(SELECT ...) subquery ---
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/subqueries#array_subquery
+	private static readonly TokenListParser<SqlToken, SqlExpression> ArraySubqueryParser =
+		Token.EqualTo(SqlToken.Identifier)
+			.Where(t => t.ToStringValue().Equals("ARRAY", StringComparison.OrdinalIgnoreCase))
+			.IgnoreThen(Token.EqualTo(SqlToken.LParen))
+			.IgnoreThen(SP.Ref(() => SelectStmt!))
+			.Then(sub => Token.EqualTo(SqlToken.RParen).Select(_ =>
+				(SqlExpression)new ArraySubquery(sub)));
+
 	// --- Atom: base expression ---
 	private static readonly TokenListParser<SqlToken, SqlExpression> Atom =
 		AggDistinct.Try()
@@ -493,6 +519,8 @@ internal static class SqlParser
 		.Or(CaseExprParser.Try())
 		.Or(ExistsExprParser.Try())
 		.Or(ArrayLiteral.Try())
+		.Or(StructLiteralParser.Try())
+		.Or(ArraySubqueryParser.Try())
 		.Or(LambdaExprParser.Try())
 		.Or(ColumnOrFunctionRef.Try())
 		.Or(NumberLiteral)
@@ -539,12 +567,26 @@ internal static class SqlParser
 
 	// --- OVER (window function) suffix ---
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls
-	// --- OVER (window function) suffix ---
-	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls
+
+// --- Field access suffix: expr.fieldname (chains left-to-right) ---
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#field_access_operator
+private static readonly TokenListParser<SqlToken, SqlExpression> FieldAccessSuffix =
+	Atom.Then(expr =>
+		Token.EqualTo(SqlToken.Dot).IgnoreThen(Identifier)
+			.Many()
+			.Select(fields =>
+			{
+				SqlExpression result = expr;
+				foreach (var field in fields)
+					result = new FieldAccessExpr(result, field);
+				return result;
+			})
+	);
+
 // --- Array subscript: expr[OFFSET(n)] / expr[ORDINAL(n)] / expr[SAFE_OFFSET(n)] / expr[SAFE_ORDINAL(n)] ---
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_subscript_operator
 private static readonly TokenListParser<SqlToken, SqlExpression> SubscriptSuffix =
-Atom.Then(expr =>
+FieldAccessSuffix.Then(expr =>
 Token.EqualTo(SqlToken.LBracket)
 .IgnoreThen(FunctionNameOrIdentifier.Or(Token.EqualTo(SqlToken.Offset).Select(t => t.ToStringValue())))
 .Then(mode =>
@@ -806,7 +848,7 @@ Token.EqualTo(SqlToken.LParen)
 
 	// --- Single table reference (no joins) ---
 
-	// --- UNNEST(expr) [AS alias] ---
+	// --- UNNEST(expr) [AS alias] [WITH OFFSET [AS offset_alias]] ---
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#unnest_operator
 	private static readonly TokenListParser<SqlToken, FromClause> UnnestParser =
 		Token.EqualTo(SqlToken.Unnest)
@@ -815,7 +857,15 @@ Token.EqualTo(SqlToken.LParen)
 			.Then(expr => Token.EqualTo(SqlToken.RParen).IgnoreThen(
 				Token.EqualTo(SqlToken.As).IgnoreThen(IdentifierOrKeyword)
 					.Select(a => (string?)a).OptionalOrDefault()
-			).Select(alias => (FromClause)new UnnestClause(expr, alias)));
+			).Then(alias =>
+				// WITH OFFSET [AS offset_alias]
+				Token.EqualTo(SqlToken.With).IgnoreThen(Token.EqualTo(SqlToken.Offset))
+					.IgnoreThen(Token.EqualTo(SqlToken.As).IgnoreThen(IdentifierOrKeyword)
+						.Select(o => (string?)o).OptionalOrDefault())
+					.Select(off => (string?)(off ?? "offset"))
+					.OptionalOrDefault()
+				.Select(offsetAlias => (FromClause)new UnnestClause(expr, alias, offsetAlias))
+			));
 
 	// --- (SELECT ... [UNION ALL SELECT ...]*) [AS alias] in FROM ---
 	private static readonly TokenListParser<SqlToken, FromClause> SubqueryFromParser =

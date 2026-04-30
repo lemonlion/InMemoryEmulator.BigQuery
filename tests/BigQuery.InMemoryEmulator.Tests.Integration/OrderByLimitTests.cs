@@ -195,7 +195,7 @@ public class OrderByLimitTests : IAsyncLifetime
 	}
 
 	// ---- Multiple ORDER BY columns ----
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task OrderBy_TwoColumns()
 	{
 		var rows = await Query(@"
@@ -210,7 +210,7 @@ public class OrderByLimitTests : IAsyncLifetime
 		Assert.Equal("1", rows[2]["val"]?.ToString());
 	}
 
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task OrderBy_MixedDirection()
 	{
 		var rows = await Query(@"

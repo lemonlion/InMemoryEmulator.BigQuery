@@ -44,7 +44,7 @@ public class GroupByHavingTests : IAsyncLifetime
 		Assert.Equal("1", rows[2]["cnt"]?.ToString());
 	}
 
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task GroupBy_SumPerGroup()
 	{
 		var rows = await Query(@"
@@ -56,7 +56,7 @@ public class GroupByHavingTests : IAsyncLifetime
 		Assert.Equal("70", rows[1]["total"]?.ToString());
 	}
 
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task GroupBy_MinMaxPerGroup()
 	{
 		var rows = await Query(@"
@@ -89,7 +89,7 @@ public class GroupByHavingTests : IAsyncLifetime
 		Assert.Equal("2", rows[1]["x"]?.ToString());
 	}
 
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task Having_SumFilter()
 	{
 		var rows = await Query(@"
@@ -108,7 +108,7 @@ public class GroupByHavingTests : IAsyncLifetime
 		Assert.Empty(rows);
 	}
 
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task Having_AvgFilter()
 	{
 		var rows = await Query(@"
@@ -120,7 +120,7 @@ public class GroupByHavingTests : IAsyncLifetime
 	}
 
 	// ---- GROUP BY with multiple columns ----
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task GroupBy_TwoColumns()
 	{
 		var rows = await Query(@"
@@ -153,7 +153,7 @@ public class GroupByHavingTests : IAsyncLifetime
 		Assert.Equal("3", rows[0]["cnt"]?.ToString());
 	}
 
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task GroupBy_OrderBySum()
 	{
 		var rows = await Query(@"
@@ -184,7 +184,7 @@ public class GroupByHavingTests : IAsyncLifetime
 	}
 
 	// ---- GROUP BY with NULL values ----
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task GroupBy_NullGroup()
 	{
 		var rows = await Query(@"
@@ -195,7 +195,7 @@ public class GroupByHavingTests : IAsyncLifetime
 	}
 
 	// ---- HAVING with functions ----
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task Having_MinFilter()
 	{
 		var rows = await Query(@"
@@ -206,7 +206,7 @@ public class GroupByHavingTests : IAsyncLifetime
 		Assert.Equal("b", rows[0]["grp"]?.ToString());
 	}
 
-	[Fact(Skip = "UNNEST with STRUCT arrays not supported")]
+	[Fact]
 	public async Task Having_MaxFilter()
 	{
 		var rows = await Query(@"
