@@ -86,7 +86,7 @@ public class JsonFunctionComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task JsonType_Null() => Assert.Equal("null", await Scalar("SELECT JSON_TYPE(PARSE_JSON('null'))"));
 
 	// ---- PARSE_JSON / TO_JSON / TO_JSON_STRING ----
-	[Fact(Skip = "TO_JSON_STRING double-encodes quotes as \\u0022")] public async Task ParseJson_Object() { var v = await Scalar("SELECT TO_JSON_STRING(PARSE_JSON('{\"a\": 1}'))"); Assert.Contains("\"a\"", v); }
+	[Fact] public async Task ParseJson_Object() { var v = await Scalar("SELECT TO_JSON_STRING(PARSE_JSON('{\"a\": 1}'))"); Assert.Contains("\"a\"", v); }
 	[Fact] public async Task ToJson_Int() { var v = await Scalar("SELECT TO_JSON_STRING(42)"); Assert.Equal("42", v); }
 	[Fact] public async Task ToJson_String() { var v = await Scalar("SELECT TO_JSON_STRING('hello')"); Assert.Equal("\"hello\"", v); }
 	[Fact] public async Task ToJsonString_Bool() { var v = await Scalar("SELECT TO_JSON_STRING(TRUE)"); Assert.Equal("true", v); }
@@ -95,28 +95,28 @@ public class JsonFunctionComprehensiveTests : IAsyncLifetime
 
 	// ---- JSON_ARRAY / JSON_OBJECT ----
 	[Fact] public async Task JsonArray_Basic() { var v = await Scalar("SELECT TO_JSON_STRING(JSON_ARRAY(1, 'two', TRUE))"); Assert.Contains("1", v); Assert.Contains("two", v); }
-	[Fact(Skip = "TO_JSON_STRING double-encodes quotes as \\u0022")] public async Task JsonObject_Basic() { var v = await Scalar("SELECT TO_JSON_STRING(JSON_OBJECT('a', 1, 'b', 'hello'))"); Assert.Contains("\"a\"", v); Assert.Contains("hello", v); }
+	[Fact] public async Task JsonObject_Basic() { var v = await Scalar("SELECT TO_JSON_STRING(JSON_OBJECT('a', 1, 'b', 'hello'))"); Assert.Contains("\"a\"", v); Assert.Contains("hello", v); }
 
 	// ---- LAX type accessors ----
-	[Fact(Skip = "Not yet supported")] public async Task LaxBool_True() => Assert.Equal("true", await Scalar("SELECT LAX_BOOL(PARSE_JSON('true'))"));
-	[Fact(Skip = "Not yet supported")] public async Task LaxBool_StringTrue() => Assert.Equal("true", await Scalar("SELECT LAX_BOOL(PARSE_JSON('\"true\"'))"));
-	[Fact(Skip = "Not yet supported")] public async Task LaxInt64_Number() => Assert.Equal("42", await Scalar("SELECT LAX_INT64(PARSE_JSON('42'))"));
-	[Fact(Skip = "Not yet supported")] public async Task LaxInt64_String() => Assert.Equal("42", await Scalar("SELECT LAX_INT64(PARSE_JSON('\"42\"'))"));
-	[Fact(Skip = "Not yet supported")] public async Task LaxFloat64_Number() { var v = await Scalar("SELECT LAX_FLOAT64(PARSE_JSON('3.14'))"); Assert.StartsWith("3.14", v); }
-	[Fact(Skip = "Not yet supported")] public async Task LaxString_String() => Assert.Equal("hello", await Scalar("SELECT LAX_STRING(PARSE_JSON('\"hello\"'))"));
-	[Fact(Skip = "Not yet supported")] public async Task LaxString_Number() => Assert.Equal("42", await Scalar("SELECT LAX_STRING(PARSE_JSON('42'))"));
+	[Fact] public async Task LaxBool_True() => Assert.Equal("True", await Scalar("SELECT LAX_BOOL(PARSE_JSON('true'))"));
+	[Fact] public async Task LaxBool_StringTrue() => Assert.Equal("True", await Scalar("SELECT LAX_BOOL(PARSE_JSON('\"true\"'))"));
+	[Fact] public async Task LaxInt64_Number() => Assert.Equal("42", await Scalar("SELECT LAX_INT64(PARSE_JSON('42'))"));
+	[Fact] public async Task LaxInt64_String() => Assert.Equal("42", await Scalar("SELECT LAX_INT64(PARSE_JSON('\"42\"'))"));
+	[Fact] public async Task LaxFloat64_Number() { var v = await Scalar("SELECT LAX_FLOAT64(PARSE_JSON('3.14'))"); Assert.StartsWith("3.14", v); }
+	[Fact] public async Task LaxString_String() => Assert.Equal("hello", await Scalar("SELECT LAX_STRING(PARSE_JSON('\"hello\"'))"));
+	[Fact] public async Task LaxString_Number() => Assert.Equal("42", await Scalar("SELECT LAX_STRING(PARSE_JSON('42'))"));
 
 	// ---- Strict type accessors ----
-	[Fact(Skip = "Not yet supported")] public async Task JsonBool_True() => Assert.Equal("true", await Scalar("SELECT BOOL(PARSE_JSON('true'))"));
-	[Fact(Skip = "Not yet supported")] public async Task JsonInt64_Number() => Assert.Equal("42", await Scalar("SELECT INT64(PARSE_JSON('42'))"));
-	[Fact(Skip = "Not yet supported")] public async Task JsonFloat64_Number() { var v = await Scalar("SELECT FLOAT64(PARSE_JSON('3.14'))"); Assert.StartsWith("3.14", v); }
-	[Fact(Skip = "Not yet supported")] public async Task JsonString_String() => Assert.Equal("hello", await Scalar("SELECT STRING(PARSE_JSON('\"hello\"'))"));
+	[Fact] public async Task JsonBool_True() => Assert.Equal("True", await Scalar("SELECT BOOL(PARSE_JSON('true'))"));
+	[Fact] public async Task JsonInt64_Number() => Assert.Equal("42", await Scalar("SELECT INT64(PARSE_JSON('42'))"));
+	[Fact] public async Task JsonFloat64_Number() { var v = await Scalar("SELECT FLOAT64(PARSE_JSON('3.14'))"); Assert.StartsWith("3.14", v); }
+	[Fact] public async Task JsonString_String() => Assert.Equal("hello", await Scalar("SELECT STRING(PARSE_JSON('\"hello\"'))"));
 
 	// ---- JSON_ARRAY_APPEND / JSON_ARRAY_INSERT ----
-	[Fact(Skip = "Not yet supported")] public async Task JsonArrayAppend_Basic() { var v = await Scalar("SELECT JSON_ARRAY_APPEND('[1,2]', '$', 3)"); Assert.Contains("3", v); }
-	[Fact(Skip = "Not yet supported")] public async Task JsonArrayInsert_Basic() { var v = await Scalar("SELECT JSON_ARRAY_INSERT('[1,3]', '$[1]', 2)"); Assert.Contains("2", v); }
+	[Fact] public async Task JsonArrayAppend_Basic() { var v = await Scalar("SELECT JSON_ARRAY_APPEND('[1,2]', '$', 3)"); Assert.Contains("3", v); }
+	[Fact] public async Task JsonArrayInsert_Basic() { var v = await Scalar("SELECT JSON_ARRAY_INSERT('[1,3]', '$[1]', 2)"); Assert.Contains("2", v); }
 
 	// ---- JSON_CONTAINS ----
-	[Fact(Skip = "Not yet supported")] public async Task JsonContains_Found() => Assert.Equal("true", await Scalar("SELECT JSON_CONTAINS('[1,2,3]', '2')"));
-	[Fact(Skip = "Not yet supported")] public async Task JsonContains_NotFound() => Assert.Equal("false", await Scalar("SELECT JSON_CONTAINS('[1,2,3]', '5')"));
+	[Fact] public async Task JsonContains_Found() => Assert.Equal("True", await Scalar("SELECT JSON_CONTAINS('[1,2,3]', '2')"));
+	[Fact] public async Task JsonContains_NotFound() => Assert.Equal("False", await Scalar("SELECT JSON_CONTAINS('[1,2,3]', '5')"));
 }

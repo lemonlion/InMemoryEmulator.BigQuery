@@ -153,7 +153,7 @@ public class SelectClauseComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task SelectExcept() { var rows = await Query($"SELECT * EXCEPT(flag) FROM `{_datasetId}.data` LIMIT 1"); Assert.NotNull(rows[0]["id"]); }
 
 	// ---- Replace columns ----
-	[Fact(Skip = "FormatValue truncates whole-number doubles to integers")] public async Task SelectReplace() { var rows = await Query($"SELECT * REPLACE(value * 2 AS value) FROM `{_datasetId}.data` ORDER BY id LIMIT 1"); Assert.Equal("20.0", rows[0]["value"]?.ToString()); }
+	[Fact] public async Task SelectReplace() { var rows = await Query($"SELECT * REPLACE(value * 2 AS value) FROM `{_datasetId}.data` ORDER BY id LIMIT 1"); Assert.Equal("20", rows[0]["value"]?.ToString()); }
 
 	// ---- COUNT DISTINCT ----
 	[Fact] public async Task CountDistinct() { var v = await Scalar($"SELECT COUNT(DISTINCT category) FROM `{_datasetId}.data`"); Assert.Equal("3", v); }

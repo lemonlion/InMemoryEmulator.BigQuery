@@ -82,6 +82,6 @@ public class ArrayFunctionBoundaryTests : IAsyncLifetime
 	[Fact] public async Task Array_LiteralStrings() { var v = await Scalar("SELECT ARRAY_TO_STRING(['hello', 'world'], ' ')"); Assert.Equal("hello world", v); }
 
 	// ---- ARRAY with subquery (inline) ----
-	[Fact(Skip = "ARRAY(SELECT ...) subquery syntax not supported")] public async Task Array_SubqueryGenerate() { var v = await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST(GENERATE_ARRAY(1,10)) AS x))"); Assert.Equal("10", v); }
-	[Fact(Skip = "ARRAY(SELECT ...) subquery syntax not supported")] public async Task Array_SubqueryFiltered() { var v = await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1,2,3,4,5]) AS x WHERE x > 2))"); Assert.Equal("3", v); }
+	[Fact] public async Task Array_SubqueryGenerate() { var v = await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST(GENERATE_ARRAY(1,10)) AS x))"); Assert.Equal("10", v); }
+	[Fact] public async Task Array_SubqueryFiltered() { var v = await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1,2,3,4,5]) AS x WHERE x > 2))"); Assert.Equal("3", v); }
 }

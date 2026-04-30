@@ -94,7 +94,7 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 		Assert.Equal("else", v);
 	}
 
-	[Fact(Skip = "Procedural: ELSEIF clause not supported")] public async Task If_ElseIf()
+	[Fact] public async Task If_ElseIf()
 	{
 		var v = await Scalar(@"
 			DECLARE x INT64 DEFAULT 2;
@@ -108,7 +108,7 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 		Assert.Equal("two", v);
 	}
 
-	[Fact(Skip = "Procedural: nested IF not supported")] public async Task If_NestedIf()
+	[Fact] public async Task If_NestedIf()
 	{
 		var v = await Scalar(@"
 			DECLARE x INT64 DEFAULT 5;
@@ -195,7 +195,7 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- FOR ----
-	[Fact(Skip = "Not yet supported")] public async Task For_OverQuery()
+	[Fact(Skip = "FOR loop over query requires table context in ProceduralExecutor")] public async Task For_OverQuery()
 	{
 		var v = await Scalar($@"
 			CREATE TABLE `{_datasetId}.ft1` (val INT64);
@@ -210,7 +210,7 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- REPEAT ----
-	[Fact(Skip = "Not yet supported")] public async Task Repeat_Until()
+	[Fact] public async Task Repeat_Until()
 	{
 		var v = await Scalar(@"
 			DECLARE i INT64 DEFAULT 0;
@@ -224,7 +224,7 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- CASE (procedural) ----
-	[Fact(Skip = "Not yet supported")] public async Task ProceduralCase_Simple()
+	[Fact] public async Task ProceduralCase_Simple()
 	{
 		var v = await Scalar(@"
 			DECLARE x INT64 DEFAULT 2;
@@ -274,13 +274,13 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- EXECUTE IMMEDIATE ----
-	[Fact(Skip = "Not yet supported")] public async Task ExecuteImmediate_SimpleSelect()
+	[Fact] public async Task ExecuteImmediate_SimpleSelect()
 	{
 		var v = await Scalar("DECLARE result INT64; EXECUTE IMMEDIATE 'SELECT 42' INTO result; SELECT result;");
 		Assert.Equal("42", v);
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task ExecuteImmediate_DynamicSql()
+	[Fact] public async Task ExecuteImmediate_DynamicSql()
 	{
 		var v = await Scalar(@"
 			DECLARE tbl STRING DEFAULT 'SELECT 1 + 2';
@@ -311,7 +311,7 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- Variables in SQL ----
-	[Fact(Skip = "Procedural: variable references in WHERE not supported")] public async Task Variable_InWhereClause()
+	[Fact(Skip = "Procedural: variable substitution in non-SELECT statements throws NRE")] public async Task Variable_InWhereClause()
 	{
 		var v = await Scalar($@"
 			CREATE TABLE `{_datasetId}.vt1` (id INT64, val STRING);
@@ -322,7 +322,7 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 		Assert.Equal("b", v);
 	}
 
-	[Fact(Skip = "Procedural: variable references in INSERT not supported")] public async Task Variable_InInsert()
+	[Fact(Skip = "Procedural: variable substitution in non-SELECT statements throws NRE")] public async Task Variable_InInsert()
 	{
 		var v = await Scalar($@"
 			CREATE TABLE `{_datasetId}.vt2` (id INT64, val STRING);
@@ -346,13 +346,13 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- Transaction stubs (no-op) ----
-	[Fact(Skip = "Not yet supported")] public async Task BeginTransaction_NoError()
+	[Fact] public async Task BeginTransaction_NoError()
 	{
 		await Scalar("BEGIN TRANSACTION; SELECT 1; COMMIT TRANSACTION;");
 	}
 
 	// ---- RETURN ----
-	[Fact(Skip = "Not yet supported")] public async Task Return_ExitsEarly()
+	[Fact(Skip = "RETURN exits script entirely, SELECT after BEGIN never executes")] public async Task Return_ExitsEarly()
 	{
 		var v = await Scalar(@"
 			DECLARE x INT64 DEFAULT 1;
@@ -378,7 +378,7 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- DROP FUNCTION ----
-	[Fact(Skip = "Not yet supported")] public async Task DropFunction_IfExists()
+	[Fact(Skip = "DROP FUNCTION requires default dataset in ProceduralExecutor")] public async Task DropFunction_IfExists()
 	{
 		await Scalar("CREATE TEMP FUNCTION my_fn(x INT64) RETURNS INT64 AS (x); DROP FUNCTION IF EXISTS my_fn; SELECT 1;");
 	}

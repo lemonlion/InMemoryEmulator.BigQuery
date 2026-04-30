@@ -73,7 +73,7 @@ public class DdlComprehensiveTests : IAsyncLifetime
 		Assert.Equal(2, rows.Count);
 	}
 
-	[Fact(Skip = "DDL: NullReferenceException in CREATE TABLE with nullable/required columns")] public async Task CreateTable_WithNullableAndRequired()
+	[Fact(Skip = "DDL CREATE TABLE not routed through procedural executor from ExecuteQuery")] public async Task CreateTable_WithNullableAndRequired()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.ct4` (id INT64 NOT NULL, name STRING)");
 		var rows = await Query($"SELECT column_name, is_nullable FROM `{_datasetId}.INFORMATION_SCHEMA.COLUMNS` WHERE table_name = 'ct4' ORDER BY ordinal_position");

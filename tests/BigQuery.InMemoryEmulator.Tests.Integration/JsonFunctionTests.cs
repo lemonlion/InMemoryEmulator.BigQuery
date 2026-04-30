@@ -31,7 +31,7 @@ public class JsonFunctionTests : IAsyncLifetime
 	[Fact] public async Task JsonExtractScalar_Missing() => Assert.Null(await Scalar("SELECT JSON_EXTRACT_SCALAR('{\"name\": \"Alice\"}', '$.missing')"));
 	[Fact] public async Task JsonExtractScalar_Nested() => Assert.Equal("NY", await Scalar("SELECT JSON_EXTRACT_SCALAR('{\"addr\": {\"city\": \"NY\"}}', '$.addr.city')"));
 	[Fact] public async Task JsonExtractScalar_Null() => Assert.Null(await Scalar("SELECT JSON_EXTRACT_SCALAR(NULL, '$.name')"));
-	[Fact(Skip = "JSON path array indexing not supported")] public async Task JsonExtractScalar_ArrayElem() => Assert.Equal("2", await Scalar("SELECT JSON_EXTRACT_SCALAR('[1, 2, 3]', '$[1]')"));
+	[Fact] public async Task JsonExtractScalar_ArrayElem() => Assert.Equal("2", await Scalar("SELECT JSON_EXTRACT_SCALAR('[1, 2, 3]', '$[1]')"));
 	[Fact] public async Task JsonExtractScalar_BoolTrue() => Assert.Equal("true", await Scalar("SELECT JSON_EXTRACT_SCALAR('{\"flag\": true}', '$.flag')"));
 	[Fact] public async Task JsonExtractScalar_BoolFalse() => Assert.Equal("false", await Scalar("SELECT JSON_EXTRACT_SCALAR('{\"flag\": false}', '$.flag')"));
 	[Fact] public async Task JsonExtractScalar_NullValue() => Assert.Null(await Scalar("SELECT JSON_EXTRACT_SCALAR('{\"val\": null}', '$.val')"));

@@ -2169,7 +2169,7 @@ return name switch
 // Conversion functions
 "CAST" => args.Count >= 2 ? CastValue(Evaluate(args[0], row), Evaluate(args[1], row)?.ToString() ?? "STRING", false) : null,
 "SAFE_CAST" => args.Count >= 2 ? CastValue(Evaluate(args[0], row), Evaluate(args[1], row)?.ToString() ?? "STRING", true) : null,
-"TO_JSON_STRING" => System.Text.Json.JsonSerializer.Serialize(Evaluate(args[0], row)),
+"TO_JSON_STRING" => EvaluateToJsonString(args, row),
 
 // Type functions
 "STRUCT" => args.Select(a => Evaluate(a, row)).ToList(),
@@ -3770,15 +3770,45 @@ catch { return null; }
 
 private static System.Text.Json.JsonElement? NavigateJsonPath(System.Text.Json.JsonElement root, string path)
 {
-// Handle simple JSONPath like "$.field" or "$.field.subfield"
+// Handle JSONPath like "$.field", "$.field.subfield", "$[0]", "$.arr[1]"
 var current = root;
-var parts = path.TrimStart('$', '.').Split('.');
-foreach (var part in parts)
+var trimmed = path.StartsWith("$") ? path.Substring(1) : path;
+if (trimmed.StartsWith(".")) trimmed = trimmed.Substring(1);
+// Split by dots but keep array brackets
+var segments = new System.Collections.Generic.List<string>();
+var sb = new System.Text.StringBuilder();
+foreach (var ch in trimmed)
 {
-if (string.IsNullOrEmpty(part)) continue;
-if (current.ValueKind != System.Text.Json.JsonValueKind.Object) return null;
-if (!current.TryGetProperty(part, out var next)) return null;
-current = next;
+    if (ch == '.' && sb.Length > 0) { segments.Add(sb.ToString()); sb.Clear(); }
+    else sb.Append(ch);
+}
+if (sb.Length > 0) segments.Add(sb.ToString());
+foreach (var segment in segments)
+{
+    if (string.IsNullOrEmpty(segment)) continue;
+    // Check for array index e.g. "[1]" or "field[1]"
+    var bracketIdx = segment.IndexOf('[');
+    if (bracketIdx >= 0)
+    {
+        var prop = segment.Substring(0, bracketIdx);
+        if (!string.IsNullOrEmpty(prop))
+        {
+            if (current.ValueKind != System.Text.Json.JsonValueKind.Object) return null;
+            if (!current.TryGetProperty(prop, out var next)) return null;
+            current = next;
+        }
+        var idxStr = segment.Substring(bracketIdx + 1, segment.Length - bracketIdx - 2);
+        if (!int.TryParse(idxStr, out var arrayIdx)) return null;
+        if (current.ValueKind != System.Text.Json.JsonValueKind.Array) return null;
+        if (arrayIdx < 0 || arrayIdx >= current.GetArrayLength()) return null;
+        current = current[arrayIdx];
+    }
+    else
+    {
+        if (current.ValueKind != System.Text.Json.JsonValueKind.Object) return null;
+        if (!current.TryGetProperty(segment, out var next)) return null;
+        current = next;
+    }
 }
 return current;
 }
@@ -3987,6 +4017,30 @@ try
 catch { return json; }
 }
 
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#to_json_string
+//   "Converts a JSON value to a SQL STRING value."
+private object? EvaluateToJsonString(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var val = Evaluate(args[0], row);
+    if (val is null) return "null";
+    if (val is bool b) return b ? "true" : "false";
+    // If already a JSON string (from PARSE_JSON, JSON_OBJECT, etc), return as-is
+    if (val is string s)
+    {
+        var trimmed = s.Trim();
+        if ((trimmed.StartsWith("{") && trimmed.EndsWith("}")) ||
+            (trimmed.StartsWith("[") && trimmed.EndsWith("]")) ||
+            trimmed == "null" || trimmed == "true" || trimmed == "false" ||
+            (trimmed.StartsWith("\"") && trimmed.EndsWith("\"")))
+        {
+            try { System.Text.Json.JsonDocument.Parse(trimmed); return trimmed; }
+            catch { }
+        }
+        return System.Text.Json.JsonSerializer.Serialize(s);
+    }
+    return System.Text.Json.JsonSerializer.Serialize(val);
+}
+
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#length
 //   "Returns the length of a STRING value in characters, or the length of a BYTES value in bytes."
 private object? EvaluateLength(IReadOnlyList<SqlExpression> args, RowContext row)
@@ -4176,20 +4230,32 @@ private object? EvaluateNetHost(IReadOnlyList<SqlExpression> args, RowContext ro
 {
 var url = Evaluate(args[0], row)?.ToString();
 if (url is null) return null;
-try { return new Uri(url.Contains("://") ? url : "http://" + url).Host; }
+try { return new Uri(url.Contains("://") ? url : url.StartsWith("//") ? "http:" + url : "http://" + url).Host; }
 catch { return null; }
 }
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions#netpublic_suffix
 //   "Takes a URL and returns the public suffix (e.g., .com, .co.uk)."
+private static readonly HashSet<string> _twoLevelTlds = new(StringComparer.OrdinalIgnoreCase)
+{
+	"co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au",
+	"co.nz", "co.jp", "co.kr", "co.in", "com.br", "com.cn", "com.mx",
+	"co.za", "com.sg", "com.hk", "co.il", "com.ar", "com.tw"
+};
+
 private object? EvaluateNetPublicSuffix(IReadOnlyList<SqlExpression> args, RowContext row)
 {
 var url = Evaluate(args[0], row)?.ToString();
 if (url is null) return null;
 try
 {
-	var host = new Uri(url.Contains("://") ? url : "http://" + url).Host;
+	var host = new Uri(url.Contains("://") ? url : url.StartsWith("//") ? "http:" + url : "http://" + url).Host;
 	var parts = host.Split('.');
+	if (parts.Length >= 3)
+	{
+		var twoLevel = parts[^2] + "." + parts[^1];
+		if (_twoLevelTlds.Contains(twoLevel)) return twoLevel;
+	}
 	return parts.Length >= 2 ? parts[^1] : host;
 }
 catch { return null; }
@@ -4203,8 +4269,14 @@ var url = Evaluate(args[0], row)?.ToString();
 if (url is null) return null;
 try
 {
-	var host = new Uri(url.Contains("://") ? url : "http://" + url).Host;
+	var host = new Uri(url.Contains("://") ? url : url.StartsWith("//") ? "http:" + url : "http://" + url).Host;
 	var parts = host.Split('.');
+	if (parts.Length >= 3)
+	{
+		var twoLevel = parts[^2] + "." + parts[^1];
+		if (_twoLevelTlds.Contains(twoLevel))
+			return parts.Length >= 4 ? parts[^3] + "." + twoLevel : twoLevel;
+	}
 	return parts.Length >= 2 ? parts[^2] + "." + parts[^1] : host;
 }
 catch { return null; }

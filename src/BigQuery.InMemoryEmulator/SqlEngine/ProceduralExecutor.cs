@@ -31,15 +31,19 @@ internal class ProceduralExecutor
 		var statements = SplitStatements(script);
 		(TableSchema Schema, List<TableRow> Rows)? lastResult = null;
 
-		foreach (var stmt in statements)
+		try
 		{
-			var trimmed = stmt.Trim();
-			if (string.IsNullOrEmpty(trimmed)) continue;
+			foreach (var stmt in statements)
+			{
+				var trimmed = stmt.Trim();
+				if (string.IsNullOrEmpty(trimmed)) continue;
 
-			var result = ExecuteStatement(trimmed);
-			if (result.HasValue)
-				lastResult = result.Value;
+				var result = ExecuteStatement(trimmed);
+				if (result.HasValue)
+					lastResult = result.Value;
+			}
 		}
+		catch (ReturnException) { /* RETURN exits the script */ }
 
 		return lastResult ?? (new TableSchema { Fields = [] }, []);
 	}
@@ -323,46 +327,129 @@ internal class ProceduralExecutor
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#if
 	private (TableSchema Schema, List<TableRow> Rows)? ExecuteIf(string sql)
 	{
-		// Parse IF condition THEN stmts [ELSEIF condition THEN stmts] [ELSE stmts] END IF
+		// Parse IF condition THEN stmts [ELSEIF condition THEN stmts]* [ELSE stmts] END IF
 		var body = sql.Substring("IF ".Length).Trim();
 
 		// Remove trailing END IF
 		if (body.EndsWith("END IF", StringComparison.OrdinalIgnoreCase))
 			body = body.Substring(0, body.Length - "END IF".Length).Trim();
 
-		// Split on THEN — allow whitespace (including newlines) around THEN
-		var thenMatch = System.Text.RegularExpressions.Regex.Match(body,
-			@"\bTHEN\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-		if (!thenMatch.Success) throw new InvalidOperationException("IF statement requires THEN.");
+		// Split into branches at top-level ELSEIF and ELSE (respecting nested IF/END IF)
+		var branches = SplitIfBranches(body);
 
-		var condition = body.Substring(0, thenMatch.Index).Trim();
-		var rest = body.Substring(thenMatch.Index + thenMatch.Length).Trim();
-
-		// Check for ELSE
-		string? elseBlock = null;
-		var elseIdx = FindTopLevelKeyword(rest, "ELSE");
-		if (elseIdx >= 0)
+		foreach (var (condition, block) in branches)
 		{
-			elseBlock = rest.Substring(elseIdx + "ELSE".Length).Trim();
-			rest = rest.Substring(0, elseIdx).Trim();
-		}
-
-		// Evaluate condition
-		var substituted = SubstituteVariables(condition);
-		var exec = CreateQueryExecutor();
-		var (_, condRows) = exec.Execute($"SELECT {substituted}");
-		var condValue = condRows.Count > 0 && condRows[0].F.Count > 0 ? condRows[0].F[0].V : null;
-		var isTruthy = condValue is true || (condValue is long l && l != 0) || (condValue is string s && bool.TryParse(s, out var b) && b);
-
-		if (isTruthy)
-		{
-			return ExecuteBlock(rest);
-		}
-		else if (elseBlock != null)
-		{
-			return ExecuteBlock(elseBlock);
+			if (condition == null)
+			{
+				// ELSE block
+				return ExecuteBlock(block);
+			}
+			// Evaluate condition
+			var substituted = SubstituteVariables(condition);
+			var exec = CreateQueryExecutor();
+			var (_, condRows) = exec.Execute($"SELECT {substituted}");
+			var condValue = condRows.Count > 0 && condRows[0].F.Count > 0 ? condRows[0].F[0].V : null;
+			var isTruthy = condValue is true || (condValue is long l && l != 0) || (condValue is string s && bool.TryParse(s, out var b) && b);
+			if (isTruthy)
+				return ExecuteBlock(block);
 		}
 		return null;
+	}
+
+	/// <summary>Splits IF body into (condition, block) pairs. ELSE has condition=null.</summary>
+	private static List<(string? Condition, string Block)> SplitIfBranches(string body)
+	{
+		var result = new List<(string? Condition, string Block)>();
+		// First branch: condition THEN block
+		var thenIdx = FindIfKeyword(body, "THEN", 0);
+		if (thenIdx < 0) throw new InvalidOperationException("IF statement requires THEN.");
+		var condition = body.Substring(0, thenIdx).Trim();
+		var pos = thenIdx + 4; // "THEN".Length
+
+		while (pos < body.Length)
+		{
+			// Find next ELSEIF or ELSE at nesting level 0
+			var nextElseIf = FindIfKeyword(body, "ELSEIF", pos);
+			var nextElse = FindIfKeyword(body, "ELSE", pos);
+			// ELSEIF check: make sure we're not matching the ELSE prefix of ELSEIF
+			if (nextElse >= 0 && nextElseIf >= 0 && nextElse == nextElseIf) nextElse = FindIfKeywordAfter(body, "ELSE", nextElseIf + 6);
+
+			var branchStart = -1;
+			var isElseIf = false;
+			if (nextElseIf >= 0 && (nextElse < 0 || nextElseIf <= nextElse)) { branchStart = nextElseIf; isElseIf = true; }
+			else if (nextElse >= 0) { branchStart = nextElse; isElseIf = false; }
+
+			if (branchStart < 0)
+			{
+				// Rest is the current block
+				result.Add((condition, body.Substring(pos).Trim()));
+				break;
+			}
+
+			result.Add((condition, body.Substring(pos, branchStart - pos).Trim()));
+
+			if (isElseIf)
+			{
+				var afterElseIf = branchStart + 6; // "ELSEIF".Length
+				var nextThen = FindIfKeyword(body, "THEN", afterElseIf);
+				if (nextThen < 0) break;
+				condition = body.Substring(afterElseIf, nextThen - afterElseIf).Trim();
+				pos = nextThen + 4;
+			}
+			else
+			{
+				// ELSE block - rest of body
+				result.Add((null, body.Substring(branchStart + 4).Trim()));
+				break;
+			}
+		}
+		if (result.Count == 0) result.Add((condition, body.Substring(pos).Trim()));
+		return result;
+	}
+
+	/// <summary>Finds keyword at top level, tracking IF/END IF nesting.</summary>
+	private static int FindIfKeyword(string text, string keyword, int startPos)
+	{
+		return FindIfKeywordAfter(text, keyword, startPos);
+	}
+
+	private static int FindIfKeywordAfter(string text, string keyword, int startPos)
+	{
+		var depth = 0; // IF/END IF nesting depth
+		var inStr = false;
+		var strCh = '\0';
+		for (int i = startPos; i <= text.Length - keyword.Length; i++)
+		{
+			var c = text[i];
+			if (inStr) { if (c == strCh) inStr = false; continue; }
+			if (c == '\'' || c == '"') { inStr = true; strCh = c; continue; }
+			// Track nested IF ... END IF
+			if (depth == 0 || true)
+			{
+				if (i + 6 <= text.Length && text.Substring(i, 2).Equals("IF", StringComparison.OrdinalIgnoreCase))
+				{
+					// Make sure it's "IF " (word boundary)
+					if ((i == 0 || !char.IsLetterOrDigit(text[i - 1])) && i + 2 < text.Length && (text[i + 2] == ' ' || text[i + 2] == '\r' || text[i + 2] == '\n'))
+					{
+						// But not ELSEIF
+						if (i < 4 || !text.Substring(i - 4, 4).Equals("ELSE", StringComparison.OrdinalIgnoreCase))
+							depth++;
+					}
+				}
+				if (i + 6 <= text.Length && text.Substring(i, 6).Equals("END IF", StringComparison.OrdinalIgnoreCase))
+				{
+					if (i == 0 || !char.IsLetterOrDigit(text[i - 1]))
+						depth--;
+				}
+			}
+			if (depth == 0 && text.Substring(i, keyword.Length).Equals(keyword, StringComparison.OrdinalIgnoreCase))
+			{
+				if (i > 0 && char.IsLetterOrDigit(text[i - 1])) continue;
+				if (i + keyword.Length < text.Length && char.IsLetterOrDigit(text[i + keyword.Length])) continue;
+				return i;
+			}
+		}
+		return -1;
 	}
 
 	private (TableSchema Schema, List<TableRow> Rows)? ExecuteBlock(string block)
