@@ -110,7 +110,7 @@ public class InformationSchemaComprehensiveTests : IAsyncLifetime
 		Assert.Equal("id", rows[0]["column_name"]?.ToString());
 	}
 
-	[Fact(Skip = "Needs investigation")] public async Task Columns_DataTypes()
+	[Fact(Skip = "INFORMATION_SCHEMA.COLUMNS data types not fully populated")] public async Task Columns_DataTypes()
 	{
 		var rows = await Query($"SELECT column_name, data_type FROM `{_datasetId}.INFORMATION_SCHEMA.COLUMNS` WHERE table_name = 'base_table' ORDER BY ordinal_position");
 		Assert.Equal("INT64", rows[0]["data_type"]?.ToString());

@@ -86,7 +86,7 @@ public class JsonFunctionComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task JsonType_Null() => Assert.Equal("null", await Scalar("SELECT JSON_TYPE(PARSE_JSON('null'))"));
 
 	// ---- PARSE_JSON / TO_JSON / TO_JSON_STRING ----
-	[Fact(Skip = "Needs investigation")] public async Task ParseJson_Object() { var v = await Scalar("SELECT TO_JSON_STRING(PARSE_JSON('{\"a\": 1}'))"); Assert.Contains("\"a\"", v); }
+	[Fact(Skip = "TO_JSON_STRING double-encodes quotes as \\u0022")] public async Task ParseJson_Object() { var v = await Scalar("SELECT TO_JSON_STRING(PARSE_JSON('{\"a\": 1}'))"); Assert.Contains("\"a\"", v); }
 	[Fact] public async Task ToJson_Int() { var v = await Scalar("SELECT TO_JSON_STRING(42)"); Assert.Equal("42", v); }
 	[Fact] public async Task ToJson_String() { var v = await Scalar("SELECT TO_JSON_STRING('hello')"); Assert.Equal("\"hello\"", v); }
 	[Fact] public async Task ToJsonString_Bool() { var v = await Scalar("SELECT TO_JSON_STRING(TRUE)"); Assert.Equal("true", v); }
@@ -95,7 +95,7 @@ public class JsonFunctionComprehensiveTests : IAsyncLifetime
 
 	// ---- JSON_ARRAY / JSON_OBJECT ----
 	[Fact] public async Task JsonArray_Basic() { var v = await Scalar("SELECT TO_JSON_STRING(JSON_ARRAY(1, 'two', TRUE))"); Assert.Contains("1", v); Assert.Contains("two", v); }
-	[Fact(Skip = "Needs investigation")] public async Task JsonObject_Basic() { var v = await Scalar("SELECT TO_JSON_STRING(JSON_OBJECT('a', 1, 'b', 'hello'))"); Assert.Contains("\"a\"", v); Assert.Contains("hello", v); }
+	[Fact(Skip = "TO_JSON_STRING double-encodes quotes as \\u0022")] public async Task JsonObject_Basic() { var v = await Scalar("SELECT TO_JSON_STRING(JSON_OBJECT('a', 1, 'b', 'hello'))"); Assert.Contains("\"a\"", v); Assert.Contains("hello", v); }
 
 	// ---- LAX type accessors ----
 	[Fact(Skip = "Not yet supported")] public async Task LaxBool_True() => Assert.Equal("true", await Scalar("SELECT LAX_BOOL(PARSE_JSON('true'))"));

@@ -94,7 +94,7 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 		Assert.Equal("else", v);
 	}
 
-	[Fact(Skip = "Needs investigation")] public async Task If_ElseIf()
+	[Fact(Skip = "Procedural: ELSEIF clause not supported")] public async Task If_ElseIf()
 	{
 		var v = await Scalar(@"
 			DECLARE x INT64 DEFAULT 2;
@@ -108,7 +108,7 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 		Assert.Equal("two", v);
 	}
 
-	[Fact(Skip = "Needs investigation")] public async Task If_NestedIf()
+	[Fact(Skip = "Procedural: nested IF not supported")] public async Task If_NestedIf()
 	{
 		var v = await Scalar(@"
 			DECLARE x INT64 DEFAULT 5;
@@ -311,7 +311,7 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- Variables in SQL ----
-	[Fact(Skip = "Needs investigation")] public async Task Variable_InWhereClause()
+	[Fact(Skip = "Procedural: variable references in WHERE not supported")] public async Task Variable_InWhereClause()
 	{
 		var v = await Scalar($@"
 			CREATE TABLE `{_datasetId}.vt1` (id INT64, val STRING);
@@ -322,7 +322,7 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 		Assert.Equal("b", v);
 	}
 
-	[Fact(Skip = "Needs investigation")] public async Task Variable_InInsert()
+	[Fact(Skip = "Procedural: variable references in INSERT not supported")] public async Task Variable_InInsert()
 	{
 		var v = await Scalar($@"
 			CREATE TABLE `{_datasetId}.vt2` (id INT64, val STRING);
@@ -335,7 +335,7 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- @@row_count ----
-	[Fact(Skip = "Needs investigation")] public async Task RowCount_AfterInsert()
+	[Fact(Skip = "Procedural: @@row_count system variable not supported")] public async Task RowCount_AfterInsert()
 	{
 		var v = await Scalar($@"
 			CREATE TABLE `{_datasetId}.rc1` (id INT64);
