@@ -40,8 +40,13 @@ public class DateTimeFunctionComprehensiveTests : IAsyncLifetime
 		var rows = result.ToList();
 		if (rows.Count == 0) return null;
 		var val = rows[0][0];
-		if (val is DateTime dt) return dt.TimeOfDay == TimeSpan.Zero ? dt.ToString("yyyy-MM-dd") : dt.ToString("yyyy-MM-dd HH:mm:ss");
-		if (val is DateTimeOffset dto) return dto.TimeOfDay == TimeSpan.Zero ? dto.ToString("yyyy-MM-dd") : dto.ToString("yyyy-MM-dd HH:mm:ss");
+		var fieldType = result.Schema.Fields[0].Type;
+		if (val is DateTime dt)
+		{
+			if (fieldType == "DATE") return dt.ToString("yyyy-MM-dd");
+			return dt.ToString("yyyy-MM-dd HH:mm:ss");
+		}
+		if (val is DateTimeOffset dto) return dto.ToString("yyyy-MM-dd HH:mm:ss");
 		return val?.ToString();
 	}
 
@@ -124,7 +129,7 @@ public class DateTimeFunctionComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task TimestampDiff_Seconds() => Assert.Equal("3600", await Scalar("SELECT TIMESTAMP_DIFF(TIMESTAMP '2024-03-15T11:00:00+00:00', TIMESTAMP '2024-03-15T10:00:00+00:00', SECOND)"));
 
 	// ---- TIMESTAMP_TRUNC ----
-	[Fact(Skip = "InferType heuristic classifies midnight DateTime as DATE instead of TIMESTAMP")] public async Task TimestampTrunc_Day() { var v = await Scalar("SELECT TIMESTAMP_TRUNC(TIMESTAMP '2024-03-15T10:30:00+00:00', DAY)"); Assert.Contains("2024-03-15", v); Assert.Contains("00:00:00", v); }
+	[Fact] public async Task TimestampTrunc_Day() { var v = await Scalar("SELECT TIMESTAMP_TRUNC(TIMESTAMP '2024-03-15T10:30:00+00:00', DAY)"); Assert.Contains("2024-03-15", v); Assert.Contains("00:00:00", v); }
 	[Fact] public async Task TimestampTrunc_Hour() { var v = await Scalar("SELECT TIMESTAMP_TRUNC(TIMESTAMP '2024-03-15T10:30:45+00:00', HOUR)"); Assert.Contains("10:00:00", v); }
 
 	// ---- TIMESTAMP_SECONDS / TIMESTAMP_MILLIS / TIMESTAMP_MICROS ----
@@ -155,7 +160,7 @@ public class DateTimeFunctionComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task DatetimeAdd_Hours() { var v = await Scalar("SELECT DATETIME_ADD(DATETIME '2024-03-15 10:00:00', INTERVAL 2 HOUR)"); Assert.Contains("12:00:00", v); }
 	[Fact] public async Task DatetimeSub_Days() { var v = await Scalar("SELECT DATETIME_SUB(DATETIME '2024-03-15 10:00:00', INTERVAL 1 DAY)"); Assert.Contains("2024-03-14", v); }
 	[Fact] public async Task DatetimeDiff_Hours() => Assert.Equal("2", await Scalar("SELECT DATETIME_DIFF(DATETIME '2024-03-15 12:00:00', DATETIME '2024-03-15 10:00:00', HOUR)"));
-	[Fact(Skip = "InferType heuristic classifies midnight DateTime as DATE instead of DATETIME")] public async Task DatetimeTrunc_Day() { var v = await Scalar("SELECT DATETIME_TRUNC(DATETIME '2024-03-15 10:30:00', DAY)"); Assert.Contains("00:00:00", v); }
+	[Fact] public async Task DatetimeTrunc_Day() { var v = await Scalar("SELECT DATETIME_TRUNC(DATETIME '2024-03-15 10:30:00', DAY)"); Assert.Contains("2024-03-15", v); }
 
 	// ---- TIME_ADD / TIME_SUB / TIME_DIFF / TIME_TRUNC ----
 	[Fact] public async Task TimeAdd_Hours() { var v = await Scalar("SELECT TIME_ADD(TIME '10:00:00', INTERVAL 2 HOUR)"); Assert.Contains("12:00:00", v); }

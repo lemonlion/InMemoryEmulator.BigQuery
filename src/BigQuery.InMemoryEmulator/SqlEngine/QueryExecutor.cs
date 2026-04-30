@@ -1770,10 +1770,11 @@ _ => DateTimeOffset.Parse(NormalizeTimestampString(val.ToString()!), CultureInfo
 },
 "DATE" => val switch
 {
-DateTime dt => dt,
-DateTimeOffset dto => dto.DateTime,
-string s => DateTime.Parse(s, CultureInfo.InvariantCulture),
-_ => DateTime.Parse(val.ToString()!, CultureInfo.InvariantCulture)
+DateOnly d => d,
+DateTime dt => DateOnly.FromDateTime(dt),
+DateTimeOffset dto => DateOnly.FromDateTime(dto.DateTime),
+string s => DateOnly.FromDateTime(DateTime.Parse(s, CultureInfo.InvariantCulture)),
+_ => DateOnly.FromDateTime(DateTime.Parse(val.ToString()!, CultureInfo.InvariantCulture))
 },
 "DATETIME" => val switch
 {
@@ -2072,7 +2073,7 @@ return name switch
 
 // Date/Time functions
 "CURRENT_TIMESTAMP" or "NOW" => DateTimeOffset.UtcNow,
-"CURRENT_DATE" => DateTime.UtcNow.Date,
+"CURRENT_DATE" => DateOnly.FromDateTime(DateTime.UtcNow),
 "CURRENT_DATETIME" => DateTime.UtcNow,
 "DATE" => EvaluateDateConstructor(args, row),
 "DATETIME" => EvaluateDateTimeConstructor(args, row),
@@ -2679,13 +2680,14 @@ if (args.Count == 1)
 var val = Evaluate(args[0], row);
 return val switch
 {
-DateTime dt => dt,
-DateTimeOffset dto => dto.Date,
-string s => DateTime.Parse(s, CultureInfo.InvariantCulture),
-_ => DateTime.Parse(val?.ToString() ?? "", CultureInfo.InvariantCulture)
+DateOnly d => d,
+DateTime dt => DateOnly.FromDateTime(dt),
+DateTimeOffset dto => DateOnly.FromDateTime(dto.Date),
+string s => DateOnly.FromDateTime(DateTime.Parse(s, CultureInfo.InvariantCulture)),
+_ => DateOnly.FromDateTime(DateTime.Parse(val?.ToString() ?? "", CultureInfo.InvariantCulture))
 };
 }
-return new DateTime((int)ToLong(Evaluate(args[0], row)),
+return new DateOnly((int)ToLong(Evaluate(args[0], row)),
 (int)ToLong(Evaluate(args[1], row)),
 (int)ToLong(Evaluate(args[2], row)));
 }
@@ -2725,6 +2727,7 @@ return val switch
 {
 DateTimeOffset dto => dto,
 DateTime dt => new DateTimeOffset(dt, TimeSpan.Zero),
+DateOnly d => new DateTimeOffset(d.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero),
 string s => DateTimeOffset.Parse(s, CultureInfo.InvariantCulture),
 _ => DateTimeOffset.Parse(val?.ToString() ?? "", CultureInfo.InvariantCulture)
 };
@@ -2751,7 +2754,7 @@ return partName switch
 "DAYOFYEAR" => (long)dto.DayOfYear,
 "WEEK" => (long)CultureInfo.InvariantCulture.Calendar.GetWeekOfYear(dto.DateTime, CalendarWeekRule.FirstDay, DayOfWeek.Sunday),
 "QUARTER" => (long)((dto.Month - 1) / 3 + 1),
-"DATE" => (object)dto.Date,
+"DATE" => (object)DateOnly.FromDateTime(dto.Date),
 "TIME" => dto.TimeOfDay.ToString(),
 "ISOWEEK" => (long)CultureInfo.InvariantCulture.Calendar.GetWeekOfYear(dto.DateTime, CalendarWeekRule.FirstFourDayWeek, DayOfWeek.Monday),
 _ => throw new NotSupportedException("Unsupported EXTRACT part: " + partName)
@@ -2760,18 +2763,22 @@ _ => throw new NotSupportedException("Unsupported EXTRACT part: " + partName)
 
 private object? EvaluateDateAdd(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-var date = ToDateTime(Evaluate(args[0], row));
+var raw = Evaluate(args[0], row);
+var date = ToDateTime(raw);
 var interval = ToLong(Evaluate(args[1], row));
 var part = Evaluate(args[2], row)?.ToString()?.ToUpperInvariant() ?? "DAY";
-return AddToPart(date, interval, part);
+var result = AddToPart(date, interval, part);
+return raw is DateOnly ? DateOnly.FromDateTime(result) : result;
 }
 
 private object? EvaluateDateSub(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-var date = ToDateTime(Evaluate(args[0], row));
+var raw = Evaluate(args[0], row);
+var date = ToDateTime(raw);
 var interval = ToLong(Evaluate(args[1], row));
 var part = Evaluate(args[2], row)?.ToString()?.ToUpperInvariant() ?? "DAY";
-return AddToPart(date, -interval, part);
+var result = AddToPart(date, -interval, part);
+return raw is DateOnly ? DateOnly.FromDateTime(result) : result;
 }
 
 private object? EvaluateDateDiff(IReadOnlyList<SqlExpression> args, RowContext row)
@@ -2846,7 +2853,7 @@ private object? EvaluateDateTrunc(IReadOnlyList<SqlExpression> args, RowContext 
 {
 var date = ToDateTime(Evaluate(args[0], row));
 var part = Evaluate(args[1], row)?.ToString()?.ToUpperInvariant() ?? "DAY";
-return part switch
+var result = part switch
 {
 "YEAR" => new DateTime(date.Year, 1, 1),
 "MONTH" => new DateTime(date.Year, date.Month, 1),
@@ -2855,6 +2862,7 @@ return part switch
 "DAY" => date.Date,
 _ => date.Date
 };
+return DateOnly.FromDateTime(result);
 }
 
 private object? EvaluateTimestampTrunc(IReadOnlyList<SqlExpression> args, RowContext row)
@@ -2898,7 +2906,7 @@ private object? EvaluateParseDate(IReadOnlyList<SqlExpression> args, RowContext 
 {
 var format = Evaluate(args[0], row)?.ToString() ?? "";
 var str = Evaluate(args[1], row)?.ToString() ?? "";
-return ParseTimestamp(str, format).DateTime;
+return DateOnly.FromDateTime(ParseTimestamp(str, format).DateTime);
 }
 
 private object? EvaluateUnixSeconds(IReadOnlyList<SqlExpression> args, RowContext row)
@@ -2944,7 +2952,7 @@ private object? EvaluateUnixMicros(IReadOnlyList<SqlExpression> args, RowContext
 private object? EvaluateDateFromUnixDate(IReadOnlyList<SqlExpression> args, RowContext row)
 {
 	var days = ToLong(Evaluate(args[0], row));
-	return new DateTime(1970, 1, 1).AddDays(days);
+	return DateOnly.FromDateTime(new DateTime(1970, 1, 1).AddDays(days));
 }
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#unix_date
@@ -2965,7 +2973,7 @@ private object? EvaluateLastDay(IReadOnlyList<SqlExpression> args, RowContext ro
 	var part = args.Count > 1
 		? Evaluate(args[1], row)?.ToString()?.ToUpperInvariant() ?? "MONTH"
 		: "MONTH";
-	return part switch
+	var result = part switch
 	{
 		"YEAR" => new DateTime(date.Year, 12, 31),
 		"QUARTER" => new DateTime(date.Year, ((date.Month - 1) / 3 + 1) * 3, 1).AddMonths(1).AddDays(-1),
@@ -2973,6 +2981,7 @@ private object? EvaluateLastDay(IReadOnlyList<SqlExpression> args, RowContext ro
 		"WEEK" => date.AddDays(6 - (int)date.DayOfWeek), // week starts Sunday, last day is Saturday
 		_ => new DateTime(date.Year, date.Month, DateTime.DaysInMonth(date.Year, date.Month)),
 	};
+	return DateOnly.FromDateTime(result);
 }
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/datetime_functions#datetime_add
@@ -3227,6 +3236,7 @@ return val switch
 {
 DateTimeOffset dto => dto,
 DateTime dt => new DateTimeOffset(dt, TimeSpan.Zero),
+DateOnly d => new DateTimeOffset(d.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero),
 string s => DateTimeOffset.Parse(NormalizeTimestampString(s), CultureInfo.InvariantCulture),
 long l => DateTimeOffset.FromUnixTimeSeconds(l),
 _ => DateTimeOffset.Parse(NormalizeTimestampString(val?.ToString() ?? ""), CultureInfo.InvariantCulture)
@@ -3239,6 +3249,7 @@ return val switch
 {
 DateTime dt => dt,
 DateTimeOffset dto => dto.DateTime,
+DateOnly d => d.ToDateTime(TimeOnly.MinValue),
 string s => DateTime.Parse(s, CultureInfo.InvariantCulture),
 _ => DateTime.Parse(val?.ToString() ?? "", CultureInfo.InvariantCulture)
 };
@@ -3422,8 +3433,8 @@ private object? EvaluateGenerateDateArray(IReadOnlyList<SqlExpression> args, Row
 var startVal = Evaluate(args[0], row);
 var endVal = Evaluate(args[1], row);
 if (startVal is null || endVal is null) return null;
-var startDate = startVal is DateTime sd ? sd : DateTime.Parse(startVal.ToString()!, System.Globalization.CultureInfo.InvariantCulture);
-var endDate = endVal is DateTime ed ? ed : DateTime.Parse(endVal.ToString()!, System.Globalization.CultureInfo.InvariantCulture);
+var startDate = ToDateTime(startVal);
+var endDate = ToDateTime(endVal);
 
 int step = 1;
 string part = "DAY";
@@ -3444,7 +3455,7 @@ if (step > 0)
 {
     while (current <= endDate)
     {
-        result.Add(current);
+        result.Add(DateOnly.FromDateTime(current));
         current = AddDatePart(current, step, part);
     }
 }
@@ -3452,7 +3463,7 @@ else
 {
     while (current >= endDate)
     {
-        result.Add(current);
+        result.Add(DateOnly.FromDateTime(current));
         current = AddDatePart(current, step, part);
     }
 }
@@ -6395,7 +6406,7 @@ return type?.ToUpperInvariant() switch
 	"TIMESTAMP" => long.TryParse(s, CultureInfo.InvariantCulture, out var us)
 		? DateTimeOffset.FromUnixTimeMilliseconds(us / 1000) : val,
 	"DATE" => DateTime.TryParseExact(s, "yyyy-MM-dd", CultureInfo.InvariantCulture,
-		System.Globalization.DateTimeStyles.None, out var dt) ? dt : val,
+		System.Globalization.DateTimeStyles.None, out var dt) ? DateOnly.FromDateTime(dt) : val,
 	_ => val
 };
 }
@@ -6428,7 +6439,7 @@ double d when double.IsNaN(d) => "NaN",
 DateTimeOffset dto => (dto.ToUnixTimeMilliseconds() * 1000L).ToString(CultureInfo.InvariantCulture),
 // Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tabledata/list
 //   DATE values are returned as "yyyy-MM-dd" strings.
-DateTime dt when dt.TimeOfDay == TimeSpan.Zero => dt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+DateOnly d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
 // Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tabledata/list
 //   DATETIME values are returned as "yyyy-MM-ddTHH:mm:ss.FFFFFF" strings.
 //   SDK source: BigQueryRow.DateTimeConverter uses DateTime.ParseExact with this format.
@@ -6594,6 +6605,9 @@ return string.Compare(sa2, sb2, StringComparison.Ordinal);
 // DateTimeOffset
 if (a is DateTimeOffset dtoa && b is DateTimeOffset dtob) return dtoa.CompareTo(dtob);
 if (a is DateTime dta && b is DateTime dtb) return dta.CompareTo(dtb);
+if (a is DateOnly doa && b is DateOnly dob) return doa.CompareTo(dob);
+if (a is DateOnly doa2 && b is DateTime dtb2) return doa2.ToDateTime(TimeOnly.MinValue).CompareTo(dtb2);
+if (a is DateTime dta2 && b is DateOnly dob2) return dta2.CompareTo(dob2.ToDateTime(TimeOnly.MinValue));
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#comparison_operators
 //   "Comparison operators work across numeric types."
@@ -6677,9 +6691,7 @@ long => "INTEGER",
 double => "FLOAT",
 bool => "BOOLEAN",
 DateTimeOffset => "TIMESTAMP",
-// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tables#TableFieldSchema
-//   DATE has no time component; DATETIME has date and time.
-DateTime dt when dt.TimeOfDay == TimeSpan.Zero => "DATE",
+DateOnly => "DATE",
 DateTime => "DATETIME",
 TimeSpan => "TIME",
 byte[] => "BYTES",
@@ -6724,7 +6736,8 @@ bool b => b ? "true" : "false",
             double d when double.IsNegativeInfinity(d) => "-Infinity",
             double d when double.IsNaN(d) => "NaN",
 DateTimeOffset dto => dto.ToString("yyyy-MM-dd HH:mm:ss.ffffff zzz", CultureInfo.InvariantCulture),
-DateTime dt => dt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+DateOnly d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+DateTime dt => dt.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture),
 TimeSpan ts => ts.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture),
 _ => val.ToString()
 };

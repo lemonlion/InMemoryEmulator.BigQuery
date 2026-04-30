@@ -183,8 +183,9 @@ public class MissingDateTimeFunctionTests
 		var (_, rows) = CreateExecutor().Execute(
 			"SELECT DATETIME_TRUNC(DATETIME '2008-12-25 15:30:00', DAY) AS result");
 		var val = rows[0].F[0].V?.ToString();
-		// Note: midnight DateTime is formatted as date-only in our system (DATE/DATETIME type ambiguity)
-		Assert.Equal("2008-12-25", val);
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/datetime_functions#datetime_trunc
+		//   DATETIME_TRUNC returns a DATETIME, formatted as yyyy-MM-ddTHH:mm:ss.ffffff
+		Assert.Equal("2008-12-25T00:00:00.000000", val);
 	}
 
 	[Fact]
