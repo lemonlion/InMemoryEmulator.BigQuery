@@ -138,7 +138,7 @@ public class SelectClauseComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task TableAlias_InSelect() { var rows = await Query($"SELECT d.id, d.category FROM `{_datasetId}.data` d ORDER BY d.id LIMIT 1"); Assert.NotNull(rows[0]["id"]); }
 
 	// ---- Wildcard table ----
-	[Fact(Skip = "Wildcard table FROM dataset.* not supported")] public async Task WildcardTable_MatchesAll()
+	[Fact] public async Task WildcardTable_MatchesAll()
 	{
 		var client = await _fixture.GetClientAsync();
 		await client.CreateTableAsync(_datasetId, "wt_alpha", new TableSchema { Fields = [new TableFieldSchema { Name = "id", Type = "INTEGER" }] });

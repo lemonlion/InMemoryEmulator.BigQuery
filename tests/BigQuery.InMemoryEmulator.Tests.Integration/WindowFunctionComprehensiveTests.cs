@@ -253,7 +253,7 @@ public class WindowFunctionComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- Named window ----
-	[Fact(Skip = "WINDOW w AS (...) named window syntax not yet supported")] public async Task NamedWindow()
+	[Fact] public async Task NamedWindow()
 	{
 		var rows = await Query($"SELECT id, ROW_NUMBER() OVER w AS rn FROM `{_datasetId}.sales` WINDOW w AS (ORDER BY id) ORDER BY id");
 		Assert.Equal("1", rows[0]["rn"]?.ToString());

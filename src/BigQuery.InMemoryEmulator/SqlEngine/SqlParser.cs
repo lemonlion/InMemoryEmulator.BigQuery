@@ -93,6 +93,18 @@ internal static class SqlParser
 			@",\s*\b(MICROSECOND|MILLISECOND|SECOND|MINUTE|HOUR|DAY|DAYOFWEEK|DAYOFYEAR|WEEK|ISOWEEK|MONTH|QUARTER|YEAR|ISOYEAR|DATE|DATETIME)\s*\)",
 			", '$1')", RegexOptions.IgnoreCase);
 
+		// Named WINDOW clause: WINDOW w AS (...) - expand OVER w references inline
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls#named_window
+		var windowMatch = Regex.Match(sql, @"\bWINDOW\s+(\w+)\s+AS\s*\(([^)]*)\)", RegexOptions.IgnoreCase);
+		while (windowMatch.Success)
+		{
+			var winName = windowMatch.Groups[1].Value;
+			var winSpec = windowMatch.Groups[2].Value;
+			sql = sql.Remove(windowMatch.Index, windowMatch.Length);
+			sql = Regex.Replace(sql, @"\bOVER\s+" + Regex.Escape(winName) + @"\b", "OVER (" + winSpec + ")", RegexOptions.IgnoreCase);
+			windowMatch = Regex.Match(sql, @"\bWINDOW\s+(\w+)\s+AS\s*\(([^)]*)\)", RegexOptions.IgnoreCase);
+		}
+
 		return sql;
 	}
 

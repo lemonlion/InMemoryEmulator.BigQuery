@@ -5014,7 +5014,7 @@ private object? EvaluateGeographyFunction(string name, IReadOnlyList<SqlExpressi
         // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_geogfromwkb
         "ST_GEOGFROMWKB" => vals[0] is null ? null : GeoComputation.ParseWkb((byte[])vals[0]),
         // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_iscollection
-        "ST_ISCOLLECTION" => vals[0] is null ? null : (object)false,
+        "ST_ISCOLLECTION" => vals[0] is null ? null : (object)(vals[0] is GeoMultiPoint),
         // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_boundary
         "ST_BOUNDARY" => GeoBoundary(vals[0]),
         // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_coveredby
@@ -5168,6 +5168,25 @@ private static object? GeoTouches(object? first, object? second)
     }
     if (a is GeoPolygon pa2 && b is GeoPoint pb2)
         return GeoTouches(second, first);
+    if (a is GeoPolygon polyA && b is GeoPolygon polyB)
+    {
+        var ringA = polyA.Rings[0];
+        var ringB = polyB.Rings[0];
+        bool sharedBoundary = false;
+        for (int i = 0; i < ringA.Count - 1; i++)
+        {
+            var pt = new GeoPoint(ringA[i].Lon, ringA[i].Lat);
+            if (PointNearBoundary(pt, polyB)) { sharedBoundary = true; continue; }
+            if (GeoComputation.PointInPolygon(pt, polyB)) return false;
+        }
+        for (int i = 0; i < ringB.Count - 1; i++)
+        {
+            var pt = new GeoPoint(ringB[i].Lon, ringB[i].Lat);
+            if (PointNearBoundary(pt, polyA)) { sharedBoundary = true; continue; }
+            if (GeoComputation.PointInPolygon(pt, polyA)) return false;
+        }
+        return sharedBoundary;
+    }
     return false;
 }
 
@@ -5455,6 +5474,8 @@ private static object? GeoDump(object? val)
 {
     if (val is null) return null;
     var geo = (GeoValue)val;
+    if (geo is GeoMultiPoint mp)
+        return mp.Points.Select(p => (object?)p).ToList();
     // For simple types, return an array with one element
     return new List<object?> { geo };
 }

@@ -103,7 +103,7 @@ public class GeographyComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task StDisjoint_NonOverlapping_True() => Assert.Equal("True", await Scalar("SELECT ST_DISJOINT(ST_GEOGFROMTEXT('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'), ST_GEOGFROMTEXT('POLYGON((5 5, 6 5, 6 6, 5 6, 5 5))'))"));
 
 	// ---- ST_TOUCHES ----
-	[Fact(Skip = "ST_TOUCHES with polygon edges not supported")] public async Task StTouches_SharedEdge() => Assert.Equal("True", await Scalar("SELECT ST_TOUCHES(ST_GEOGFROMTEXT('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'), ST_GEOGFROMTEXT('POLYGON((1 0, 2 0, 2 1, 1 1, 1 0))'))"));
+	[Fact] public async Task StTouches_SharedEdge() => Assert.Equal("True", await Scalar("SELECT ST_TOUCHES(ST_GEOGFROMTEXT('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'), ST_GEOGFROMTEXT('POLYGON((1 0, 2 0, 2 1, 1 1, 1 0))'))"));
 
 	// ---- ST_EQUALS ----
 	[Fact] public async Task StEquals_SameGeometry_True() => Assert.Equal("True", await Scalar("SELECT ST_EQUALS(ST_GEOGPOINT(1,1), ST_GEOGPOINT(1,1))"));
@@ -152,14 +152,14 @@ public class GeographyComprehensiveTests : IAsyncLifetime
 
 	// ---- ST_ISCOLLECTION ----
 	[Fact] public async Task StIsCollection_Point_False() => Assert.Equal("False", await Scalar("SELECT ST_ISCOLLECTION(ST_GEOGPOINT(0,0))"));
-	[Fact(Skip = "MultiPoint geography not supported")] public async Task StIsCollection_MultiPoint_True() => Assert.Equal("True", await Scalar("SELECT ST_ISCOLLECTION(ST_GEOGFROMTEXT('MULTIPOINT(0 0, 1 1)'))"));
+	[Fact] public async Task StIsCollection_MultiPoint_True() => Assert.Equal("True", await Scalar("SELECT ST_ISCOLLECTION(ST_GEOGFROMTEXT('MULTIPOINT(0 0, 1 1)'))"));
 
 	// ---- ST_GEOMETRYTYPE ----
 	[Fact] public async Task StGeometryType_Point() { var v = await Scalar("SELECT ST_GEOMETRYTYPE(ST_GEOGPOINT(0,0))"); Assert.Contains("Point", v!); }
 	[Fact] public async Task StGeometryType_Line() { var v = await Scalar("SELECT ST_GEOMETRYTYPE(ST_GEOGFROMTEXT('LINESTRING(0 0, 1 1)'))"); Assert.Contains("Line", v!); }
 
 	// ---- ST_DUMP ----
-	[Fact(Skip = "ST_DUMP not supported")] public async Task StDump_MultiPoint()
+	[Fact] public async Task StDump_MultiPoint()
 	{
 		var client = await _fixture.GetClientAsync();
 		var result = await client.ExecuteQueryAsync("SELECT geom FROM UNNEST(ST_DUMP(ST_GEOGFROMTEXT('MULTIPOINT(0 0, 1 1)'))) AS geom", parameters: null);

@@ -90,6 +90,32 @@ internal record GeoPolygon(IReadOnlyList<IReadOnlyList<(double Lon, double Lat)>
 	public override string ToString() => ToWkt();
 }
 
+/// <summary>A multi-point GEOGRAPHY: MULTIPOINT(...).</summary>
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_geogfromtext
+//   "Converts a WKT string to a GEOGRAPHY value. Supports MULTIPOINT."
+internal record GeoMultiPoint(IReadOnlyList<GeoPoint> Points) : GeoValue
+{
+	public override string ToWkt()
+	{
+		var pts = string.Join(", ", Points.Select(p =>
+			$"({p.Longitude.ToString(CultureInfo.InvariantCulture)} {p.Latitude.ToString(CultureInfo.InvariantCulture)})"));
+		return $"MULTIPOINT({pts})";
+	}
+
+	public override string ToGeoJson()
+	{
+		var coords = string.Join(",", Points.Select(p =>
+			$"[{p.Longitude.ToString(CultureInfo.InvariantCulture)},{p.Latitude.ToString(CultureInfo.InvariantCulture)}]"));
+		return $$"""{"type":"MultiPoint","coordinates":[{{coords}}]}""";
+	}
+
+	public override bool IsEmpty => Points.Count == 0;
+	public override int Dimension => 0;
+	public override int NumPoints => Points.Count;
+	public override string GeometryType => "ST_MultiPoint";
+	public override string ToString() => ToWkt();
+}
+
 /// <summary>An empty GEOGRAPHY.</summary>
 internal record GeoEmpty : GeoValue
 {
@@ -308,6 +334,32 @@ internal static class GeoComputation
 			var content = upper.Substring(upper.IndexOf('('));
 			var rings = ParseRings(content);
 			return new GeoPolygon(rings);
+		}
+
+		if (upper.StartsWith("MULTIPOINT", StringComparison.OrdinalIgnoreCase))
+		{
+			// MULTIPOINT((0 0), (1 1)) or MULTIPOINT(0 0, 1 1)
+			var content = ExtractCoords(upper, "MULTIPOINT");
+			var points = new List<GeoPoint>();
+			// Try parenthesized form: (x y), (x y)
+			var matches = Regex.Matches(content, @"\(\s*([^)]+)\s*\)");
+			if (matches.Count > 0)
+			{
+				foreach (Match m in matches)
+				{
+					var parts = m.Groups[1].Value.Trim().Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+					points.Add(new GeoPoint(
+						double.Parse(parts[0], CultureInfo.InvariantCulture),
+						double.Parse(parts[1], CultureInfo.InvariantCulture)));
+				}
+			}
+			else
+			{
+				// Simple form: x1 y1, x2 y2
+				foreach (var pt in ParsePointList(content))
+					points.Add(new GeoPoint(pt.Lon, pt.Lat));
+			}
+			return new GeoMultiPoint(points);
 		}
 
 		// Fallback
