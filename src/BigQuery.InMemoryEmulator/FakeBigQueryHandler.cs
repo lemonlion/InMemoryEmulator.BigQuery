@@ -792,11 +792,8 @@ public class FakeBigQueryHandler : HttpMessageHandler
 			List<TableRow> rows;
 			var upperQ = body.Query.TrimStart();
 			if (body.Query.Contains(';') ||
-				upperQ.StartsWith("CREATE FUNCTION", StringComparison.OrdinalIgnoreCase) ||
-				upperQ.StartsWith("CREATE OR REPLACE FUNCTION", StringComparison.OrdinalIgnoreCase) ||
-				upperQ.StartsWith("CREATE TEMP FUNCTION", StringComparison.OrdinalIgnoreCase) ||
-				upperQ.StartsWith("CREATE OR REPLACE TEMP FUNCTION", StringComparison.OrdinalIgnoreCase) ||
-				upperQ.StartsWith("DROP FUNCTION", StringComparison.OrdinalIgnoreCase))
+				upperQ.StartsWith("CREATE ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ.StartsWith("DROP ", StringComparison.OrdinalIgnoreCase))
 			{
 				var procExecutor = new SqlEngine.ProceduralExecutor(_store, defaultDatasetId);
 				(schema, rows) = procExecutor.Execute(body.Query);
@@ -910,11 +907,8 @@ public class FakeBigQueryHandler : HttpMessageHandler
 			List<TableRow> rows;
 			var upperQ2 = queryConfig.Query.TrimStart();
 			if (queryConfig.Query.Contains(';') ||
-				upperQ2.StartsWith("CREATE FUNCTION", StringComparison.OrdinalIgnoreCase) ||
-				upperQ2.StartsWith("CREATE OR REPLACE FUNCTION", StringComparison.OrdinalIgnoreCase) ||
-				upperQ2.StartsWith("CREATE TEMP FUNCTION", StringComparison.OrdinalIgnoreCase) ||
-				upperQ2.StartsWith("CREATE OR REPLACE TEMP FUNCTION", StringComparison.OrdinalIgnoreCase) ||
-				upperQ2.StartsWith("DROP FUNCTION", StringComparison.OrdinalIgnoreCase))
+				upperQ2.StartsWith("CREATE ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ2.StartsWith("DROP ", StringComparison.OrdinalIgnoreCase))
 			{
 				var procExecutor = new SqlEngine.ProceduralExecutor(_store, defaultDatasetId);
 				(schema, rows) = procExecutor.Execute(queryConfig.Query);

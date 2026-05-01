@@ -5471,6 +5471,19 @@ private object? EvaluateStUnionAgg(List<object?> values)
 #endregion
 private object? EvaluateUdf(string name, IReadOnlyList<SqlExpression> args, RowContext row)
 {
+// If name is qualified (dataset.func), resolve in specific dataset
+if (name.Contains('.'))
+{
+	var parts = name.Split('.', 2);
+	var dsName = parts[0];
+	var funcName = parts[1];
+	foreach (var ds in _store.Datasets.Values)
+	{
+		if (ds.DatasetId.Equals(dsName, StringComparison.OrdinalIgnoreCase) &&
+			(ds.Routines.TryGetValue(funcName, out var r) || ds.Routines.TryGetValue(funcName.ToLowerInvariant(), out r)))
+			return EvaluateUdfRoutine(r, args, row);
+	}
+}
 // Search all datasets for UDF
 foreach (var ds in _store.Datasets.Values)
 {
@@ -5513,6 +5526,38 @@ return engine.Execute(routine.Body, paramNames, argValues);
 }
 }
 throw new NotSupportedException("Unknown function: " + name);
+}
+
+private object? EvaluateUdfRoutine(InMemoryRoutine routine, IReadOnlyList<SqlExpression> args, RowContext row)
+{
+	if (routine.Language?.ToUpperInvariant() == "SQL" && routine.Body is not null)
+	{
+		var udfSql = routine.Body;
+		for (int i = 0; i < args.Count && i < routine.Parameters.Count; i++)
+		{
+			var paramName = routine.Parameters[i].Name;
+			var argVal = Evaluate(args[i], row);
+			var argStr = argVal is null ? "NULL" :
+				argVal is string s ? "'" + s.Replace("'", "''") + "'" :
+				ConvertToString(argVal) ?? "NULL";
+			udfSql = udfSql.Replace(paramName, argStr);
+		}
+		var udfExecutor = new QueryExecutor(_store, _defaultDatasetId);
+		if (_parameters is not null) udfExecutor.SetParameters(_parameters);
+		var result = udfExecutor.Execute("SELECT " + udfSql);
+		if (result.Rows.Count > 0 && result.Rows[0].F?.Count > 0)
+			return result.Rows[0].F[0].V;
+		return null;
+	}
+	if (routine.Language?.ToUpperInvariant() == "JAVASCRIPT" && routine.Body is not null)
+	{
+		var engine = _store.JsUdfEngine
+			?? throw new NotSupportedException("JavaScript UDFs require a JS engine.");
+		var paramNames = routine.Parameters.Select(p => p.Name).ToList();
+		var argValues = args.Select(a => Evaluate(a, row)).ToList();
+		return engine.Execute(routine.Body, paramNames, argValues);
+	}
+	return null;
 }
 
 #endregion
@@ -6053,7 +6098,7 @@ var schema = new TableSchema
     {
         Name = c.Name,
         Type = c.Type.ToUpperInvariant(),
-        Mode = "NULLABLE"
+        Mode = c.Mode == "REQUIRED" ? "REQUIRED" : "NULLABLE"
     }).ToList()
 };
 

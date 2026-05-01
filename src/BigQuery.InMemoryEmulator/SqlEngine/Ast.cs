@@ -273,7 +273,7 @@ internal record MergeWhenNotMatched(
 internal record CreateTableStatement(
 	string TableName,
 	string? DatasetId,
-	IReadOnlyList<(string Name, string Type)> Columns,
+	IReadOnlyList<(string Name, string Type, string Mode)> Columns,
 	bool OrReplace,
 	bool IfNotExists
 ) : SqlStatement;

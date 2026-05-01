@@ -659,7 +659,7 @@ internal class ProceduralExecutor
 	{
 		var ifExists = sql.Contains("IF EXISTS", StringComparison.OrdinalIgnoreCase);
 		var match = System.Text.RegularExpressions.Regex.Match(sql,
-			@"DROP\s+FUNCTION\s+(?:IF\s+EXISTS\s+)?(\w+(?:\.\w+)?)",
+			@"DROP\s+FUNCTION\s+(?:IF\s+EXISTS\s+)?`?(\w+(?:\.\w+)?)`?",
 			System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
 		if (!match.Success)
@@ -676,7 +676,7 @@ internal class ProceduralExecutor
 		}
 		else
 		{
-			datasetId = _defaultDatasetId ?? throw new InvalidOperationException("No default dataset.");
+			datasetId = _defaultDatasetId ?? "_temp";
 			funcName = fullName;
 		}
 

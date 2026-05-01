@@ -1381,9 +1381,12 @@ Token.EqualTo(SqlToken.LParen)
 		);
 
 	// Column definition: name TYPE
-	private static readonly TokenListParser<SqlToken, (string Name, string Type)> ColumnDefParser =
+	private static readonly TokenListParser<SqlToken, (string Name, string Type, string Mode)> ColumnDefParser =
 		IdentifierOrKeyword.Then(name =>
-			IdentifierOrKeyword.Select(type => (name, type.ToUpperInvariant())));
+			IdentifierOrKeyword.Then(type =>
+				// Optionally consume NOT NULL
+				Token.EqualTo(SqlToken.Not).IgnoreThen(Token.EqualTo(SqlToken.Null)).Select(_ => "REQUIRED").OptionalOrDefault("NULLABLE")
+					.Select(mode => (name, type.ToUpperInvariant(), mode))));
 
 	// CREATE [OR REPLACE] TABLE [IF NOT EXISTS] name (col TYPE, ...) | AS SELECT | LIKE src | COPY src | CLONE src
 	private static readonly TokenListParser<SqlToken, SqlStatement> CreateTableStmt =

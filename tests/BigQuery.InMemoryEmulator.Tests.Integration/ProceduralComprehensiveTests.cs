@@ -378,7 +378,7 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- DROP FUNCTION ----
-	[Fact(Skip = "DROP FUNCTION requires default dataset in ProceduralExecutor")] public async Task DropFunction_IfExists()
+	[Fact] public async Task DropFunction_IfExists()
 	{
 		await Scalar("CREATE TEMP FUNCTION my_fn(x INT64) RETURNS INT64 AS (x); DROP FUNCTION IF EXISTS my_fn; SELECT 1;");
 	}

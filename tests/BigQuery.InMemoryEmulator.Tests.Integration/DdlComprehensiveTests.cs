@@ -73,7 +73,7 @@ public class DdlComprehensiveTests : IAsyncLifetime
 		Assert.Equal(2, rows.Count);
 	}
 
-	[Fact(Skip = "DDL CREATE TABLE not routed through procedural executor from ExecuteQuery")] public async Task CreateTable_WithNullableAndRequired()
+	[Fact] public async Task CreateTable_WithNullableAndRequired()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.ct4` (id INT64 NOT NULL, name STRING)");
 		var rows = await Query($"SELECT column_name, is_nullable FROM `{_datasetId}.INFORMATION_SCHEMA.COLUMNS` WHERE table_name = 'ct4' ORDER BY ordinal_position");
@@ -89,7 +89,7 @@ public class DdlComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- CREATE TABLE AS SELECT (CTAS) ----
-	[Fact(Skip = "DDL: CREATE TABLE AS SELECT not implemented")] public async Task CreateTableAsSelect_Basic()
+	[Fact] public async Task CreateTableAsSelect_Basic()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.src1` (id INT64, name STRING)");
 		await Exec($"INSERT INTO `{_datasetId}.src1` VALUES (1, 'A'), (2, 'B')");
@@ -97,7 +97,7 @@ public class DdlComprehensiveTests : IAsyncLifetime
 		Assert.Equal("2", await Scalar($"SELECT COUNT(*) FROM `{_datasetId}.ctas1`"));
 	}
 
-	[Fact(Skip = "DDL: CREATE TABLE AS SELECT not implemented")] public async Task CreateTableAsSelect_WithTransform()
+	[Fact] public async Task CreateTableAsSelect_WithTransform()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.src2` (id INT64, name STRING)");
 		await Exec($"INSERT INTO `{_datasetId}.src2` VALUES (1, 'hello')");
