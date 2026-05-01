@@ -213,7 +213,7 @@ public class DdlComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- CREATE TABLE with STRUCT ----
-	[Fact(Skip = "DDL: STRUCT column type in CREATE TABLE not supported")] public async Task CreateTable_WithStruct()
+	[Fact] public async Task CreateTable_WithStruct()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.st1` (id INT64, info STRUCT<name STRING, age INT64>)");
 		var rows = await Query($"SELECT column_name FROM `{_datasetId}.INFORMATION_SCHEMA.COLUMNS` WHERE table_name = 'st1'");
@@ -221,7 +221,7 @@ public class DdlComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- CREATE TABLE with ARRAY ----
-	[Fact(Skip = "DDL: ARRAY column type in CREATE TABLE not supported")] public async Task CreateTable_WithArray()
+	[Fact] public async Task CreateTable_WithArray()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.arr1` (id INT64, tags ARRAY<STRING>)");
 		var rows = await Query($"SELECT column_name FROM `{_datasetId}.INFORMATION_SCHEMA.COLUMNS` WHERE table_name = 'arr1'");

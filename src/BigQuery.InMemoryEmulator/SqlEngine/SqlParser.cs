@@ -1381,12 +1381,36 @@ Token.EqualTo(SqlToken.LParen)
 		);
 
 	// Column definition: name TYPE
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#parameterized_data_types
+	//   Column types can be parameterized: STRUCT<field TYPE, ...>, ARRAY<TYPE>, NUMERIC(P,S)
+	private static readonly TokenListParser<SqlToken, string> ColumnTypeParser =
+		IdentifierOrKeyword.Then(baseType =>
+			Token.EqualTo(SqlToken.Lt).IgnoreThen(
+				SP.Ref(() => BalancedAngleBracketContent!)
+			).Then(inner => Token.EqualTo(SqlToken.Gt).Select(_ => baseType + "<" + inner + ">"))
+			.Try()
+			.Or(Token.EqualTo(SqlToken.LParen)
+				.IgnoreThen(Token.EqualTo(SqlToken.Number).Select(t => t.ToStringValue())
+					.ManyDelimitedBy(Token.EqualTo(SqlToken.Comma)))
+				.Then(nums => Token.EqualTo(SqlToken.RParen).Select(_ => baseType + "(" + string.Join(",", nums) + ")"))
+				.Try())
+			.Or(Constant(baseType))
+		).Select(t => t.ToUpperInvariant());
+
+	private static readonly TokenListParser<SqlToken, string> BalancedAngleBracketContent =
+		Token.Matching<SqlToken>(t => t != SqlToken.Lt && t != SqlToken.Gt, "non-angle")
+			.Select(t => t.ToStringValue())
+			.Or(Token.EqualTo(SqlToken.Lt)
+				.Then(_ => SP.Ref(() => BalancedAngleBracketContent!)
+					.Then(inner => Token.EqualTo(SqlToken.Gt).Select(_ => "<" + inner + ">"))))
+		.Many().Select(parts => string.Join(" ", parts));
+
 	private static readonly TokenListParser<SqlToken, (string Name, string Type, string Mode)> ColumnDefParser =
 		IdentifierOrKeyword.Then(name =>
-			IdentifierOrKeyword.Then(type =>
+			ColumnTypeParser.Then(type =>
 				// Optionally consume NOT NULL
 				Token.EqualTo(SqlToken.Not).IgnoreThen(Token.EqualTo(SqlToken.Null)).Select(_ => "REQUIRED").OptionalOrDefault("NULLABLE")
-					.Select(mode => (name, type.ToUpperInvariant(), mode))));
+					.Select(mode => (name, type, mode))));
 
 	// CREATE [OR REPLACE] TABLE [IF NOT EXISTS] name (col TYPE, ...) | AS SELECT | LIKE src | COPY src | CLONE src
 	private static readonly TokenListParser<SqlToken, SqlStatement> CreateTableStmt =
