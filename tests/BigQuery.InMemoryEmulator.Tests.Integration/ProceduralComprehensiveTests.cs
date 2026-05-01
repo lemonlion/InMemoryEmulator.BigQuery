@@ -195,7 +195,7 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- FOR ----
-	[Fact(Skip = "FOR loop over query requires table context in ProceduralExecutor")] public async Task For_OverQuery()
+	[Fact] public async Task For_OverQuery()
 	{
 		var v = await Scalar($@"
 			CREATE TABLE `{_datasetId}.ft1` (val INT64);

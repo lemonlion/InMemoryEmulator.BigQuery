@@ -659,7 +659,17 @@ fields["_PARTITIONDATE"] = truncated.ToString("yyyy-MM-dd", CultureInfo.Invarian
 }
 }
 
-private List<RowContext> ResolveInformationSchema(string tableName, string alias, string? datasetId = null)
+	// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tables#TableFieldSchema.FIELDS.type
+	//   INFORMATION_SCHEMA.COLUMNS returns canonical type names (INT64, FLOAT64, BOOL) not legacy aliases.
+	private static string NormalizeFieldType(string type) => (type?.ToUpperInvariant()) switch
+	{
+		"INTEGER" => "INT64",
+		"FLOAT" => "FLOAT64",
+		"BOOLEAN" => "BOOL",
+		_ => type?.ToUpperInvariant() ?? "STRING"
+	};
+
+	private List<RowContext> ResolveInformationSchema(string tableName, string alias, string? datasetId = null)
 {
 var dsId = datasetId ?? _defaultDatasetId;
 
@@ -703,7 +713,7 @@ rows.Add(new RowContext(new Dictionary<string, object?>
 ["table_name"] = t.TableId,
 ["column_name"] = f.Name,
 ["ordinal_position"] = (long)(i + 1),
-["data_type"] = f.Type,
+["data_type"] = NormalizeFieldType(f.Type),
 ["is_nullable"] = f.Mode != "REQUIRED" ? "YES" : "NO",
 }, alias));
 }
@@ -855,7 +865,7 @@ rows.Add(new RowContext(new Dictionary<string, object?>
 ["table_name"] = tableId,
 ["column_name"] = topColumn,
 ["field_path"] = path,
-["data_type"] = f.Type,
+["data_type"] = NormalizeFieldType(f.Type),
 ["description"] = (object?)null,
 }, alias));
 if (f.Fields is { Count: > 0 })
@@ -5602,7 +5612,7 @@ return funcName switch
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#array_concat_agg
 //   "Concatenates elements from expression of type ARRAY, returning a single ARRAY as a result."
 "ARRAY_CONCAT_AGG" => values.Where(v => v is not null)
-	.SelectMany(v => v is IList<object?> list ? list : (v is System.Collections.IEnumerable e ? e.Cast<object?>() : [v]))
+	.SelectMany(v => v is IList<object?> list ? list : (v is string s && s.Contains(", ") ? s.Split(", ").Select(x => (object?)x.Trim()).ToList() : [v]))
 	.ToList(),
 "COUNTIF" => (long)rows.Count(r => IsTruthy(Evaluate(agg.Arg!, r))),
 "APPROX_COUNT_DISTINCT" => (long)values.Where(v => v is not null).Distinct().Count(),

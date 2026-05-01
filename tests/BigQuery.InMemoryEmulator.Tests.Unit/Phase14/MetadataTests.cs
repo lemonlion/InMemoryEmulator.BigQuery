@@ -82,7 +82,7 @@ public class MetadataTests
 
 		Assert.Equal(2, rows.Count);
 		Assert.Equal("id", rows[0].F[0].V?.ToString());
-		Assert.Equal("INTEGER", rows[0].F[1].V?.ToString());
+		Assert.Equal("INT64", rows[0].F[1].V?.ToString());
 		Assert.Equal("name", rows[1].F[0].V?.ToString());
 		Assert.Equal("STRING", rows[1].F[1].V?.ToString());
 	}
