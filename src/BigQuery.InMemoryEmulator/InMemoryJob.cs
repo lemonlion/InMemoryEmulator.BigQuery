@@ -81,6 +81,7 @@ internal class InMemoryJob
 					CacheHit = false,
 					StatementType = StatementType,
 					NumDmlAffectedRows = NumDmlAffectedRows > 0 ? NumDmlAffectedRows : null,
+Schema = ResultSchema,
 				}
 			}
 		};

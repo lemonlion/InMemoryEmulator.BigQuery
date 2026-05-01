@@ -850,7 +850,7 @@ public class FakeBigQueryHandler : HttpMessageHandler
 		// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs#JobConfigurationTableCopy
 		//   "Copies a table."
 		var copyConfig = body?.Configuration?.Copy;
-		if (copyConfig?.SourceTable is not null && copyConfig.DestinationTable is not null)
+		if ((copyConfig?.SourceTable is not null || copyConfig?.SourceTables?.Count > 0) && copyConfig?.DestinationTable is not null)
 		{
 			return HandleCopyJob(body!, copyConfig);
 		}
@@ -949,8 +949,9 @@ public class FakeBigQueryHandler : HttpMessageHandler
 		var jobId = jobBody.JobReference?.JobId ?? Guid.NewGuid().ToString();
 		try
 		{
-			var srcDsId = copyConfig.SourceTable.DatasetId;
-			var srcTblId = copyConfig.SourceTable.TableId;
+			var srcTableRef = copyConfig.SourceTable ?? copyConfig.SourceTables?[0];
+var srcDsId = srcTableRef!.DatasetId;
+			var srcTblId = srcTableRef!.TableId;
 			var dstDsId = copyConfig.DestinationTable.DatasetId;
 			var dstTblId = copyConfig.DestinationTable.TableId;
 

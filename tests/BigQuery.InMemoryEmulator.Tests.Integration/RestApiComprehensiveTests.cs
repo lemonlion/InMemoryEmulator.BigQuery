@@ -216,7 +216,7 @@ public class RestApiComprehensiveTests : IAsyncLifetime
 	}
 
 	// ==== JOB OPERATIONS ====
-	[Fact(Skip = "Dry run not supported")] public async Task DryRun_ReturnsSchemaWithoutData()
+	[Fact] public async Task DryRun_ReturnsSchemaWithoutData()
 	{
 		var client = await GetClient();
 		await client.CreateTableAsync(_datasetId, "dr_t1", new TableSchema
@@ -340,7 +340,7 @@ public class RestApiComprehensiveTests : IAsyncLifetime
 	}
 
 	// ==== COPY JOB ====
-	[Fact(Skip = "Copy job not supported")] public async Task CopyJob_DuplicatesTable()
+	[Fact] public async Task CopyJob_DuplicatesTable()
 	{
 		var client = await GetClient();
 		await client.CreateTableAsync(_datasetId, "cp_src", new TableSchema
