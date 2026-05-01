@@ -115,7 +115,7 @@ public class ExpressionCombinationTests : IAsyncLifetime
 	[Fact] public async Task Literal_String() => Assert.Equal("hello", await Scalar("SELECT 'hello'"));
 	[Fact] public async Task Literal_EmptyString() => Assert.Equal("", await Scalar("SELECT ''"));
 	[Fact] public async Task Literal_StringWithSpaces() => Assert.Equal("hello world", await Scalar("SELECT 'hello world'"));
-	[Fact(Skip = "Tokenizer does not support backslash-escaped quotes in string literals")] public async Task Literal_StringWithEscape() => Assert.Equal("it's", await Scalar("SELECT 'it\\'s'"));
+	[Fact] public async Task Literal_StringWithEscape() => Assert.Equal("it's", await Scalar("SELECT 'it\\'s'"));
 	[Fact] public async Task Literal_BoolTrue() => Assert.Equal("True", await Scalar("SELECT TRUE"));
 	[Fact] public async Task Literal_BoolFalse() => Assert.Equal("False", await Scalar("SELECT FALSE"));
 	[Fact] public async Task Literal_Null() => Assert.Null(await Scalar("SELECT NULL"));

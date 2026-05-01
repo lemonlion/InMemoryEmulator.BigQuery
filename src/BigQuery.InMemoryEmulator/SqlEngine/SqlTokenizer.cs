@@ -94,8 +94,15 @@ internal static class SqlTokenizer
 				Character.Except('`').Many())
 				.Then(_ => Character.EqualTo('`'))
 		), SqlToken.BacktickIdentifier)
-		// String literal: 'text' or "text"
-		.Match(QuotedString.SqlStyle, SqlToken.StringLiteral)
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#string_and_bytes_literals
+		//   BigQuery supports both '' and \' as escape sequences in single-quoted strings.
+		.Match(Span.MatchedBy(
+			Character.EqualTo('\'').IgnoreThen(
+				Span.EqualTo("''").Value('\'').Try()
+					.Or(Character.EqualTo('\\').IgnoreThen(Character.AnyChar).Try())
+					.Or(Character.Except('\'')).Many())
+				.Then(_ => Character.EqualTo('\''))
+		), SqlToken.StringLiteral)
 		.Match(Span.MatchedBy(
 			Character.EqualTo('"').IgnoreThen(
 				Span.EqualTo("\"\"").Value('"').Try()

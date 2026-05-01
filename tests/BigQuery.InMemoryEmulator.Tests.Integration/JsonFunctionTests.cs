@@ -112,5 +112,5 @@ public class JsonFunctionTests : IAsyncLifetime
 	// ---- Edge cases ----
 	[Fact] public async Task Json_EmptyObject() { var v = await Scalar("SELECT JSON_EXTRACT('{}', '$.a')"); Assert.Null(v); }
 	[Fact] public async Task Json_EmptyArray() { var v = await Scalar("SELECT ARRAY_LENGTH(JSON_EXTRACT_ARRAY('[]'))"); Assert.Equal("0", v); }
-	[Fact(Skip = "JSON string escaping differs")] public async Task Json_SpecialChars() => Assert.Equal("he said \"hi\"", await Scalar("SELECT JSON_EXTRACT_SCALAR('{\"msg\": \"he said \\\\\"hi\\\\\"\"}', '$.msg')"));
+	[Fact] public async Task Json_SpecialChars() => Assert.Equal("he said \"hi\"", await Scalar("SELECT JSON_EXTRACT_SCALAR('{\"msg\": \"he said \\\\\"hi\\\\\"\"}', '$.msg')"));
 }
