@@ -805,6 +805,9 @@ public class FakeBigQueryHandler : HttpMessageHandler
 				(schema, rows) = executor.Execute(body.Query);
 			}
 
+			if (body.Query.Contains("ROW_NUMBER") && body.Query.Contains("ORDER BY 1"))
+				throw new Exception($"HANDLER_DBG: rows=[{string.Join(",", rows.Select(r => r.F?[0]?.V))}]");
+
 			job.ResultSchema = schema;
 			job.ResultRows = rows;
 			job.TotalRows = rows.Count;

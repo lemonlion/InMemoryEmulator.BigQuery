@@ -35,7 +35,7 @@ public class WindowFunctionDeepTests : IAsyncLifetime
 	}
 
 	// ---- ROW_NUMBER ----
-	[Fact(Skip = "ORDER BY on window function alias not applied correctly")]
+	[Fact]
 	public async Task RowNumber_Basic()
 	{
 		var rows = await Column("SELECT ROW_NUMBER() OVER (ORDER BY x) FROM UNNEST([30,10,20]) AS x ORDER BY 1");
@@ -45,7 +45,7 @@ public class WindowFunctionDeepTests : IAsyncLifetime
 		Assert.Equal("3", rows[2]);
 	}
 
-	[Fact(Skip = "ORDER BY on window function alias not applied correctly")]
+	[Fact]
 	public async Task RowNumber_Desc()
 	{
 		var rows = await Column("SELECT ROW_NUMBER() OVER (ORDER BY x DESC) FROM UNNEST([30,10,20]) AS x ORDER BY 1");
@@ -55,7 +55,7 @@ public class WindowFunctionDeepTests : IAsyncLifetime
 		Assert.Equal("3", rows[2]);
 	}
 
-	[Fact(Skip = "ORDER BY on window function alias not applied correctly")]
+	[Fact]
 	public async Task RowNumber_Five()
 	{
 		var rows = await Column("SELECT ROW_NUMBER() OVER (ORDER BY x) FROM UNNEST([50,40,30,20,10]) AS x ORDER BY 1");

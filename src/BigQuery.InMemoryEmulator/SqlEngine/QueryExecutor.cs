@@ -9,7 +9,10 @@ namespace BigQuery.InMemoryEmulator.SqlEngine;
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax
 //   Core query execution engine evaluates parsed SQL AST against in-memory data.
 
-internal record InMemoryBigQueryResult(TableSchema Schema, List<TableRow> Rows);
+internal record InMemoryBigQueryResult(TableSchema Schema, List<TableRow> Rows)
+{
+	public long? DmlAffectedRows { get; init; }
+}
 
 internal class QueryExecutor
 {
@@ -199,6 +202,7 @@ tableRows = tableRows
 // ORDER BY
 if (sel.OrderBy is { Count: > 0 })
 {
+
 // Include source row fields so ORDER BY can reference columns not in SELECT
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#order_by_clause
 var projFieldNames = schema.Fields.Select(f => f.Name).ToHashSet();
@@ -6433,7 +6437,7 @@ var rows = new List<TableRow>
 {
 new() { F = [new TableCell { V = affectedRows.ToString() }] }
 };
-return new InMemoryBigQueryResult(schema, rows);
+return new InMemoryBigQueryResult(schema, rows) { DmlAffectedRows = affectedRows };
 }
 
 private static Dictionary<string, object?> RowToDict(TableRow row, TableSchema schema)
@@ -6557,7 +6561,9 @@ private static IReadOnlyList<OrderByItem> ResolveOrderByOrdinals(IReadOnlyList<O
     {
         if (item.Expr is LiteralExpr lit && lit.Value is long ordinal && ordinal >= 1 && ordinal <= columns.Count)
         {
-            resolved.Add(new OrderByItem(columns[(int)ordinal - 1].Expr, item.Descending));
+            var col = columns[(int)ordinal - 1];
+            var colName = col.Alias ?? DeriveColumnName(col.Expr);
+            resolved.Add(new OrderByItem(new ColumnRef(null, colName), item.Descending));
         }
         else
         {

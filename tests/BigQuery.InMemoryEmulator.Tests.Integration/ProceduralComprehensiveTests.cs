@@ -311,7 +311,7 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- Variables in SQL ----
-	[Fact(Skip = "Procedural: variable substitution in non-SELECT statements throws NRE")] public async Task Variable_InWhereClause()
+	[Fact] public async Task Variable_InWhereClause()
 	{
 		var v = await Scalar($@"
 			CREATE TABLE `{_datasetId}.vt1` (id INT64, val STRING);
@@ -322,7 +322,7 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 		Assert.Equal("b", v);
 	}
 
-	[Fact(Skip = "Procedural: variable substitution in non-SELECT statements throws NRE")] public async Task Variable_InInsert()
+	[Fact] public async Task Variable_InInsert()
 	{
 		var v = await Scalar($@"
 			CREATE TABLE `{_datasetId}.vt2` (id INT64, val STRING);
@@ -335,7 +335,7 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- @@row_count ----
-	[Fact(Skip = "Procedural: @@row_count system variable not supported")] public async Task RowCount_AfterInsert()
+	[Fact] public async Task RowCount_AfterInsert()
 	{
 		var v = await Scalar($@"
 			CREATE TABLE `{_datasetId}.rc1` (id INT64);
@@ -352,7 +352,7 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- RETURN ----
-	[Fact(Skip = "RETURN exits script entirely, SELECT after BEGIN never executes")] public async Task Return_ExitsEarly()
+	[Fact(Skip = "RETURN stops entire script per docs; test expectation conflicts with documented behavior")] public async Task Return_ExitsEarly()
 	{
 		var v = await Scalar(@"
 			DECLARE x INT64 DEFAULT 1;

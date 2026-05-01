@@ -182,6 +182,13 @@ internal class ProceduralExecutor
 		substituted = QualifyTempTables(substituted);
 		var executor = new QueryExecutor(_store, _defaultDatasetId);
 		var result = executor.Execute(substituted);
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#system_variables
+		//   "@@row_count: The number of rows modified by the last DML statement."
+		if (result.DmlAffectedRows.HasValue)
+		{
+			_rowCount = result.DmlAffectedRows.Value;
+			_variables["@@row_count"] = _rowCount;
+		}
 		return (result.Schema, result.Rows);
 	}
 
