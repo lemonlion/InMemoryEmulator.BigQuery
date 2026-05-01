@@ -557,3 +557,10 @@ internal static class GeoComputation
 		}
 	}
 }
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#range_type
+//   "A RANGE value represents a contiguous range between two values of the same type."
+internal record RangeValue(object? Start, object? End)
+{
+    public override string ToString() => $"[{Start}, {End})";
+}

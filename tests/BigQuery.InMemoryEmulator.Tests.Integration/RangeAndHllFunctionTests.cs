@@ -29,31 +29,39 @@ public class RangeAndHllFunctionTests : IAsyncLifetime
 		var client = await _fixture.GetClientAsync();
 		var result = await client.ExecuteQueryAsync(sql, parameters: null);
 		var rows = result.ToList();
-		return rows.Count > 0 ? rows[0][0]?.ToString() : null;
+		if (rows.Count == 0) return null;
+		var val = rows[0][0];
+		if (val is DateTime dt)
+		{
+			var fieldType = result.Schema.Fields[0].Type;
+			if (fieldType == "DATE") return dt.ToString("yyyy-MM-dd");
+			return dt.ToString("yyyy-MM-dd HH:mm:ss");
+		}
+		return val?.ToString();
 	}
 
 	// ---- RANGE constructor ----
 	[Fact] public async Task Range_DateRange() => Assert.NotNull(await Scalar("SELECT RANGE(DATE '2024-01-01', DATE '2024-12-31')"));
 	[Fact] public async Task Range_TimestampRange() => Assert.NotNull(await Scalar("SELECT RANGE(TIMESTAMP '2024-01-01 00:00:00 UTC', TIMESTAMP '2024-12-31 23:59:59 UTC')"));
-	[Fact(Skip = "RANGE type functions not implemented")] public async Task Range_NullStart() => Assert.NotNull(await Scalar("SELECT RANGE(NULL, DATE '2024-12-31')"));
-	[Fact(Skip = "RANGE type functions not implemented")] public async Task Range_NullEnd() => Assert.NotNull(await Scalar("SELECT RANGE(DATE '2024-01-01', NULL)"));
+	[Fact] public async Task Range_NullStart() => Assert.NotNull(await Scalar("SELECT RANGE(NULL, DATE '2024-12-31')"));
+	[Fact] public async Task Range_NullEnd() => Assert.NotNull(await Scalar("SELECT RANGE(DATE '2024-01-01', NULL)"));
 
 	// ---- RANGE_START / RANGE_END ----
-	[Fact(Skip = "RANGE type functions not implemented")] public async Task RangeStart_Date() { var v = await Scalar("SELECT RANGE_START(RANGE(DATE '2024-01-01', DATE '2024-12-31'))"); Assert.Contains("2024-01-01", v); }
-	[Fact(Skip = "RANGE type functions not implemented")] public async Task RangeEnd_Date() { var v = await Scalar("SELECT RANGE_END(RANGE(DATE '2024-01-01', DATE '2024-12-31'))"); Assert.Contains("2024-12-31", v); }
+	[Fact] public async Task RangeStart_Date() { var v = await Scalar("SELECT RANGE_START(RANGE(DATE '2024-01-01', DATE '2024-12-31'))"); Assert.Contains("2024-01-01", v); }
+	[Fact] public async Task RangeEnd_Date() { var v = await Scalar("SELECT RANGE_END(RANGE(DATE '2024-01-01', DATE '2024-12-31'))"); Assert.Contains("2024-12-31", v); }
 	[Fact] public async Task RangeStart_Null() => Assert.Null(await Scalar("SELECT RANGE_START(RANGE(NULL, DATE '2024-12-31'))"));
 	[Fact] public async Task RangeEnd_Null() => Assert.Null(await Scalar("SELECT RANGE_END(RANGE(DATE '2024-01-01', NULL))"));
 
 	// ---- RANGE_CONTAINS ----
 	[Fact] public async Task RangeContains_ValueInRange_True() => Assert.Equal("True", await Scalar("SELECT RANGE_CONTAINS(RANGE(DATE '2024-01-01', DATE '2024-12-31'), DATE '2024-06-15')"));
-	[Fact(Skip = "RANGE type functions not implemented")] public async Task RangeContains_ValueOutOfRange_False() => Assert.Equal("False", await Scalar("SELECT RANGE_CONTAINS(RANGE(DATE '2024-01-01', DATE '2024-12-31'), DATE '2025-01-01')"));
+	[Fact] public async Task RangeContains_ValueOutOfRange_False() => Assert.Equal("False", await Scalar("SELECT RANGE_CONTAINS(RANGE(DATE '2024-01-01', DATE '2024-12-31'), DATE '2025-01-01')"));
 	[Fact] public async Task RangeContains_AtStart_True() => Assert.Equal("True", await Scalar("SELECT RANGE_CONTAINS(RANGE(DATE '2024-01-01', DATE '2024-12-31'), DATE '2024-01-01')"));
 	[Fact] public async Task RangeContains_AtEnd_False() => Assert.Equal("False", await Scalar("SELECT RANGE_CONTAINS(RANGE(DATE '2024-01-01', DATE '2024-12-31'), DATE '2024-12-31')"));
 	[Fact] public async Task RangeContains_RangeInRange_True() => Assert.Equal("True", await Scalar("SELECT RANGE_CONTAINS(RANGE(DATE '2024-01-01', DATE '2024-12-31'), RANGE(DATE '2024-03-01', DATE '2024-06-01'))"));
 
 	// ---- RANGE_OVERLAPS ----
 	[Fact] public async Task RangeOverlaps_Overlapping_True() => Assert.Equal("True", await Scalar("SELECT RANGE_OVERLAPS(RANGE(DATE '2024-01-01', DATE '2024-06-30'), RANGE(DATE '2024-03-01', DATE '2024-12-31'))"));
-	[Fact(Skip = "RANGE type functions not implemented")] public async Task RangeOverlaps_NonOverlapping_False() => Assert.Equal("False", await Scalar("SELECT RANGE_OVERLAPS(RANGE(DATE '2024-01-01', DATE '2024-03-31'), RANGE(DATE '2024-06-01', DATE '2024-12-31'))"));
+	[Fact] public async Task RangeOverlaps_NonOverlapping_False() => Assert.Equal("False", await Scalar("SELECT RANGE_OVERLAPS(RANGE(DATE '2024-01-01', DATE '2024-03-31'), RANGE(DATE '2024-06-01', DATE '2024-12-31'))"));
 	[Fact] public async Task RangeOverlaps_Adjacent_False() => Assert.Equal("False", await Scalar("SELECT RANGE_OVERLAPS(RANGE(DATE '2024-01-01', DATE '2024-06-01'), RANGE(DATE '2024-06-01', DATE '2024-12-31'))"));
 
 	// ---- RANGE_BUCKET ----

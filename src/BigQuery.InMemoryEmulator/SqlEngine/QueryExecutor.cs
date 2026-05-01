@@ -2343,6 +2343,7 @@ or "ST_BUFFER" or "ST_SIMPLIFY" or "ST_DUMP"
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#parse_numeric
 "PARSE_NUMERIC" or "PARSE_BIGNUMERIC" => EvaluateParseNumeric(args, row),
 
+
 // JSON type conversion functions (extract typed value from JSON)
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions
 "BOOL" or "JSON_BOOL" => EvaluateJsonBool(args, row),
@@ -4167,105 +4168,71 @@ return val; // Simplified: intervals are already string-formatted
 }
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range
-//   "Constructs a range of DATE, DATETIME, or TIMESTAMP values."
+//   "Constructs a RANGE<T> value with lower and upper bounds."
 private object? EvaluateRange(IReadOnlyList<SqlExpression> args, RowContext row)
 {
 var lower = Evaluate(args[0], row);
-var upper = Evaluate(args[1], row);
-if (lower is null || upper is null) return null;
-// Represent range as "[lower, upper)" string
-return $"[{lower}, {upper})";
+var upper = args.Count > 1 ? Evaluate(args[1], row) : null;
+return new RangeValue(lower, upper);
 }
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range_start
 //   "Gets the lower bound of a range."
 private object? EvaluateRangeStart(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-var range = Evaluate(args[0], row)?.ToString();
-if (range is null) return null;
-// Parse "[lower, upper)" format
-var trimmed = range.TrimStart('[').TrimEnd(')');
-var parts = trimmed.Split(',', 2);
-return parts[0].Trim();
+var val = Evaluate(args[0], row);
+if (val is RangeValue r) return r.Start;
+return null;
 }
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range_end
 //   "Gets the upper bound of a range."
 private object? EvaluateRangeEnd(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-var range = Evaluate(args[0], row)?.ToString();
-if (range is null) return null;
-var trimmed = range.TrimStart('[').TrimEnd(')');
-var parts = trimmed.Split(',', 2);
-return parts.Length > 1 ? parts[1].Trim() : null;
+var val = Evaluate(args[0], row);
+if (val is RangeValue r) return r.End;
+return null;
 }
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range_contains
 //   "Checks if a value or range is contained within another range."
 private object? EvaluateRangeContains(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-var outer = Evaluate(args[0], row)?.ToString();
+var outer = Evaluate(args[0], row);
 var inner = Evaluate(args[1], row);
-if (outer is null || inner is null) return null;
-
-var outerTrimmed = outer.TrimStart('[').TrimEnd(')');
-var outerParts = outerTrimmed.Split(',', 2);
-var outerStart = outerParts[0].Trim();
-var outerEnd = outerParts.Length > 1 ? outerParts[1].Trim() : "";
-
-var innerStr = inner.ToString()!;
-// Check if inner is a range or a scalar value
-if (innerStr.StartsWith("[") && innerStr.EndsWith(")"))
+if (outer is not RangeValue outerRange) return null;
+if (inner is null) return null;
+if (inner is RangeValue innerRange)
 {
-	// Range-in-range containment
-	var innerTrimmed = innerStr.TrimStart('[').TrimEnd(')');
-	var innerParts = innerTrimmed.Split(',', 2);
-	var innerStart = innerParts[0].Trim();
-	var innerEnd = innerParts.Length > 1 ? innerParts[1].Trim() : "";
-	return string.Compare(outerStart, innerStart, StringComparison.Ordinal) <= 0 &&
-	       string.Compare(outerEnd, innerEnd, StringComparison.Ordinal) >= 0;
+    return CompareValues(outerRange.Start, innerRange.Start) <= 0 &&
+           CompareValues(outerRange.End, innerRange.End) >= 0;
 }
-else
-{
-	// Scalar-in-range containment
-	return string.Compare(outerStart, innerStr, StringComparison.Ordinal) <= 0 &&
-	       string.Compare(innerStr, outerEnd, StringComparison.Ordinal) < 0;
-}
+// Scalar containment: start <= value < end
+return CompareValues(outerRange.Start, inner) <= 0 &&
+       CompareValues(inner, outerRange.End) < 0;
 }
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range_overlaps
 //   "Checks if two ranges overlap."
 private object? EvaluateRangeOverlaps(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-var rangeA = Evaluate(args[0], row)?.ToString();
-var rangeB = Evaluate(args[1], row)?.ToString();
-if (rangeA is null || rangeB is null) return null;
-
-var aT = rangeA.TrimStart('[').TrimEnd(')');
-var aParts = aT.Split(',', 2);
-var aStart = aParts[0].Trim();
-var aEnd = aParts.Length > 1 ? aParts[1].Trim() : "";
-
-var bT = rangeB.TrimStart('[').TrimEnd(')');
-var bParts = bT.Split(',', 2);
-var bStart = bParts[0].Trim();
-var bEnd = bParts.Length > 1 ? bParts[1].Trim() : "";
-
+var a = Evaluate(args[0], row);
+var b = Evaluate(args[1], row);
+if (a is not RangeValue ra || b is not RangeValue rb) return null;
 // Two ranges overlap if aStart < bEnd AND bStart < aEnd
-return string.Compare(aStart, bEnd, StringComparison.Ordinal) < 0 &&
-       string.Compare(bStart, aEnd, StringComparison.Ordinal) < 0;
+return CompareValues(ra.Start, rb.End) < 0 &&
+       CompareValues(rb.Start, ra.End) < 0;
 }
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#generate_range_array
 //   "Splits a range into an array of subranges."
 private object? EvaluateGenerateRangeArray(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-var range = Evaluate(args[0], row)?.ToString();
-if (range is null) return null;
+var val = Evaluate(args[0], row);
+if (val is not RangeValue range) return null;
 // For simplicity, return a single-element array containing the full range
 return new List<object?> { range };
 }
-
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/net_functions#nethosturl
 //   "Takes a URL as a STRING and returns the host."
 private object? EvaluateNetHost(IReadOnlyList<SqlExpression> args, RowContext row)
@@ -5480,6 +5447,7 @@ private static object? GeoDump(object? val)
     return new List<object?> { geo };
 }
 
+
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_centroid_agg
 //   "Returns the centroid of all input GEOGRAPHY values."
 private object? EvaluateStCentroidAgg(List<object?> values)
@@ -6556,6 +6524,7 @@ DateTime dt => dt.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff", CultureInfo.Invariant
 TimeSpan ts => ts.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture),
 byte[] bytes => Convert.ToBase64String(bytes),
 IList<object?> list => string.Join(", ", list.Select(v => FormatValue(v)?.ToString() ?? "NULL")),
+RangeValue rv => $"[{FormatValue(rv.Start)}, {FormatValue(rv.End)})",
 _ => val.ToString()
 };
 }
