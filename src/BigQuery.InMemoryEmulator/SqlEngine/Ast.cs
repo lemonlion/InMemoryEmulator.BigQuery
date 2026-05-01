@@ -321,7 +321,8 @@ internal record CreateViewStatement(
 	string ViewName,
 	string? DatasetId,
 	SelectStatement Query,
-	bool OrReplace
+	bool OrReplace,
+	string? ViewSql = null
 ) : SqlStatement;
 
 /// <summary>DROP VIEW [IF EXISTS] name</summary>

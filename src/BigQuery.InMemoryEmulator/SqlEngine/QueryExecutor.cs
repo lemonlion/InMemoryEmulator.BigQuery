@@ -43,6 +43,12 @@ if (IsStubDdl(sql))
 	return EmptyResult();
 
 var stmt = SqlParser.ParseSql(sql);
+if (stmt is CreateViewStatement cv2)
+{
+	var asIdx = sql.IndexOf(" AS ", StringComparison.OrdinalIgnoreCase);
+	var viewSql = asIdx >= 0 ? sql[(asIdx + 4)..].Trim() : sql;
+	stmt = cv2 with { ViewSql = viewSql };
+}
 return ExecuteStatement(stmt);
 }
 
@@ -565,7 +571,12 @@ if (tableName.Contains("INFORMATION_SCHEMA", StringComparison.OrdinalIgnoreCase)
 	// If DatasetId is "INFORMATION_SCHEMA" itself, use _defaultDatasetId
 	if (isDs?.Equals("INFORMATION_SCHEMA", StringComparison.OrdinalIgnoreCase) == true)
 		isDs = _defaultDatasetId;
-	return ResolveInformationSchema(tableName, alias, isDs ?? _defaultDatasetId);
+	var infoRows = ResolveInformationSchema(tableName, alias, isDs ?? _defaultDatasetId);
+	// Add alias-qualified keys for JOIN support
+	foreach (var ir in infoRows)
+		foreach (var kv in ir.Fields.ToList())
+			ir.Fields[alias + "." + kv.Key] = kv.Value;
+	return infoRows;
 }
 
 // Wildcard tables
@@ -647,6 +658,17 @@ fields["_PARTITIONDATE"] = truncated.ToString("yyyy-MM-dd", CultureInfo.Invarian
 private List<RowContext> ResolveInformationSchema(string tableName, string alias, string? datasetId = null)
 {
 var dsId = datasetId ?? _defaultDatasetId;
+
+// SCHEMATA is project-level, not dataset-scoped
+if (tableName.EndsWith("SCHEMATA", StringComparison.OrdinalIgnoreCase))
+{
+	return _store.Datasets.Keys.Select(name => new RowContext(new Dictionary<string, object?>
+	{
+		["catalog_name"] = _store.ProjectId,
+		["schema_name"] = name,
+	}, alias)).ToList();
+}
+
 if (dsId is null || !_store.Datasets.TryGetValue(dsId, out var ds)) return [];
 
 if (tableName.EndsWith("TABLES", StringComparison.OrdinalIgnoreCase))
@@ -684,14 +706,7 @@ rows.Add(new RowContext(new Dictionary<string, object?>
 }
 return rows;
 }
-if (tableName.EndsWith("SCHEMATA", StringComparison.OrdinalIgnoreCase))
-{
-return _store.Datasets.Keys.Select(name => new RowContext(new Dictionary<string, object?>
-{
-["catalog_name"] = _store.ProjectId,
-["schema_name"] = name,
-}, alias)).ToList();
-}
+
 // Ref: https://cloud.google.com/bigquery/docs/information-schema-routines
 //   "The INFORMATION_SCHEMA.ROUTINES view contains one row for each routine in a dataset."
 if (tableName.EndsWith("ROUTINES", StringComparison.OrdinalIgnoreCase))
@@ -6176,6 +6191,7 @@ var table = new InMemoryTable(dsId, viewId, result.Schema);
 // Store the view query AST so it can be re-executed when the view is queried
 // Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tables#ViewDefinition
 table.ViewQuery = view.Query;
+table.ViewDefinitionSql = view.ViewSql ?? "(view definition not available)";
 if (view.OrReplace && ds.Tables.ContainsKey(viewId))
     ds.Tables[viewId] = table;
 else

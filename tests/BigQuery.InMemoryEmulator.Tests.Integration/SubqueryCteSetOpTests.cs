@@ -258,7 +258,7 @@ public class SubqueryCteSetOpTests : IAsyncLifetime
 	}
 
 	// ==== PIVOT ====
-	[Fact(Skip = "Not yet supported")] public async Task Pivot_Basic()
+	[Fact] public async Task Pivot_Basic()
 	{
 		var rows = await Query($@"
 			SELECT * FROM (
@@ -269,21 +269,21 @@ public class SubqueryCteSetOpTests : IAsyncLifetime
 	}
 
 	// ==== UNPIVOT ====
-	[Fact(Skip = "Not yet supported")] public async Task Unpivot_Basic()
+	[Fact] public async Task Unpivot_Basic()
 	{
 		var rows = await Query("SELECT * FROM (SELECT 1 AS col_a, 2 AS col_b, 3 AS col_c) UNPIVOT (val FOR col_name IN (col_a, col_b, col_c))");
 		Assert.Equal(3, rows.Count);
 	}
 
 	// ==== TABLESAMPLE ====
-	[Fact(Skip = "Not yet supported")] public async Task TableSample_ReturnsSubset()
+	[Fact] public async Task TableSample_ReturnsSubset()
 	{
 		var rows = await Query($"SELECT * FROM `{_datasetId}.items` TABLESAMPLE SYSTEM (100 PERCENT)");
 		Assert.Equal(5, rows.Count); // 100% should return all
 	}
 
 	// ==== ROLLUP ====
-	[Fact(Skip = "Not yet supported")] public async Task Rollup_SubtotalsAndGrandTotal()
+	[Fact] public async Task Rollup_SubtotalsAndGrandTotal()
 	{
 		var rows = await Query($"SELECT category, SUM(price) AS total FROM `{_datasetId}.items` GROUP BY ROLLUP(category) ORDER BY category");
 		Assert.True(rows.Count >= 4); // A, B, C, + grand total

@@ -78,7 +78,7 @@ public class InformationSchemaComprehensiveTests : IAsyncLifetime
 	}
 
 	// ==== INFORMATION_SCHEMA.TABLES ====
-	[Fact(Skip = "Not yet supported")] public async Task Tables_ListsAllTables()
+	[Fact] public async Task Tables_ListsAllTables()
 	{
 		var rows = await Query($"SELECT table_name, table_type FROM `{_datasetId}.INFORMATION_SCHEMA.TABLES` ORDER BY table_name");
 		Assert.True(rows.Count >= 3); // base_table, nested_table, base_view
@@ -90,13 +90,13 @@ public class InformationSchemaComprehensiveTests : IAsyncLifetime
 		Assert.Equal("BASE TABLE", rows[0]["table_type"]?.ToString());
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task Tables_ViewType()
+	[Fact] public async Task Tables_ViewType()
 	{
 		var rows = await Query($"SELECT table_type FROM `{_datasetId}.INFORMATION_SCHEMA.TABLES` WHERE table_name = 'base_view'");
 		Assert.Equal("VIEW", rows[0]["table_type"]?.ToString());
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task Tables_WhereFilter()
+	[Fact] public async Task Tables_WhereFilter()
 	{
 		var rows = await Query($"SELECT table_name FROM `{_datasetId}.INFORMATION_SCHEMA.TABLES` WHERE table_name LIKE 'base_%' ORDER BY table_name");
 		Assert.Equal(2, rows.Count);
@@ -137,7 +137,7 @@ public class InformationSchemaComprehensiveTests : IAsyncLifetime
 		Assert.Equal("5", rows[4]["ordinal_position"]?.ToString());
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task Columns_ForView()
+	[Fact] public async Task Columns_ForView()
 	{
 		var rows = await Query($"SELECT column_name FROM `{_datasetId}.INFORMATION_SCHEMA.COLUMNS` WHERE table_name = 'base_view' ORDER BY ordinal_position");
 		Assert.Equal(2, rows.Count);
@@ -146,48 +146,48 @@ public class InformationSchemaComprehensiveTests : IAsyncLifetime
 	}
 
 	// ==== INFORMATION_SCHEMA.COLUMN_FIELD_PATHS ====
-	[Fact(Skip = "Not yet supported")] public async Task ColumnFieldPaths_FlatTable()
+	[Fact] public async Task ColumnFieldPaths_FlatTable()
 	{
 		var rows = await Query($"SELECT column_name, field_path FROM `{_datasetId}.INFORMATION_SCHEMA.COLUMN_FIELD_PATHS` WHERE table_name = 'base_table' ORDER BY field_path");
 		Assert.True(rows.Count >= 5);
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task ColumnFieldPaths_NestedTable()
+	[Fact] public async Task ColumnFieldPaths_NestedTable()
 	{
 		var rows = await Query($"SELECT field_path, data_type FROM `{_datasetId}.INFORMATION_SCHEMA.COLUMN_FIELD_PATHS` WHERE table_name = 'nested_table' ORDER BY field_path");
 		Assert.True(rows.Count >= 3); // id, info, info.first_name, info.last_name
 	}
 
 	// ==== INFORMATION_SCHEMA.SCHEMATA ====
-	[Fact(Skip = "Not yet supported")] public async Task Schemata_ContainsDataset()
+	[Fact] public async Task Schemata_ContainsDataset()
 	{
 		var rows = await Query($"SELECT schema_name FROM INFORMATION_SCHEMA.SCHEMATA WHERE schema_name = '{_datasetId}'");
 		Assert.Single(rows);
 	}
 
 	// ==== INFORMATION_SCHEMA.VIEWS ====
-	[Fact(Skip = "Not yet supported")] public async Task Views_ListsViews()
+	[Fact] public async Task Views_ListsViews()
 	{
 		var rows = await Query($"SELECT table_name, view_definition FROM `{_datasetId}.INFORMATION_SCHEMA.VIEWS` WHERE table_name = 'base_view'");
 		Assert.Single(rows);
 		Assert.Contains("base_table", rows[0]["view_definition"]?.ToString());
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task Views_DoesNotListBaseTables()
+	[Fact] public async Task Views_DoesNotListBaseTables()
 	{
 		var rows = await Query($"SELECT table_name FROM `{_datasetId}.INFORMATION_SCHEMA.VIEWS` WHERE table_name = 'base_table'");
 		Assert.Empty(rows);
 	}
 
 	// ==== INFORMATION_SCHEMA.ROUTINES ====
-	[Fact(Skip = "Not yet supported")] public async Task Routines_ListsFunctions()
+	[Fact] public async Task Routines_ListsFunctions()
 	{
 		var rows = await Query($"SELECT routine_name FROM `{_datasetId}.INFORMATION_SCHEMA.ROUTINES`");
 		Assert.Contains(rows, r => r["routine_name"]?.ToString() == "my_func");
 	}
 
 	// ==== INFORMATION_SCHEMA.TABLE_OPTIONS ====
-	[Fact(Skip = "Not yet supported")] public async Task TableOptions_AfterSetDescription()
+	[Fact] public async Task TableOptions_AfterSetDescription()
 	{
 		var client = await _fixture.GetClientAsync();
 		await client.PatchTableAsync(_datasetId, "base_table", new Table { Description = "Test description" });
@@ -197,7 +197,7 @@ public class InformationSchemaComprehensiveTests : IAsyncLifetime
 	}
 
 	// ==== INFORMATION_SCHEMA.PARTITIONS ====
-	[Fact(Skip = "Not yet supported")] public async Task Partitions_NonPartitioned_Empty()
+	[Fact] public async Task Partitions_NonPartitioned_Empty()
 	{
 		var rows = await Query($"SELECT * FROM `{_datasetId}.INFORMATION_SCHEMA.PARTITIONS` WHERE table_name = 'base_table'");
 		// Non-partitioned tables may return empty or a single __NULL__ partition
@@ -205,7 +205,7 @@ public class InformationSchemaComprehensiveTests : IAsyncLifetime
 	}
 
 	// ==== Cross-view queries ====
-	[Fact(Skip = "Not yet supported")] public async Task JoinTablesAndColumns()
+	[Fact] public async Task JoinTablesAndColumns()
 	{
 		var rows = await Query($@"
 			SELECT t.table_name, c.column_name
@@ -217,7 +217,7 @@ public class InformationSchemaComprehensiveTests : IAsyncLifetime
 		Assert.Equal(5, rows.Count);
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task CountColumnsPerTable()
+	[Fact] public async Task CountColumnsPerTable()
 	{
 		var rows = await Query($@"
 			SELECT table_name, COUNT(*) AS col_count

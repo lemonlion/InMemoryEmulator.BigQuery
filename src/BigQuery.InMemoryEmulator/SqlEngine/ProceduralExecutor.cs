@@ -592,7 +592,7 @@ internal class ProceduralExecutor
 
 		// Parse SQL UDF: CREATE [OR REPLACE] [TEMP] FUNCTION [dataset.]name(params) [RETURNS type] AS (body)
 		var match = System.Text.RegularExpressions.Regex.Match(sql,
-			@"FUNCTION\s+(\w+(?:\.\w+)?)\s*\(([^)]*)\)\s*(?:RETURNS\s+(\w+)\s+)?AS\s*\((.+)\)\s*$",
+			@"FUNCTION\s+`?(\w+(?:\.\w+)?)`?\s*\(([^)]*)\)\s*(?:RETURNS\s+(\w+)\s+)?AS\s*\((.+)\)\s*$",
 			System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline);
 
 		if (!match.Success)
