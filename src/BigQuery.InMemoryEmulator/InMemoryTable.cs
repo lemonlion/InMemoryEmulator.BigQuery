@@ -9,7 +9,7 @@ namespace BigQuery.InMemoryEmulator;
 public class InMemoryTable
 {
 	public string DatasetId { get; }
-	public string TableId { get; }
+	public string TableId { get; internal set; }
 	public TableSchema Schema { get; internal set; }
 	public DateTimeOffset CreationTime { get; }
 	public DateTimeOffset LastModifiedTime { get; internal set; }

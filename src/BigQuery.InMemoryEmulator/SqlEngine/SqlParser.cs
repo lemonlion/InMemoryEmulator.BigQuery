@@ -292,7 +292,8 @@ internal static class SqlParser
 		"VAR_SAMP", "VAR_POP", "VARIANCE", "STDDEV", "STDDEV_SAMP", "STDDEV_POP",
 		"CORR", "COVAR_POP", "COVAR_SAMP",
 		"APPROX_QUANTILES", "APPROX_TOP_COUNT", "APPROX_TOP_SUM",
-		"ST_CENTROID_AGG", "ST_UNION_AGG"
+		"ST_CENTROID_AGG", "ST_UNION_AGG",
+		"HLL_COUNT_MERGE", "HLL_COUNT_MERGE_PARTIAL"
 	};
 
 	private static readonly TokenListParser<SqlToken, SqlExpression> ColumnOrFunctionRef =

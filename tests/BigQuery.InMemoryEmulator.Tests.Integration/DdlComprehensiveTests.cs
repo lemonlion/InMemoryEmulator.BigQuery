@@ -139,7 +139,7 @@ public class DdlComprehensiveTests : IAsyncLifetime
 		Assert.Equal(2, rows.Count);
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task AlterTable_RenameTable()
+	[Fact] public async Task AlterTable_RenameTable()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.at3old` (id INT64)");
 		await Exec($"ALTER TABLE `{_datasetId}.at3old` RENAME TO at3new");
@@ -148,7 +148,7 @@ public class DdlComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- TRUNCATE TABLE ----
-	[Fact(Skip = "Not yet supported")] public async Task TruncateTable_RemovesAllRows()
+	[Fact] public async Task TruncateTable_RemovesAllRows()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.tt1` (id INT64)");
 		await Exec($"INSERT INTO `{_datasetId}.tt1` VALUES (1), (2), (3)");
@@ -157,7 +157,7 @@ public class DdlComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- CREATE VIEW ----
-	[Fact(Skip = "Not yet supported")] public async Task CreateView_Basic()
+	[Fact] public async Task CreateView_Basic()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.vt1` (id INT64, name STRING)");
 		await Exec($"INSERT INTO `{_datasetId}.vt1` VALUES (1, 'A'), (2, 'B')");
@@ -165,7 +165,7 @@ public class DdlComprehensiveTests : IAsyncLifetime
 		Assert.Equal("2", await Scalar($"SELECT COUNT(*) FROM `{_datasetId}.v1`"));
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task CreateView_WithFilter()
+	[Fact] public async Task CreateView_WithFilter()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.vt2` (id INT64, active BOOL)");
 		await Exec($"INSERT INTO `{_datasetId}.vt2` VALUES (1, TRUE), (2, FALSE), (3, TRUE)");
@@ -173,7 +173,7 @@ public class DdlComprehensiveTests : IAsyncLifetime
 		Assert.Equal("2", await Scalar($"SELECT COUNT(*) FROM `{_datasetId}.v2`"));
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task CreateView_OrReplace()
+	[Fact] public async Task CreateView_OrReplace()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.vt3` (id INT64)");
 		await Exec($"CREATE VIEW `{_datasetId}.v3` AS SELECT id FROM `{_datasetId}.vt3`");
@@ -182,7 +182,7 @@ public class DdlComprehensiveTests : IAsyncLifetime
 		Assert.Equal("doubled", cols[0]["column_name"]?.ToString());
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task DropView_Basic()
+	[Fact] public async Task DropView_Basic()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.vt4` (id INT64)");
 		await Exec($"CREATE VIEW `{_datasetId}.v4` AS SELECT * FROM `{_datasetId}.vt4`");
@@ -191,20 +191,20 @@ public class DdlComprehensiveTests : IAsyncLifetime
 		Assert.Empty(rows);
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task DropView_IfExists_NoError()
+	[Fact] public async Task DropView_IfExists_NoError()
 	{
 		await Exec($"DROP VIEW IF EXISTS `{_datasetId}.nonexistent_view`");
 	}
 
 	// ---- CREATE TEMP TABLE ----
-	[Fact(Skip = "Not yet supported")] public async Task CreateTempTable_UsableInSession()
+	[Fact] public async Task CreateTempTable_UsableInSession()
 	{
 		await Exec($"CREATE TEMP TABLE tmp1 (id INT64, val STRING); INSERT INTO tmp1 VALUES (1, 'x'); SELECT * FROM tmp1;");
 		// temp tables are session-scoped; just verifying no error
 	}
 
 	// ---- CREATE SCHEMA ----
-	[Fact(Skip = "Not yet supported")] public async Task CreateSchema_IfNotExists()
+	[Fact] public async Task CreateSchema_IfNotExists()
 	{
 		var client = await _fixture.GetClientAsync();
 		var schemaName = $"test_sch_{Guid.NewGuid():N}"[..30];
@@ -229,7 +229,7 @@ public class DdlComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- Views show in INFORMATION_SCHEMA.VIEWS ----
-	[Fact(Skip = "Not yet supported")] public async Task View_AppearsInInformationSchemaViews()
+	[Fact] public async Task View_AppearsInInformationSchemaViews()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.vt5` (id INT64)");
 		await Exec($"CREATE VIEW `{_datasetId}.v5` AS SELECT * FROM `{_datasetId}.vt5`");
@@ -245,7 +245,7 @@ public class DdlComprehensiveTests : IAsyncLifetime
 		Assert.Equal("BASE TABLE", rows[0]["table_type"]?.ToString());
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task View_HasCorrectTableTypeInInfoSchema()
+	[Fact] public async Task View_HasCorrectTableTypeInInfoSchema()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.bt2` (id INT64)");
 		await Exec($"CREATE VIEW `{_datasetId}.v6` AS SELECT * FROM `{_datasetId}.bt2`");

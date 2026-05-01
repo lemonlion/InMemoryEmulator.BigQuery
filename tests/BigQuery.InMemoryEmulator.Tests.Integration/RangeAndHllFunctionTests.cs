@@ -64,10 +64,10 @@ public class RangeAndHllFunctionTests : IAsyncLifetime
 	[Fact] public async Task RangeBucket_NullPoint() => Assert.Null(await Scalar("SELECT RANGE_BUCKET(NULL, [0, 10, 20])"));
 
 	// ==== HLL FUNCTIONS ====
-	[Fact(Skip = "Not yet supported")] public async Task HllCountInit_Basic() => Assert.NotNull(await Scalar("SELECT HLL_COUNT.INIT(1)"));
-	[Fact(Skip = "Not yet supported")] public async Task HllCountInit_String() => Assert.NotNull(await Scalar("SELECT HLL_COUNT.INIT('hello')"));
+	[Fact] public async Task HllCountInit_Basic() => Assert.NotNull(await Scalar("SELECT HLL_COUNT.INIT(1)"));
+	[Fact] public async Task HllCountInit_String() => Assert.NotNull(await Scalar("SELECT HLL_COUNT.INIT('hello')"));
 	
-	[Fact(Skip = "Not yet supported")] public async Task HllCountMerge_Basic()
+	[Fact] public async Task HllCountMerge_Basic()
 	{
 		var v = await Scalar(@"
 			SELECT HLL_COUNT.MERGE(sketch) FROM (
@@ -79,7 +79,7 @@ public class RangeAndHllFunctionTests : IAsyncLifetime
 		Assert.True(count >= 2 && count <= 4); // approximate
 	}
 
-	[Fact(Skip = "Not yet supported")] public async Task HllCountExtract_Basic()
+	[Fact] public async Task HllCountExtract_Basic()
 	{
 		var v = await Scalar(@"
 			SELECT HLL_COUNT.EXTRACT(HLL_COUNT.MERGE_PARTIAL(sketch)) FROM (
@@ -92,11 +92,11 @@ public class RangeAndHllFunctionTests : IAsyncLifetime
 	}
 
 	// ---- MAKE_INTERVAL ----
-	[Fact(Skip = "Not yet supported")] public async Task MakeInterval_Days() => Assert.NotNull(await Scalar("SELECT MAKE_INTERVAL(0, 0, 5)"));
-	[Fact(Skip = "Not yet supported")] public async Task MakeInterval_Hours() => Assert.NotNull(await Scalar("SELECT MAKE_INTERVAL(0, 0, 0, 3)"));
+	[Fact] public async Task MakeInterval_Days() => Assert.NotNull(await Scalar("SELECT MAKE_INTERVAL(0, 0, 5)"));
+	[Fact] public async Task MakeInterval_Hours() => Assert.NotNull(await Scalar("SELECT MAKE_INTERVAL(0, 0, 0, 3)"));
 
 	// ---- JUSTIFY_DAYS / JUSTIFY_HOURS / JUSTIFY_INTERVAL ----
-	[Fact(Skip = "Not yet supported")] public async Task JustifyDays_Basic() => Assert.NotNull(await Scalar("SELECT JUSTIFY_DAYS(MAKE_INTERVAL(0, 0, 35))"));
-	[Fact(Skip = "Not yet supported")] public async Task JustifyHours_Basic() => Assert.NotNull(await Scalar("SELECT JUSTIFY_HOURS(MAKE_INTERVAL(0, 0, 0, 30))"));
-	[Fact(Skip = "Not yet supported")] public async Task JustifyInterval_Basic() => Assert.NotNull(await Scalar("SELECT JUSTIFY_INTERVAL(MAKE_INTERVAL(0, 0, 35, 30))"));
+	[Fact] public async Task JustifyDays_Basic() => Assert.NotNull(await Scalar("SELECT JUSTIFY_DAYS(MAKE_INTERVAL(0, 0, 35))"));
+	[Fact] public async Task JustifyHours_Basic() => Assert.NotNull(await Scalar("SELECT JUSTIFY_HOURS(MAKE_INTERVAL(0, 0, 0, 30))"));
+	[Fact] public async Task JustifyInterval_Basic() => Assert.NotNull(await Scalar("SELECT JUSTIFY_INTERVAL(MAKE_INTERVAL(0, 0, 35, 30))"));
 }

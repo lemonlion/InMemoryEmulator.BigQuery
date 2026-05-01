@@ -1077,6 +1077,9 @@ if (schemaFields.Count == 0)
 schemaFields.AddRange(cells.Keys.Select(k => new TableFieldSchema { Name = k, Type = InferType(cells[k]) }));
 }
 
+if (schemaFields.Count == 0)
+		schemaFields.AddRange(items.Where(i => i.Expr is not StarExpr).Select(i => new TableFieldSchema { Name = i.Alias ?? DeriveColumnName(i.Expr), Type = "STRING" }));
+
 return (new TableSchema { Fields = schemaFields }, resultRows);
 }
 
@@ -2279,8 +2282,7 @@ return name switch
 
 // HLL++ approximate counting (exact in-memory implementation, normalized from HLL_COUNT.INIT â†’ HLL_COUNT_INIT)
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/hll_count_functions
-"HLL_COUNT_INIT" or "HLL_COUNT_MERGE" or "HLL_COUNT_MERGE_PARTIAL"
-or "HLL_COUNT_EXTRACT" => EvaluateHllCount(name, args, row),
+"HLL_COUNT_INIT" or "HLL_COUNT_EXTRACT" => EvaluateHllCount(name, args, row),
 
 // Vector / distance functions
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#cosine_distance
@@ -5583,6 +5585,9 @@ return funcName switch
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_union_agg
 //   "Returns a GEOGRAPHY that represents the point set union of all input geographies."
 "ST_UNION_AGG" => EvaluateStUnionAgg(values),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/hll_count_functions
+//   "HLL_COUNT.MERGE returns the cardinality of multiple HLL++ sketches by computing their union."
+"HLL_COUNT_MERGE" or "HLL_COUNT_MERGE_PARTIAL" => (long)values.Where(v => v is not null).Distinct().Count(),
 _ => throw new NotSupportedException("Unsupported aggregate: " + funcName)
 };
 }
@@ -5825,9 +5830,12 @@ lock (table.RowLock)
 foreach (var rowValues in insert.Rows)
 {
 var fields = new Dictionary<string, object?>();
-for (int i = 0; i < insert.Columns.Count && i < rowValues.Count; i++)
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#insert_statement
+//   When column list is omitted, values map to columns in schema order.
+var columns = insert.Columns ?? table.Schema.Fields.Select(f => f.Name).ToList();
+for (int i = 0; i < columns.Count && i < rowValues.Count; i++)
 {
-fields[insert.Columns[i]] = Evaluate(rowValues[i],
+fields[columns[i]] = Evaluate(rowValues[i],
 new RowContext(new Dictionary<string, object?>(), null));
 }
 table.Rows.Add(new InMemoryRow(fields));
@@ -6105,7 +6113,10 @@ switch (alter.Action)
         if (dsId is not null && _store.Datasets.TryGetValue(dsId, out var ds))
         {
             if (ds.Tables.TryRemove(tblId, out var t))
+            {
+                t.TableId = rename.NewName;
                 ds.Tables[rename.NewName] = t;
+            }
         }
         break;
     // Phase 27: ALTER COLUMN variants
