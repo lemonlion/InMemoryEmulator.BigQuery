@@ -374,7 +374,7 @@ new TableFieldSchema { Name = c.Alias ?? DeriveColumnName(c.Expr), Type = "STRIN
 if (sel.OrderBy is { Count: > 0 })
 {
 var ctx2 = resultRows.Select(d => new RowContext(d, null)).ToList();
-ctx2 = OrderBy(ctx2, ResolveOrderByOrdinals(sel.OrderBy, sel.Columns));
+ctx2 = OrderBy(ctx2, ResolveOrderByExpressions(ResolveOrderByOrdinals(sel.OrderBy, sel.Columns), sel.Columns));
 resultRows = ctx2.Select(c => c.Fields).ToList();
 }
 
@@ -435,7 +435,7 @@ private InMemoryBigQueryResult ExecuteRollup(SelectStatement sel, List<RowContex
     if (sel.OrderBy is { Count: > 0 })
     {
         var ctx2 = allResultRows.Select(d => new RowContext(d, null)).ToList();
-        ctx2 = OrderBy(ctx2, ResolveOrderByOrdinals(sel.OrderBy, sel.Columns));
+        ctx2 = OrderBy(ctx2, ResolveOrderByExpressions(ResolveOrderByOrdinals(sel.OrderBy, sel.Columns), sel.Columns));
         allResultRows = ctx2.Select(c => c.Fields).ToList();
     }
 
@@ -6615,6 +6615,50 @@ private static IReadOnlyList<OrderByItem> ResolveOrderByAliases(IReadOnlyList<Or
     return resolved;
 }
 
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#order_by_clause
+//   "ORDER BY can reference aggregate expressions that appear in the SELECT list."
+private static IReadOnlyList<OrderByItem> ResolveOrderByExpressions(IReadOnlyList<OrderByItem> orderBy, IReadOnlyList<SelectItem> columns)
+{
+    var resolved = new List<OrderByItem>();
+    foreach (var item in orderBy)
+    {
+        if (item.Expr is AggregateCall || item.Expr is FunctionCall)
+        {
+            // Find matching SELECT column by expression toString equality
+            var match = columns.FirstOrDefault(c => ExpressionsEqual(c.Expr, item.Expr));
+            if (match is not null)
+            {
+                var colName = match.Alias ?? DeriveColumnName(match.Expr);
+                resolved.Add(new OrderByItem(new ColumnRef(null, colName), item.Descending));
+                continue;
+            }
+        }
+        resolved.Add(item);
+    }
+    return resolved;
+}
+
+private static bool ExpressionsEqual(SqlExpression a, SqlExpression b)
+{
+    if (a is null || b is null) return ReferenceEquals(a, b);
+    if (a.GetType() != b.GetType()) return false;
+    return a switch
+    {
+        AggregateCall ac when b is AggregateCall bc =>
+            ac.FunctionName.Equals(bc.FunctionName, StringComparison.OrdinalIgnoreCase) &&
+            ac.Distinct == bc.Distinct &&
+            ExpressionsEqual(ac.Arg!, bc.Arg!),
+        FunctionCall fc when b is FunctionCall gc =>
+            fc.FunctionName.Equals(gc.FunctionName, StringComparison.OrdinalIgnoreCase) &&
+            fc.Args.Count == gc.Args.Count &&
+            fc.Args.Zip(gc.Args).All(p => ExpressionsEqual(p.First, p.Second)),
+        ColumnRef cr when b is ColumnRef dr =>
+            cr.ColumnName.Equals(dr.ColumnName, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(cr.TableAlias, dr.TableAlias, StringComparison.OrdinalIgnoreCase),
+        LiteralExpr le when b is LiteralExpr me => Equals(le.Value, me.Value),
+        _ => false
+    };
+}
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#group_by_clause
 //   "GROUP BY can reference SELECT list aliases."
 private static IReadOnlyList<SqlExpression> ResolveGroupByAliases(IReadOnlyList<SqlExpression> groupBy, IReadOnlyList<SelectItem> columns)

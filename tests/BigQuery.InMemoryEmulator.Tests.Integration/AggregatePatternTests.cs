@@ -126,7 +126,7 @@ ORDER BY s");
 		Assert.Equal(new[] { "9", "12" }, v);
 	}
 
-	[Fact(Skip = "ORDER BY aggregate expression not supported")]
+	[Fact]
 	public async Task GroupBy_AvgPerGroup()
 	{
 		var v = await Scalar(@"
