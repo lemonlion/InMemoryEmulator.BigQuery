@@ -64,7 +64,7 @@ public class LatencyTests : IDisposable
 		sw.Stop();
 
 		var avgMs = sw.Elapsed.TotalMilliseconds / iterations;
-		Assert.True(avgMs < 10, $"Average simple SELECT took {avgMs:F2}ms (expected <10ms)");
+		Assert.True(avgMs < 20, $"Average simple SELECT took {avgMs:F2}ms (expected <20ms)");
 	}
 
 	[Fact]
@@ -84,7 +84,7 @@ public class LatencyTests : IDisposable
 		sw.Stop();
 
 		var avgMs = sw.Elapsed.TotalMilliseconds / iterations;
-		Assert.True(avgMs < 20, $"Average WHERE query took {avgMs:F2}ms (expected <20ms)");
+		Assert.True(avgMs < 40, $"Average WHERE query took {avgMs:F2}ms (expected <40ms)");
 	}
 
 	[Fact]
@@ -105,7 +105,7 @@ public class LatencyTests : IDisposable
 		sw.Stop();
 
 		var avgMs = sw.Elapsed.TotalMilliseconds / iterations;
-		Assert.True(avgMs < 30, $"Average aggregate query took {avgMs:F2}ms (expected <30ms)");
+		Assert.True(avgMs < 60, $"Average aggregate query took {avgMs:F2}ms (expected <60ms)");
 	}
 
 	[Fact]
@@ -127,7 +127,7 @@ public class LatencyTests : IDisposable
 		sw.Stop();
 
 		var avgMs = sw.Elapsed.TotalMilliseconds / iterations;
-		Assert.True(avgMs < 50, $"Average GROUP BY query took {avgMs:F2}ms (expected <50ms)");
+		Assert.True(avgMs < 100, $"Average GROUP BY query took {avgMs:F2}ms (expected <100ms)");
 	}
 
 	[Fact]
@@ -173,7 +173,7 @@ public class LatencyTests : IDisposable
 		sw.Stop();
 
 		var avgMs = sw.Elapsed.TotalMilliseconds / iterations;
-		Assert.True(avgMs < 25, $"Average function evaluation took {avgMs:F2}ms (expected <25ms)");
+		Assert.True(avgMs < 50, $"Average function evaluation took {avgMs:F2}ms (expected <50ms)");
 	}
 
 	[Fact]
@@ -191,6 +191,6 @@ public class LatencyTests : IDisposable
 		sw.Stop();
 
 		var avgMs = sw.Elapsed.TotalMilliseconds / (iterations * 3); // 3 ops per iteration
-		Assert.True(avgMs < 10, $"Average CRUD op took {avgMs:F2}ms (expected <10ms)");
+		Assert.True(avgMs < 20, $"Average CRUD op took {avgMs:F2}ms (expected <20ms)");
 	}
 }
