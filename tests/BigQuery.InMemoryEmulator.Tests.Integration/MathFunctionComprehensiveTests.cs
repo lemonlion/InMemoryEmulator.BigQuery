@@ -110,10 +110,10 @@ public class MathFunctionComprehensiveTests : IAsyncLifetime
 	// ---- GREATEST / LEAST ----
 	[Fact] public async Task Greatest_Ints() => Assert.Equal("5", await Scalar("SELECT GREATEST(1, 5, 3)"));
 	[Fact] public async Task Greatest_Strings() => Assert.Equal("c", await Scalar("SELECT GREATEST('a', 'c', 'b')"));
-	[Fact] public async Task Greatest_WithNull() => Assert.Equal("5", await Scalar("SELECT GREATEST(1, NULL, 5)"));
+	[Fact] public async Task Greatest_WithNull() => Assert.Null(await Scalar("SELECT GREATEST(1, NULL, 5)"));
 	[Fact] public async Task Least_Ints() => Assert.Equal("1", await Scalar("SELECT LEAST(3, 1, 5)"));
 	[Fact] public async Task Least_Strings() => Assert.Equal("a", await Scalar("SELECT LEAST('c', 'a', 'b')"));
-	[Fact] public async Task Least_WithNull() => Assert.Equal("1", await Scalar("SELECT LEAST(3, NULL, 1)"));
+	[Fact] public async Task Least_WithNull() => Assert.Null(await Scalar("SELECT LEAST(3, NULL, 1)"));
 
 	// ---- SAFE_DIVIDE ----
 	[Fact] public async Task SafeDivide_Normal() => Assert.Equal("5", await Scalar("SELECT SAFE_DIVIDE(10, 2)"));

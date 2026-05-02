@@ -1927,6 +1927,12 @@ return dict;
 }
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#field_access_operator
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_subscript_operator
+//   "array_expression[OFFSET(zero_based_offset)] â€” Accesses an ARRAY element by position."
+//   "array_expression[ORDINAL(one_based_offset)] â€” Accesses an ARRAY element by position."
+//   "array_expression[SAFE_OFFSET(zero_based_offset)] â€” Like OFFSET but returns NULL if out of range."
+//   "array_expression[SAFE_ORDINAL(one_based_offset)] â€” Like ORDINAL but returns NULL if out of range."
+
 private object? EvaluateFieldAccess(FieldAccessExpr fa, RowContext row)
 {
 var obj = Evaluate(fa.Object, row);
@@ -2007,7 +2013,9 @@ return name switch
 "REGEXP_CONTAINS" => EvaluateRegexpContains(args, row),
 "REGEXP_EXTRACT" => EvaluateRegexpExtract(args, row),
 "REGEXP_REPLACE" => EvaluateRegexpReplace(args, row),
-"ASCII" => Evaluate(args[0], row)?.ToString() is string sa && sa.Length > 0 ? (long)sa[0] : null,
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#ascii
+//   "Returns 0 if the string is empty."
+"ASCII" => Evaluate(args[0], row)?.ToString() is string sa ? (sa.Length > 0 ? (long)sa[0] : 0L) : null,
 "CHR" => Evaluate(args[0], row) is object cv ? ((char)Convert.ToInt64(cv)).ToString() : null,
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#unicode
 //   "Returns the Unicode code point for the first character in value. Returns 0 if value is empty."
@@ -2401,6 +2409,9 @@ var str = Evaluate(args[0], row)?.ToString();
 var from = Evaluate(args[1], row)?.ToString();
 var to = Evaluate(args[2], row)?.ToString();
 if (str is null || from is null || to is null) return null;
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#replace
+//   "If original_value is empty, the original value is returned."
+if (from.Length == 0) return str;
 return str.Replace(from, to);
 }
 
@@ -2624,6 +2635,13 @@ var val = Evaluate(args[0], row);
 if (val is null) return null;
 var d = ToDouble(val);
 var digits = args.Count > 1 ? (int)ToLong(Evaluate(args[1], row)) : 0;
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#round
+//   Supports negative digits to round to powers of 10.
+if (digits < 0)
+{
+	var factor = Math.Pow(10, -digits);
+	return Math.Round(d / factor, MidpointRounding.AwayFromZero) * factor;
+}
 return Math.Round(d, digits, MidpointRounding.AwayFromZero);
 }
 
@@ -2668,34 +2686,47 @@ if (a is null || b is null) return null;
 return Math.Pow(ToDouble(a), ToDouble(b));
 }
 
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#greatest
+//   "Returns NULL if any of the inputs is NULL."
 private object? EvaluateGreatest(IReadOnlyList<SqlExpression> args, RowContext row)
 {
 object? best = null;
+bool first = true;
 foreach (var arg in args)
 {
 var val = Evaluate(arg, row);
-if (val is null) continue;
-if (best is null || CompareRaw(val, best) > 0) best = val;
+if (val is null) return null;
+if (first || CompareRaw(val, best!) > 0) best = val;
+first = false;
 }
 return best;
 }
 
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#least
+//   "Returns NULL if any of the inputs is NULL."
 private object? EvaluateLeast(IReadOnlyList<SqlExpression> args, RowContext row)
 {
 object? best = null;
+bool first = true;
 foreach (var arg in args)
 {
 var val = Evaluate(arg, row);
-if (val is null) continue;
-if (best is null || CompareRaw(val, best) < 0) best = val;
+if (val is null) return null;
+if (first || CompareRaw(val, best!) < 0) best = val;
+first = false;
 }
 return best;
 }
 
 private object? EvaluateIeeeDivide(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-var a = ToDouble(Evaluate(args[0], row));
-var b = ToDouble(Evaluate(args[1], row));
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#ieee_divide
+//   "If one of the input values is NULL, the result is NULL."
+var rawA = Evaluate(args[0], row);
+var rawB = Evaluate(args[1], row);
+if (rawA is null || rawB is null) return null;
+var a = ToDouble(rawA);
+var b = ToDouble(rawB);
 return a / b; // IEEE 754: handles div by zero as Infinity/NaN
 }
 
@@ -2938,7 +2969,11 @@ return ParseTimestamp(str, format);
 private object? EvaluateFormatDate(IReadOnlyList<SqlExpression> args, RowContext row)
 {
 var format = Evaluate(args[0], row)?.ToString() ?? "";
-var date = ToDateTime(Evaluate(args[1], row));
+var dateVal = Evaluate(args[1], row);
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#format_date
+//   Returns NULL if any argument is NULL.
+if (dateVal is null) return null;
+var date = ToDateTime(dateVal);
 return FormatTimestamp(new DateTimeOffset(date, TimeSpan.Zero), format);
 }
 
@@ -3368,8 +3403,17 @@ private object? EvaluateArrayToString(IReadOnlyList<SqlExpression> args, RowCont
 {
 var val = Evaluate(args[0], row);
 var delimiter = Evaluate(args[1], row)?.ToString() ?? ",";
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_to_string
+//   "If null_text is specified, the function replaces any NULL values in the array with null_text."
+//   "If null_text is not specified, NULL values are omitted."
+var nullText = args.Count > 2 ? Evaluate(args[2], row)?.ToString() : null;
 if (val is IEnumerable<object?> en)
-return string.Join(delimiter, en.Select(v => v?.ToString() ?? ""));
+{
+	if (nullText is not null)
+		return string.Join(delimiter, en.Select(v => v?.ToString() ?? nullText));
+	else
+		return string.Join(delimiter, en.Where(v => v is not null).Select(v => v!.ToString()));
+}
 return null;
 }
 
@@ -6403,9 +6447,14 @@ private object? EvaluateWithAggregates(SqlExpression expr, List<RowContext> grou
                                      (SqlExpression)new LiteralExpr(EvaluateWithAggregates(b.Then, groupRows)))).ToList(),
             ce.Else is not null ? new LiteralExpr(EvaluateWithAggregates(ce.Else, groupRows)) : null), groupRows[0]),
         CastExpr cast => CastValue(EvaluateWithAggregates(cast.Expr, groupRows), cast.TargetType, cast.Safe),
-ArraySubscriptExpr sub => EvaluateArraySubscript(sub, groupRows[0]),
         IsNullExpr isNull => EvaluateWithAggregates(isNull.Expr, groupRows) is null == !isNull.IsNot,
         IsBoolExpr isBool => EvaluateIsBool(isBool, groupRows[0]),
+        ArraySubscriptExpr arrSub => EvaluateArraySubscript(
+            new ArraySubscriptExpr(
+                new LiteralExpr(EvaluateWithAggregates(arrSub.Array, groupRows)),
+                arrSub.AccessMode,
+                new LiteralExpr(EvaluateWithAggregates(arrSub.Index, groupRows))),
+            groupRows[0]),
         _ => Evaluate(expr, groupRows[0])
     };
 }
@@ -6678,11 +6727,16 @@ private static IReadOnlyList<SqlExpression> ResolveGroupByAliases(IReadOnlyList<
         if (col.Alias is not null)
             aliasMap[col.Alias] = col.Expr;
     }
-    if (aliasMap.Count == 0) return groupBy;
     var resolved = new List<SqlExpression>();
     foreach (var expr in groupBy)
     {
-        if (expr is ColumnRef cr && cr.TableAlias is null && aliasMap.TryGetValue(cr.ColumnName, out var selectExpr))
+        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#group_by_clause
+        //   "GROUP BY can also reference column ordinals (1-based)."
+        if (expr is LiteralExpr lit && lit.Value is long ordinal && ordinal >= 1 && ordinal <= columns.Count)
+        {
+            resolved.Add(columns[(int)ordinal - 1].Expr);
+        }
+        else if (expr is ColumnRef cr && cr.TableAlias is null && aliasMap.TryGetValue(cr.ColumnName, out var selectExpr))
             resolved.Add(selectExpr);
         else
             resolved.Add(expr);
@@ -6794,6 +6848,7 @@ CaseExpr ce => ce.Branches.Any(w => ContainsAggregate(w.When) || ContainsAggrega
 || (ce.Else is not null && ContainsAggregate(ce.Else)),
 CastExpr c => ContainsAggregate(c.Expr),
 ArraySubscriptExpr sub => ContainsAggregate(sub.Array) || ContainsAggregate(sub.Index),
+FieldAccessExpr fa => ContainsAggregate(fa.Object),
 _ => false
 };
 }
@@ -6862,11 +6917,11 @@ return val switch
 {
 null => null,
 bool b => b ? "true" : "false",
-            // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#ieee_divide
-            //   IEEE_DIVIDE(25.0, 0.0) => +inf; CAST(+inf AS STRING) => "Infinity"
-            double d when double.IsPositiveInfinity(d) => "Infinity",
-            double d when double.IsNegativeInfinity(d) => "-Infinity",
-            double d when double.IsNaN(d) => "NaN",
+            // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_string
+            //   CAST(FLOAT64 AS STRING) returns "inf", "-inf", "NaN" for special values.
+            double d when double.IsPositiveInfinity(d) => "inf",
+            double d when double.IsNegativeInfinity(d) => "-inf",
+            double d when double.IsNaN(d) => "nan",
 DateTimeOffset dto => dto.ToString("yyyy-MM-dd HH:mm:ss.ffffff zzz", CultureInfo.InvariantCulture),
 DateOnly d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
 DateTime dt => dt.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture),

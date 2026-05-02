@@ -141,8 +141,8 @@ public class MathFunctionBoundaryTests : IAsyncLifetime
 
 	// ---- IEEE_DIVIDE ----
 	[Fact] public async Task IeeeDivide_Normal() { var v = double.Parse(await Scalar("SELECT IEEE_DIVIDE(10, 3)") ?? "0"); Assert.Equal(3.333, v, 2); }
-	[Fact] public async Task IeeeDivide_ByZero() => Assert.Equal("Infinity", await Scalar("SELECT CAST(IEEE_DIVIDE(1, 0) AS STRING)"));
-	[Fact] public async Task IeeeDivide_ZeroByZero() => Assert.Equal("NaN", await Scalar("SELECT CAST(IEEE_DIVIDE(0, 0) AS STRING)"));
+	[Fact] public async Task IeeeDivide_ByZero() => Assert.Equal("inf", await Scalar("SELECT CAST(IEEE_DIVIDE(1, 0) AS STRING)"));
+	[Fact] public async Task IeeeDivide_ZeroByZero() => Assert.Equal("nan", await Scalar("SELECT CAST(IEEE_DIVIDE(0, 0) AS STRING)"));
 
 	// ---- RANGE_BUCKET ----
 	[Fact] public async Task RangeBucket_Mid() => Assert.Equal("2", await Scalar("SELECT RANGE_BUCKET(15, [0, 10, 20, 30])"));

@@ -56,8 +56,8 @@ public class ArrayFunctionComprehensiveTests : IAsyncLifetime
 	// ---- ARRAY_TO_STRING ----
 	[Fact] public async Task ArrayToString_Comma() => Assert.Equal("a,b,c", await Scalar("SELECT ARRAY_TO_STRING(['a', 'b', 'c'], ',')"));
 	[Fact] public async Task ArrayToString_Dash() => Assert.Equal("1-2-3", await Scalar("SELECT ARRAY_TO_STRING(['1', '2', '3'], '-')"));
-	[Fact] public async Task ArrayToString_WithNull() => Assert.Equal("a,,c", await Scalar("SELECT ARRAY_TO_STRING(['a', NULL, 'c'], ',')"));
-	[Fact] public async Task ArrayToString_NullReplacement() => Assert.Equal("a,,c", await Scalar("SELECT ARRAY_TO_STRING(['a', NULL, 'c'], ',', 'NULL')"));
+	[Fact] public async Task ArrayToString_WithNull() => Assert.Equal("a,c", await Scalar("SELECT ARRAY_TO_STRING(['a', NULL, 'c'], ',')"));
+	[Fact] public async Task ArrayToString_NullReplacement() => Assert.Equal("a,NULL,c", await Scalar("SELECT ARRAY_TO_STRING(['a', NULL, 'c'], ',', 'NULL')"));
 
 	// ---- GENERATE_ARRAY ----
 	[Fact] public async Task GenerateArray_Basic() => Assert.Equal("5", await Scalar("SELECT ARRAY_LENGTH(GENERATE_ARRAY(1, 5))"));

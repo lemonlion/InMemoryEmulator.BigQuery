@@ -121,8 +121,8 @@ public class NullHandlingTests : IAsyncLifetime
 	[Fact] public async Task Cast_NullDate() => Assert.Null(await Scalar("SELECT CAST(NULL AS DATE)"));
 
 	// ---- NULL in GREATEST / LEAST ----
-	[Fact] public async Task Greatest_WithNull() => Assert.Equal("3", await Scalar("SELECT GREATEST(1, NULL, 3)"));
-	[Fact] public async Task Least_WithNull() => Assert.Equal("1", await Scalar("SELECT LEAST(1, NULL, 3)"));
+	[Fact] public async Task Greatest_WithNull() => Assert.Null(await Scalar("SELECT GREATEST(1, NULL, 3)"));
+	[Fact] public async Task Least_WithNull() => Assert.Null(await Scalar("SELECT LEAST(1, NULL, 3)"));
 	[Fact] public async Task Greatest_AllNull2() => Assert.Null(await Scalar("SELECT GREATEST(CAST(NULL AS INT64), CAST(NULL AS INT64))"));
 	[Fact] public async Task Least_AllNull2() => Assert.Null(await Scalar("SELECT LEAST(CAST(NULL AS INT64), CAST(NULL AS INT64))"));
 

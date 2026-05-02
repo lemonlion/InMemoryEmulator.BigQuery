@@ -73,11 +73,11 @@ public class ConditionalAndCastComprehensiveTests : IAsyncLifetime
 	// ---- GREATEST / LEAST ----
 	[Fact] public async Task Greatest_Integers() => Assert.Equal("5", await Scalar("SELECT GREATEST(1, 5, 3)"));
 	[Fact] public async Task Greatest_Strings() => Assert.Equal("c", await Scalar("SELECT GREATEST('a', 'c', 'b')"));
-	[Fact] public async Task Greatest_WithNull() => Assert.Equal("5", await Scalar("SELECT GREATEST(1, NULL, 5)"));
+	[Fact] public async Task Greatest_WithNull() => Assert.Null(await Scalar("SELECT GREATEST(1, NULL, 5)"));
 	[Fact] public async Task Greatest_AllNull() => Assert.Null(await Scalar("SELECT GREATEST(NULL, NULL)"));
 	[Fact] public async Task Least_Integers() => Assert.Equal("1", await Scalar("SELECT LEAST(1, 5, 3)"));
 	[Fact] public async Task Least_Strings() => Assert.Equal("a", await Scalar("SELECT LEAST('a', 'c', 'b')"));
-	[Fact] public async Task Least_WithNull() => Assert.Equal("1", await Scalar("SELECT LEAST(1, NULL, 5)"));
+	[Fact] public async Task Least_WithNull() => Assert.Null(await Scalar("SELECT LEAST(1, NULL, 5)"));
 	[Fact] public async Task Least_AllNull() => Assert.Null(await Scalar("SELECT LEAST(NULL, NULL)"));
 
 	// ---- CAST ----

@@ -150,7 +150,8 @@ internal class ProceduralExecutor
 
 		// Procedural CASE
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#case_statement
-		if (upper.StartsWith("CASE ", StringComparison.OrdinalIgnoreCase) &&
+		if ((upper.StartsWith("CASE ", StringComparison.OrdinalIgnoreCase) ||
+			(upper.Length > 4 && upper.StartsWith("CASE", StringComparison.OrdinalIgnoreCase) && char.IsWhiteSpace(upper[4]))) &&
 			upper.Contains("END CASE", StringComparison.OrdinalIgnoreCase))
 			return ExecuteCaseStatement(sql);
 
@@ -961,7 +962,19 @@ return null;
 				var (_, rows) = exec.Execute($"SELECT {substituted}");
 				var whenValue = rows.Count > 0 && rows[0].F.Count > 0 ? rows[0].F[0].V : null;
 
-				if (caseValue?.ToString() == whenValue?.ToString())
+				// For searched CASE (no case expression), check if WHEN condition is truthy
+				// For simple CASE (with case expression), compare values
+				bool match;
+				if (string.IsNullOrEmpty(caseExpr))
+				{
+					// Searched CASE: WHEN condition evaluates to boolean
+					match = whenValue?.ToString() is "true" or "True" or "TRUE" or "1";
+				}
+				else
+				{
+					match = caseValue?.ToString() == whenValue?.ToString();
+				}
+				if (match)
 					return ExecuteBlock(thenBlock);
 			}
 			else if (remaining.StartsWith("ELSE", StringComparison.OrdinalIgnoreCase))
