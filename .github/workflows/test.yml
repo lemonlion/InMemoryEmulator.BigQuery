@@ -32,12 +32,19 @@ jobs:
         ports:
           - 9050:9050
           - 9060:9060
-        options: >-
-          --health-cmd "curl -sf http://localhost:9050/bigquery/v2/projects/test-project/datasets || exit 1"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
     steps:
+      - name: Wait for BigQuery emulator
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:9050/bigquery/v2/projects/test-project/datasets > /dev/null 2>&1; then
+              echo "Emulator is ready"
+              exit 0
+            fi
+            echo "Waiting for emulator... ($i/30)"
+            sleep 2
+          done
+          echo "Timed out waiting for emulator"
+          exit 1
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
