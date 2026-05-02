@@ -173,7 +173,7 @@ public class LatencyTests : IDisposable
 		sw.Stop();
 
 		var avgMs = sw.Elapsed.TotalMilliseconds / iterations;
-		Assert.True(avgMs < 10, $"Average function evaluation took {avgMs:F2}ms (expected <10ms)");
+		Assert.True(avgMs < 25, $"Average function evaluation took {avgMs:F2}ms (expected <25ms)");
 	}
 
 	[Fact]

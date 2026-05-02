@@ -27,6 +27,8 @@ jobs:
     services:
       bigquery-emulator:
         image: ghcr.io/goccy/bigquery-emulator:0.6.6
+        env:
+          BIGQUERY_EMULATOR_PROJECT: test-project
         ports:
           - 9050:9050
           - 9060:9060
@@ -51,7 +53,7 @@ jobs:
 
   test-cloud-on-push:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.GOOGLE_CREDENTIALS != ''
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
