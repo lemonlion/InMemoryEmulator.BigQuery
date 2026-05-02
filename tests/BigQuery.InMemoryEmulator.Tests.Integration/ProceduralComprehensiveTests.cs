@@ -352,7 +352,9 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- RETURN ----
-	[Fact(Skip = "RETURN stops entire script per docs; test expectation conflicts with documented behavior")] public async Task Return_ExitsEarly()
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#return
+	//   "RETURN stops execution of the multi-statements query."
+	[Fact] public async Task Return_StopsEntireScript()
 	{
 		var v = await Scalar(@"
 			DECLARE x INT64 DEFAULT 1;
@@ -363,7 +365,7 @@ public class ProceduralComprehensiveTests : IAsyncLifetime
 			END;
 			SELECT x;
 		");
-		Assert.Equal("10", v);
+		Assert.Null(v);
 	}
 
 	// ---- Multiple statements producing results ----

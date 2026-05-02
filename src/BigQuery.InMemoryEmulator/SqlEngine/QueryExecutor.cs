@@ -1542,6 +1542,12 @@ if (col.TableAlias is not null)
 {
 var qualified = col.TableAlias + "." + name;
 if (row.Fields.TryGetValue(qualified, out var qVal)) return qVal;
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#field_access_operator
+//   "Struct field access: expression.fieldname"
+if (row.Fields.TryGetValue(col.TableAlias, out var structVal) && structVal is IDictionary<string, object?> structDict)
+{
+if (structDict.TryGetValue(name, out var fieldVal)) return fieldVal;
+}
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/subqueries#correlated_subqueries
 //   When table alias does not match current scope, delegate to outer row context.
 if (_outerRowContext is not null)
@@ -1825,7 +1831,9 @@ _ => TimeSpan.Parse(val.ToString()!, CultureInfo.InvariantCulture)
 "BYTES" => val switch
 {
 byte[] b => b,
-string s => Convert.FromBase64String(s),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_bytes
+//   "STRING to BYTES: the STRING is cast to BYTES using UTF-8 encoding."
+string s => System.Text.Encoding.UTF8.GetBytes(s),
 _ => throw new InvalidCastException("Cannot cast to BYTES")
 },
 _ => val // passthrough for unknown types
@@ -6525,6 +6533,7 @@ TimeSpan ts => ts.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture),
 byte[] bytes => Convert.ToBase64String(bytes),
 IList<object?> list => string.Join(", ", list.Select(v => FormatValue(v)?.ToString() ?? "NULL")),
 RangeValue rv => $"[{FormatValue(rv.Start)}, {FormatValue(rv.End)})",
+IDictionary<string, object?> dict => dict,
 _ => val.ToString()
 };
 }
@@ -6818,6 +6827,7 @@ DateTime => "DATETIME",
 TimeSpan => "TIME",
 byte[] => "BYTES",
 IList<object?> => "RECORD",
+IDictionary<string, object?> => "RECORD",
 _ => "STRING"
 };
 }

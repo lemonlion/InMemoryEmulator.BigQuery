@@ -89,7 +89,7 @@ public class CastAndConversionTests : IAsyncLifetime
 	[Fact] public async Task Cast_BoolToIntToString() { var v = await Scalar("SELECT CAST(CAST(TRUE AS INT64) AS STRING)"); Assert.Equal("1", v); }
 
 	// ---- BYTES casts ----
-	[Fact(Skip = "SDK cannot deserialize BYTES type from query result")] public async Task Cast_StringToBytes() { var v = await Scalar("SELECT CAST(CAST('hello' AS BYTES) AS STRING)"); Assert.Equal("hello", v); }
+	[Fact] public async Task Cast_StringToBytes() { var v = await Scalar("SELECT CAST(CAST('hello' AS BYTES) AS STRING)"); Assert.Equal("hello", v); }
 
 	// ---- Numeric type edge cases ----
 	[Fact] public async Task Cast_LargeIntToString() => Assert.Equal("9999999999", await Scalar("SELECT CAST(9999999999 AS STRING)"));

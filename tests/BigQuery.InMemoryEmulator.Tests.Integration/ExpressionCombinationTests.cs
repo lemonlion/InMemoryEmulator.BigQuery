@@ -156,7 +156,7 @@ public class ExpressionCombinationTests : IAsyncLifetime
 	[Fact] public async Task NullCoalesce_Null() => Assert.Equal("10", await Scalar("SELECT IFNULL(CAST(NULL AS INT64), 10)"));
 
 	// ---- STRUCT construction ----
-	[Fact(Skip = "STRUCT values not preserved through FROM subquery serialization")]
+	[Fact]
 	public async Task Struct_Access()
 	{
 		var rows = await Query("SELECT t.a, t.b FROM (SELECT STRUCT(1 AS a, 'hello' AS b) AS t) AS s");

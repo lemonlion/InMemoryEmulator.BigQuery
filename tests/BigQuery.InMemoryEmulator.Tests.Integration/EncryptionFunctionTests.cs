@@ -119,7 +119,7 @@ public class EncryptionFunctionTests : IAsyncLifetime
 	}
 
 	// ---- Deterministic encrypt is deterministic ----
-	[Fact(Skip = "Encryption key type mismatch")] public async Task DeterministicEncrypt_SameInputSameOutput()
+	[Fact] public async Task DeterministicEncrypt_SameInputSameOutput()
 	{
 		var v1 = await Scalar(@"
 			SELECT TO_HEX(DETERMINISTIC_ENCRYPT(keyset, b'same', 'aad')), TO_HEX(DETERMINISTIC_ENCRYPT(keyset, b'same', 'aad'))
