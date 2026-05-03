@@ -27,6 +27,13 @@ internal record SelectStatement(
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#with_clause
 internal record CteDefinition(string Name, SelectStatement Body, SelectStatement? RecursiveBody = null, IReadOnlyList<SelectStatement>? UnionBodies = null);
 
+/// <summary>WITH cte1 AS (...) DML_STATEMENT — CTEs preceding a DML statement.</summary>
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#with_clause
+internal record WithDmlStatement(
+	IReadOnlyList<CteDefinition> Ctes,
+	SqlStatement DmlBody
+) : SqlStatement;
+
 /// <summary>A set operation: UNION ALL, EXCEPT DISTINCT, INTERSECT DISTINCT.</summary>
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
 internal record SetOperationStatement(
@@ -227,15 +234,17 @@ internal record InsertValuesStatement(
 internal record InsertSelectStatement(
 	string TableName,
 	IReadOnlyList<string>? Columns,
-	SelectStatement Query
+	SqlStatement Query
 ) : SqlStatement;
 
-/// <summary>UPDATE table SET col=expr, ... WHERE condition</summary>
+/// <summary>UPDATE table SET col=expr, ... [FROM source] WHERE condition</summary>
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#update_statement
 internal record UpdateStatement(
 	string TableName,
 	string? Alias,
 	IReadOnlyList<(string Column, SqlExpression Value)> Assignments,
-	SqlExpression Where
+	SqlExpression? Where,
+	FromClause? From = null
 ) : SqlStatement;
 
 /// <summary>DELETE FROM table WHERE condition</summary>

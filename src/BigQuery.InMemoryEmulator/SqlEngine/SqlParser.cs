@@ -1174,6 +1174,14 @@ Token.EqualTo(SqlToken.LParen)
 						new SelectStatement(sel.Distinct, sel.Columns, sel.From, sel.Where,
 							sel.GroupBy, sel.Having, sel.OrderBy, sel.Limit, sel.Offset, ctes.ToList(), sel.Qualify, isRecursive))));
 
+	// --- WITH cte1 AS (...) INSERT/UPDATE/DELETE ... ---
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#with_clause
+	private static readonly TokenListParser<SqlToken, SqlStatement> WithDmlStmt =
+		Token.EqualTo(SqlToken.With)
+			.IgnoreThen(CteDefParser.ManyDelimitedBy(Token.EqualTo(SqlToken.Comma)))
+			.Then(ctes => SP.Ref(() => DmlStatement!)
+				.Select(dml => (SqlStatement)new WithDmlStatement(ctes.ToList(), dml)));
+
 	// --- Top-level statement with optional set operations ---
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
 	//   "Multiple set operators can be chained: SELECT ... UNION ALL SELECT ... UNION ALL SELECT ..."
@@ -1205,6 +1213,7 @@ Token.EqualTo(SqlToken.LParen)
 	private static readonly TokenListParser<SqlToken, SqlStatement> TopLevelStatement =
 		SP.Ref(() => DdlStatement!).Try()
 		.Or(SP.Ref(() => DmlStatement!).Try())
+		.Or(WithDmlStmt.Try())
 		.Or(WithSetOps(WithSelectStmt.Select(s => (SqlStatement)s).Try().Or(SelectStmt.Select(s => (SqlStatement)s))));
 
 	// --- DML Parsers ---
@@ -1240,24 +1249,35 @@ Token.EqualTo(SqlToken.LParen)
 					.IgnoreThen(IdentifierOrKeyword.ManyDelimitedBy(Token.EqualTo(SqlToken.Comma)))
 					.Then(cols => Token.EqualTo(SqlToken.RParen).Select(_ => (IReadOnlyList<string>?)cols.ToList()))
 					.OptionalOrDefault()
-				.Then(cols => SelectStmt.Select(q => (SqlStatement)new InsertSelectStatement(table, cols, q)))
+				.Then(cols => WithSetOps(SelectStmt.Select(s => (SqlStatement)s)).Select(q => (SqlStatement)new InsertSelectStatement(table, cols, q)))
 			);
 
-	// UPDATE table [alias] SET col=expr, ... WHERE condition
+	// UPDATE table [AS alias] SET [alias.]col=expr, ... [FROM source] WHERE condition
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#update_statement
 	private static readonly TokenListParser<SqlToken, SqlStatement> UpdateStmt =
 		Token.EqualTo(SqlToken.Update).IgnoreThen(IdentifierOrKeyword)
 			.Then(table =>
-				// optional alias (identifier that is not SET)
-				Token.EqualTo(SqlToken.Identifier).Select(t => (string?)t.ToStringValue()).OptionalOrDefault()
+				// optional alias: AS ident or bare ident (not SET)
+				Token.EqualTo(SqlToken.As).IgnoreThen(IdentifierOrKeyword).Select(a => (string?)a).Try()
+				.Or(Token.EqualTo(SqlToken.Identifier).Select(t => (string?)t.ToStringValue()))
+				.OptionalOrDefault()
 			.Then(alias =>
 				Token.EqualTo(SqlToken.Set).IgnoreThen(
-					IdentifierOrKeyword.Then(col =>
+					// Qualified column: [alias.]col
+					IdentifierOrKeyword.Then(first =>
+						Token.EqualTo(SqlToken.Dot).IgnoreThen(IdentifierOrKeyword)
+							.Select(second => first + "." + second)
+							.Try().Or(Constant(first))
+					).Then(col =>
 						Token.EqualTo(SqlToken.Eq).IgnoreThen(SP.Ref(() => Expression!))
 							.Select(val => (col, val))
 					).ManyDelimitedBy(Token.EqualTo(SqlToken.Comma))
 				).Then(assignments =>
-					Token.EqualTo(SqlToken.Where).IgnoreThen(SP.Ref(() => Expression!))
-						.Select(where => (SqlStatement)new UpdateStatement(table, alias, assignments.ToList(), where))
+					FromClauseParser.Select(f => (FromClause?)f).Try().OptionalOrDefault()
+					.Then(from =>
+						Token.EqualTo(SqlToken.Where).IgnoreThen(SP.Ref(() => Expression!))
+							.Select(where => (SqlStatement)new UpdateStatement(table, alias, assignments.ToList(), where, from))
+					)
 				)
 			));
 

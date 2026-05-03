@@ -98,6 +98,7 @@ InsertSelectStatement ins => ExecuteInsertSelect(ins),
 UpdateStatement upd => ExecuteUpdate(upd),
 DeleteStatement del => ExecuteDelete(del),
 MergeStatement merge => ExecuteMerge(merge),
+WithDmlStatement withDml => ExecuteWithDml(withDml),
 CreateTableStatement ct => ExecuteCreateTable(ct),
 CreateTableAsSelectStatement ctas => ExecuteCreateTableAsSelect(ctas),
 DropTableStatement dt => ExecuteDropTable(dt),
@@ -136,7 +137,7 @@ try
 // FROM
 List<RowContext> rows;
 if (sel.From is not null)
-rows = ResolveFrom(sel.From, cteResults);
+rows = ResolveFrom(sel.From, cteResults ?? _activeCteResults);
 else
 rows = [new RowContext(new Dictionary<string, object?>(), null)];
 
@@ -1714,7 +1715,9 @@ return hasNull ? null : false;
 private object? EvaluateInSubquery(InSubqueryExpr inSub, RowContext row)
 {
 var val = Evaluate(inSub.Expr, row);
-var result = ExecuteSelect(inSub.Subquery);
+// Pass active CTE results so subqueries can reference outer CTEs
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#cte_rules
+var result = ExecuteSelect(inSub.Subquery, _activeCteResults);
 var values = result.Rows.Select(r => r.F?[0]?.V).ToList();
 var found = values.Any(v => CompareRaw(val, v) == 0);
 return found;
@@ -1800,6 +1803,8 @@ _ => Convert.ToBoolean(val, CultureInfo.InvariantCulture)
 "TIMESTAMP" => val switch
 {
 DateTimeOffset dto => dto,
+DateOnly d => new DateTimeOffset(d.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero),
+DateTime dt => new DateTimeOffset(dt, TimeSpan.Zero),
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#timestamp_literals
 //   BigQuery accepts "UTC" as a timezone suffix, but .NET ParseExact doesn't.
 //   Normalize "UTC" to "+00:00" before parsing.
@@ -1811,13 +1816,16 @@ _ => DateTimeOffset.Parse(NormalizeTimestampString(val.ToString()!), CultureInfo
 DateOnly d => d,
 DateTime dt => DateOnly.FromDateTime(dt),
 DateTimeOffset dto => DateOnly.FromDateTime(dto.DateTime),
-string s => DateOnly.FromDateTime(DateTime.Parse(s, CultureInfo.InvariantCulture)),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_date
+//   BigQuery only accepts ISO 8601 date format (yyyy-MM-dd) for CAST to DATE.
+string s => DateOnly.ParseExact(s.Length > 10 ? s[..10] : s, "yyyy-MM-dd", CultureInfo.InvariantCulture),
 _ => DateOnly.FromDateTime(DateTime.Parse(val.ToString()!, CultureInfo.InvariantCulture))
 },
 "DATETIME" => val switch
 {
 DateTime dt => dt,
 DateTimeOffset dto => dto.DateTime,
+DateOnly d => d.ToDateTime(TimeOnly.MinValue),
 string s => DateTime.Parse(s, CultureInfo.InvariantCulture),
 _ => DateTime.Parse(val.ToString()!, CultureInfo.InvariantCulture)
 },
@@ -2754,7 +2762,9 @@ return val switch
 DateOnly d => d,
 DateTime dt => DateOnly.FromDateTime(dt),
 DateTimeOffset dto => DateOnly.FromDateTime(dto.Date),
-string s => DateOnly.FromDateTime(DateTime.Parse(s, CultureInfo.InvariantCulture)),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_date
+//   BigQuery only accepts ISO 8601 date format (yyyy-MM-dd) for CAST to DATE.
+string s => DateOnly.ParseExact(s.Length > 10 ? s[..10] : s, "yyyy-MM-dd", CultureInfo.InvariantCulture),
 _ => DateOnly.FromDateTime(DateTime.Parse(val?.ToString() ?? "", CultureInfo.InvariantCulture))
 };
 }
@@ -5907,7 +5917,11 @@ var resultRows = (setOp.OpType, setOp.All) switch
 (SetOperationType.Union, false) => left.Rows.Concat(right.Rows)
 .GroupBy(r => string.Join("|", r.F?.Select(f => f?.V?.ToString() ?? "NULL") ?? Array.Empty<string>()))
 .Select(g => g.First()).ToList(),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#except
+//   "EXCEPT DISTINCT removes both duplicates and rows present in the right operand."
 (SetOperationType.Except, _) => left.Rows
+.GroupBy(r => string.Join("|", r.F?.Select(f => f?.V?.ToString() ?? "NULL") ?? Array.Empty<string>()))
+.Select(g => g.First())
 .Where(lr => !right.Rows.Any(rr => RowEquals(lr, rr))).ToList(),
 (SetOperationType.Intersect, _) => left.Rows
 .Where(lr => right.Rows.Any(rr => RowEquals(lr, rr)))
@@ -5953,6 +5967,13 @@ for (int i = 0; i < columns.Count && i < rowValues.Count; i++)
 fields[columns[i]] = Evaluate(rowValues[i],
 new RowContext(new Dictionary<string, object?>(), null));
 }
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#insert_statement
+//   Unspecified columns are assigned NULL.
+foreach (var schemaField in table.Schema.Fields)
+{
+	if (!fields.ContainsKey(schemaField.Name))
+		fields[schemaField.Name] = null;
+}
 table.Rows.Add(new InMemoryRow(fields));
 count++;
 }
@@ -5960,11 +5981,29 @@ count++;
 return EmptyResult(count);
 }
 
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#with_clause
+//   "You can use a WITH clause with INSERT, UPDATE, DELETE, and MERGE statements."
+private InMemoryBigQueryResult ExecuteWithDml(WithDmlStatement withDml)
+{
+// Resolve CTEs using a temporary SelectStatement wrapper
+var tempSel = new SelectStatement(false, Array.Empty<SelectItem>(), null, null, null, null, null, null, null, withDml.Ctes.ToList(), null, false);
+var cteResults = ResolveCtes(tempSel);
+var prevCteResults = _activeCteResults;
+_activeCteResults = cteResults;
+try
+{
+return ExecuteStatement(withDml.DmlBody);
+}
+finally
+{
+_activeCteResults = prevCteResults;
+}
+}
 private InMemoryBigQueryResult ExecuteInsertSelect(InsertSelectStatement insert)
 {
 var (iDs, iTbl) = SplitTableName(insert.TableName);
 var table = ResolveTable(iDs, iTbl);
-var result = ExecuteSelect(insert.Query);
+var result = ExecuteStatement(insert.Query);
 long count = 0;
 lock (table.RowLock)
 {
@@ -5998,6 +6037,34 @@ var alias = update.Alias ?? uTbl;
 long count = 0;
 lock (table.RowLock)
 {
+if (update.From is not null)
+{
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#update_with_joins
+    var sourceRows = ResolveFrom(update.From);
+    foreach (var row in table.Rows)
+    {
+        var targetFields = new Dictionary<string, object?>(row.Fields);
+        foreach (var kv in row.Fields) targetFields[alias + "." + kv.Key] = kv.Value;
+        foreach (var srcCtx in sourceRows)
+        {
+            var combined = new Dictionary<string, object?>(targetFields);
+            foreach (var kv in srcCtx.Fields) combined[kv.Key] = kv.Value;
+            var ctx = new RowContext(combined, alias);
+            if (update.Where is null || IsTruthy(Evaluate(update.Where, ctx)))
+            {
+                foreach (var (col, expr) in update.Assignments)
+                {
+                    var actualCol = col.Contains('.') ? col[(col.IndexOf('.') + 1)..] : col;
+                    row.Fields[actualCol] = Evaluate(expr, ctx);
+                }
+                count++;
+                break;
+            }
+        }
+    }
+}
+else
+{
 foreach (var row in table.Rows)
 {
 var fields = new Dictionary<string, object?>(row.Fields);
@@ -6006,8 +6073,12 @@ var ctx = new RowContext(fields, alias);
 if (update.Where is null || IsTruthy(Evaluate(update.Where, ctx)))
 {
 foreach (var (col, expr) in update.Assignments)
-row.Fields[col] = Evaluate(expr, ctx);
+{
+var actualCol = col.Contains('.') ? col[(col.IndexOf('.') + 1)..] : col;
+row.Fields[actualCol] = Evaluate(expr, ctx);
+}
 count++;
+}
 }
 }
 }

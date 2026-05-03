@@ -793,7 +793,12 @@ public class FakeBigQueryHandler : HttpMessageHandler
 			var upperQ = body.Query.TrimStart();
 			if (body.Query.Contains(';') ||
 				upperQ.StartsWith("CREATE ", StringComparison.OrdinalIgnoreCase) ||
-				upperQ.StartsWith("DROP ", StringComparison.OrdinalIgnoreCase))
+				upperQ.StartsWith("DROP ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ.StartsWith("INSERT ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ.StartsWith("UPDATE ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ.StartsWith("DELETE ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ.StartsWith("MERGE ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ.StartsWith("TRUNCATE ", StringComparison.OrdinalIgnoreCase))
 			{
 				var procExecutor = new SqlEngine.ProceduralExecutor(_store, defaultDatasetId);
 				(schema, rows) = procExecutor.Execute(body.Query);
@@ -805,8 +810,6 @@ public class FakeBigQueryHandler : HttpMessageHandler
 				(schema, rows) = executor.Execute(body.Query);
 			}
 
-			if (body.Query.Contains("ROW_NUMBER") && body.Query.Contains("ORDER BY 1"))
-				throw new Exception($"HANDLER_DBG: rows=[{string.Join(",", rows.Select(r => r.F?[0]?.V))}]");
 
 			job.ResultSchema = schema;
 			job.ResultRows = rows;
@@ -911,7 +914,12 @@ public class FakeBigQueryHandler : HttpMessageHandler
 			var upperQ2 = queryConfig.Query.TrimStart();
 			if (queryConfig.Query.Contains(';') ||
 				upperQ2.StartsWith("CREATE ", StringComparison.OrdinalIgnoreCase) ||
-				upperQ2.StartsWith("DROP ", StringComparison.OrdinalIgnoreCase))
+				upperQ2.StartsWith("DROP ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ2.StartsWith("INSERT ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ2.StartsWith("UPDATE ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ2.StartsWith("DELETE ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ2.StartsWith("MERGE ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ2.StartsWith("TRUNCATE ", StringComparison.OrdinalIgnoreCase))
 			{
 				var procExecutor = new SqlEngine.ProceduralExecutor(_store, defaultDatasetId);
 				(schema, rows) = procExecutor.Execute(queryConfig.Query);
