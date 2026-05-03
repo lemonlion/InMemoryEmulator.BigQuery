@@ -36,11 +36,15 @@ internal record WithDmlStatement(
 
 /// <summary>A set operation: UNION ALL, EXCEPT DISTINCT, INTERSECT DISTINCT.</summary>
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
+//   "ORDER BY, LIMIT, and OFFSET after a set operation apply to the entire result."
 internal record SetOperationStatement(
 	SqlStatement Left,
 	SetOperationType OpType,
 	bool All,
-	SqlStatement Right
+	SqlStatement Right,
+	IReadOnlyList<OrderByItem>? OrderBy = null,
+	int? Limit = null,
+	int? Offset = null
 ) : SqlStatement;
 
 internal enum SetOperationType { Union, Except, Intersect }
@@ -217,6 +221,8 @@ internal enum BinaryOp
 	Concat,
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#bitwise_operators
 	BitAnd, BitOr, BitXor, ShiftLeft, ShiftRight,
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#operator_precedence
+	NullCoalesce,
 }
 
 internal enum UnaryOp { Not, Negate, BitNot }

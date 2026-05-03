@@ -97,7 +97,8 @@ public class SubqueryTests : IAsyncLifetime
 		Assert.Empty(rows);
 	}
 
-	[Fact] public async Task NotInSub_Basic()
+	[Fact]
+	public async Task NotInSub_Basic()
 	{
 		var rows = await Query("SELECT x FROM UNNEST([1,2,3,4,5]) AS x WHERE x NOT IN (SELECT y FROM UNNEST([2,4]) AS y) ORDER BY x");
 		Assert.Equal(3, rows.Count);
@@ -131,13 +132,15 @@ public class SubqueryTests : IAsyncLifetime
 	}
 
 	// ---- ARRAY subquery ----
-	[Fact] public async Task ArraySub_Length()
+	[Fact]
+	public async Task ArraySub_Length()
 	{
 		var v = await Scalar("SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1,2,3,4,5]) AS x WHERE x > 2))");
 		Assert.Equal("3", v);
 	}
 
-	[Fact] public async Task ArraySub_ToString()
+	[Fact]
+	public async Task ArraySub_ToString()
 	{
 		var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY(SELECT x FROM UNNEST([3,1,2]) AS x ORDER BY x), ',')");
 		Assert.Equal("1,2,3", v);

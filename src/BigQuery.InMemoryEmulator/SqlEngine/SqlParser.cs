@@ -273,10 +273,17 @@ internal static class SqlParser
 	// --- Array literal: [expr, ...] ---
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#array_literals
 	private static readonly TokenListParser<SqlToken, SqlExpression> ArrayLiteral =
+		// Empty array: []
+		Token.EqualTo(SqlToken.LBracket).IgnoreThen(
+			Token.EqualTo(SqlToken.RBracket))
+			.Select(_ => (SqlExpression)new FunctionCall("ARRAY", new List<SqlExpression>()))
+			.Try()
+		.Or(
+		// Non-empty array: [expr, expr, ...]
 		Token.EqualTo(SqlToken.LBracket).IgnoreThen(
 			SP.Ref(() => Expression!).ManyDelimitedBy(Token.EqualTo(SqlToken.Comma)))
 		.Then(elems => Token.EqualTo(SqlToken.RBracket)
-			.Select(_ => (SqlExpression)new FunctionCall("ARRAY", elems.ToList())));
+			.Select(_ => (SqlExpression)new FunctionCall("ARRAY", elems.ToList()))));
 
 	// --- Star expression ---
 
@@ -477,10 +484,10 @@ internal static class SqlParser
 		);
 
 	// --- Unary NOT / - / ~ ---
-	private static readonly TokenListParser<SqlToken, SqlExpression> UnaryNot =
-		Token.EqualTo(SqlToken.Not).IgnoreThen(
-			SP.Ref(() => Atom!)
-		).Select(e => (SqlExpression)new UnaryExpr(UnaryOp.Not, e));
+	// NOTE: NOT is handled at a higher precedence level (NotExpr, between Comparison and AND)
+	// so that `NOT x = y` parses as `NOT(x = y)` rather than `(NOT x) = y`.
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#operator_precedence
+	//   "NOT has lower precedence than comparison operators."
 
 	private static readonly TokenListParser<SqlToken, SqlExpression> UnaryMinus =
 		Token.EqualTo(SqlToken.Minus).IgnoreThen(
@@ -548,7 +555,6 @@ internal static class SqlParser
 		.Or(ParameterExpr)
 		.Or(Star)
 		.Or(Parens)
-		.Or(UnaryNot)
 		.Or(UnaryMinus)
 		.Or(UnaryBitNot);
 
@@ -794,9 +800,31 @@ Token.EqualTo(SqlToken.LParen)
 				(SqlExpression)new BinaryExpr(left, pair.Op, pair.Right)))
 		);
 
+	// --- Null coalesce ?? (left-associative, between comparison and NOT) ---
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+	//   "?? is equivalent to COALESCE(a, b)."
+	private static readonly TokenListParser<SqlToken, SqlExpression> NullCoalesceExpr =
+		Comparison.Then(first =>
+			Token.EqualTo(SqlToken.NullCoalesce)
+				.Then(_ => Comparison.Select(right => right))
+			.Try().Many()
+			.Select(rights => rights.Aggregate(first, (left, right) =>
+				(SqlExpression)new BinaryExpr(left, BinaryOp.NullCoalesce, right)))
+		);
+
+	// --- NOT (prefix, lower precedence than comparison) ---
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#operator_precedence
+	//   "NOT has lower precedence than comparison operators but higher than AND."
+	private static readonly TokenListParser<SqlToken, SqlExpression> NotExpr =
+		Token.EqualTo(SqlToken.Not).IgnoreThen(
+			SP.Ref(() => NotExpr!)
+		).Select(e => (SqlExpression)new UnaryExpr(UnaryOp.Not, e))
+		.Try()
+		.Or(NullCoalesceExpr);
+
 	// --- AND ---
 	private static readonly TokenListParser<SqlToken, SqlExpression> AndExpr =
-		Comparison.Then(left =>
+		NotExpr.Then(left =>
 			Token.EqualTo(SqlToken.And)
 				.IgnoreThen(SP.Ref(() => AndExpr!))
 				.Select(right => (SqlExpression)new BinaryExpr(left, BinaryOp.And, right))
@@ -1108,6 +1136,44 @@ Token.EqualTo(SqlToken.LParen)
 
 	// --- Full SELECT statement ---
 
+	// A "bare" SELECT without ORDER BY / LIMIT / OFFSET — used as operands of set operations.
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
+	//   "Parentheses are required to apply ORDER BY / LIMIT to an individual operand of a set operation."
+	private static readonly TokenListParser<SqlToken, SelectStatement> BareSelectStmt =
+		Token.EqualTo(SqlToken.Select).IgnoreThen(
+			Token.EqualTo(SqlToken.Distinct).Select(_ => true).OptionalOrDefault(false)
+		).Then(distinct =>
+			SelectItemParser.ManyDelimitedBy(Token.EqualTo(SqlToken.Comma))
+				.Select(cols => (Distinct: distinct, Columns: cols))
+		).Then(sel =>
+			FromClauseParser.Select(f => (FromClause?)f).OptionalOrDefault().Select(from =>
+				(sel.Distinct, sel.Columns, From: from))
+		).Then(sel =>
+			WhereClause.Select(w => (SqlExpression?)w).OptionalOrDefault().Select(where =>
+				(sel.Distinct, sel.Columns, sel.From, Where: where))
+		).Then(sel =>
+			GroupByClause.Select(g => (IReadOnlyList<SqlExpression>?)g).OptionalOrDefault().Select(groupBy =>
+				(sel.Distinct, sel.Columns, sel.From, sel.Where, GroupBy: groupBy))
+		).Then(sel =>
+			HavingClause.Select(h => (SqlExpression?)h).OptionalOrDefault().Select(having =>
+				(sel.Distinct, sel.Columns, sel.From, sel.Where, sel.GroupBy, Having: having))
+		).Then(sel =>
+			QualifyClause.Select(q => (SqlExpression?)q).OptionalOrDefault().Select(qualify =>
+				new SelectStatement(
+					sel.Distinct,
+					sel.Columns.ToList(),
+					sel.From,
+					sel.Where,
+					sel.GroupBy,
+					sel.Having,
+					null, // OrderBy
+					null, // Limit
+					null, // Offset
+					Qualify: qualify
+				)
+			)
+		);
+
 	private static readonly TokenListParser<SqlToken, SelectStatement> SelectStmt =
 		Token.EqualTo(SqlToken.Select).IgnoreThen(
 			Token.EqualTo(SqlToken.Distinct).Select(_ => true).OptionalOrDefault(false)
@@ -1201,6 +1267,8 @@ Token.EqualTo(SqlToken.LParen)
 
 	// Helper: parse zero or more set-operation suffixes (UNION ALL, UNION DISTINCT, EXCEPT DISTINCT, INTERSECT DISTINCT)
 	// and fold them left-to-right into nested SetOperationStatements.
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
+	//   "ORDER BY, LIMIT, and OFFSET after a set operation apply to the entire result, not just the last SELECT."
 	private static TokenListParser<SqlToken, SqlStatement> WithSetOps(TokenListParser<SqlToken, SqlStatement> inner) =>
 		inner.Then(first =>
 			(
@@ -1210,18 +1278,57 @@ Token.EqualTo(SqlToken.LParen)
 				.Or(Token.EqualTo(SqlToken.Union).IgnoreThen(Token.EqualTo(SqlToken.Distinct))
 					.Select(_ => (Op: SetOperationType.Union, All: false)))
 				.Try()
+				// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#except
+				.Or(Token.EqualTo(SqlToken.Except).IgnoreThen(Token.EqualTo(SqlToken.All))
+					.Select(_ => (Op: SetOperationType.Except, All: true)))
+				.Try()
 				.Or(Token.EqualTo(SqlToken.Except).IgnoreThen(Token.EqualTo(SqlToken.Distinct))
 					.Select(_ => (Op: SetOperationType.Except, All: false)))
+				.Try()
+				// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#intersect
+				.Or(Token.EqualTo(SqlToken.Intersect).IgnoreThen(Token.EqualTo(SqlToken.All))
+					.Select(_ => (Op: SetOperationType.Intersect, All: true)))
 				.Try()
 				.Or(Token.EqualTo(SqlToken.Intersect).IgnoreThen(Token.EqualTo(SqlToken.Distinct))
 					.Select(_ => (Op: SetOperationType.Intersect, All: false)))
 			)
-			.Then(op => SelectStmt.Select(right => (op, right)))
+			// Use BareSelectStmt for RHS operands — ORDER BY/LIMIT/OFFSET apply to the whole result
+			.Then(op => BareSelectStmt.Select(right => (SqlStatement)right).Select(right => (op, right)))
 			.Try()
 			.Many()
-			.Select(ops => ops.Aggregate((SqlStatement)first, (acc, pair) =>
-				new SetOperationStatement(acc, pair.op.Op, pair.op.All, pair.right)))
+			.Then(ops =>
+			{
+				var folded = ops.Aggregate((SqlStatement)first, (acc, pair) =>
+					new SetOperationStatement(acc, pair.op.Op, pair.op.All, pair.right));
+
+				// If there were set operations, parse trailing ORDER BY / LIMIT / OFFSET
+				if (ops.Length == 0)
+					return Constant(folded);
+
+				return OrderByClause.Select(o => (IReadOnlyList<OrderByItem>?)o).OptionalOrDefault()
+					.Then(orderBy => LimitClause.Select(l => (int?)l).OptionalOrDefault()
+						.Then(limit => OffsetClause.Select(o => (int?)o).OptionalOrDefault()
+							.Select(offset =>
+							{
+								if (orderBy is null && limit is null && offset is null)
+									return folded;
+								// Attach ORDER BY/LIMIT/OFFSET to the outermost set operation
+								return ApplyOrderByLimitToSetOp(folded, orderBy, limit, offset);
+							})));
+			})
 		);
+
+	// Attaches ORDER BY / LIMIT / OFFSET to the outermost SetOperationStatement.
+	// If the outermost node is already a SetOperationStatement, adds the fields directly.
+	// Otherwise (shouldn't happen in practice), wraps it.
+	private static SqlStatement ApplyOrderByLimitToSetOp(
+		SqlStatement stmt, IReadOnlyList<OrderByItem>? orderBy, int? limit, int? offset)
+	{
+		if (stmt is SetOperationStatement setOp)
+			return setOp with { OrderBy = orderBy, Limit = limit, Offset = offset };
+		// Fallback: shouldn't happen since we only call this when ops.Length > 0
+		return stmt;
+	}
 
 	private static readonly TokenListParser<SqlToken, SqlStatement> TopLevelStatement =
 		SP.Ref(() => DdlStatement!).Try()

@@ -1606,6 +1606,13 @@ if (r is not null && IsTruthy(r)) return true;
 if (l is null || r is null) return null;
 return false;
 }
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+//   "?? is equivalent to COALESCE(a, b): returns a if a is not null, otherwise b."
+if (bin.Op == BinaryOp.NullCoalesce)
+{
+var l = Evaluate(bin.Left, row);
+return l ?? Evaluate(bin.Right, row);
+}
 
 var left = Evaluate(bin.Left, row);
 var right = Evaluate(bin.Right, row);
@@ -5966,17 +5973,25 @@ private InMemoryBigQueryResult ExecuteSetOperation(SetOperationStatement setOp)
 {
 // If the left side is a SELECT with CTEs, resolve CTEs and propagate to right side
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#with_clause
+InMemoryBigQueryResult result;
 if (setOp.Left is SelectStatement { Ctes: { Count: > 0 } } leftSel)
 {
     var cteResults = ResolveCtes(leftSel);
     var leftBody = leftSel with { Ctes = null };
     var left = ExecuteSelect(leftBody, cteResults);
     var right = ExecuteWithCtes(setOp.Right, cteResults);
-    return CombineSetOperation(setOp, left, right);
+    result = CombineSetOperation(setOp, left, right);
 }
-var leftResult = ExecuteStatement(setOp.Left);
-var rightResult = ExecuteStatement(setOp.Right);
-return CombineSetOperation(setOp, leftResult, rightResult);
+else
+{
+    var leftResult = ExecuteStatement(setOp.Left);
+    var rightResult = ExecuteStatement(setOp.Right);
+    result = CombineSetOperation(setOp, leftResult, rightResult);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
+//   "ORDER BY, LIMIT, and OFFSET after a set operation apply to the entire result."
+return ApplySetOpOrderByLimitOffset(result, setOp);
 }
 
 private InMemoryBigQueryResult ExecuteWithCtes(
@@ -6007,14 +6022,20 @@ var resultRows = (setOp.OpType, setOp.All) switch
 .Select(g => g.First()).ToList(),
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#except
 //   "EXCEPT DISTINCT removes both duplicates and rows present in the right operand."
-(SetOperationType.Except, _) => left.Rows
+//   "EXCEPT ALL removes only one occurrence of each right-side row from the left side."
+(SetOperationType.Except, false) => left.Rows
 .GroupBy(r => string.Join("|", r.F?.Select(f => f?.V?.ToString() ?? "NULL") ?? Array.Empty<string>()))
 .Select(g => g.First())
 .Where(lr => !right.Rows.Any(rr => RowEquals(lr, rr))).ToList(),
-(SetOperationType.Intersect, _) => left.Rows
+(SetOperationType.Except, true) => ExceptAll(left.Rows, right.Rows),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#intersect
+//   "INTERSECT DISTINCT returns only distinct rows present in both operands."
+//   "INTERSECT ALL preserves duplicate counts: min(count_left, count_right) for each row."
+(SetOperationType.Intersect, false) => left.Rows
 .Where(lr => right.Rows.Any(rr => RowEquals(lr, rr)))
 .GroupBy(r => string.Join("|", r.F?.Select(f => f?.V?.ToString() ?? "NULL") ?? Array.Empty<string>()))
 .Select(g => g.First()).ToList(),
+(SetOperationType.Intersect, true) => IntersectAll(left.Rows, right.Rows),
 _ => throw new NotSupportedException("Unsupported set operation: " + setOp.OpType)
 };
 
@@ -6032,6 +6053,72 @@ var bv = b.F[i]?.V?.ToString();
 if (av != bv) return false;
 }
 return true;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#except
+//   "EXCEPT ALL: For each row in the right input, removes one matching row from the left input."
+private static List<TableRow> ExceptAll(List<TableRow> left, List<TableRow> right)
+{
+var result = new List<TableRow>(left);
+foreach (var rr in right)
+{
+    var idx = result.FindIndex(lr => RowEquals(lr, rr));
+    if (idx >= 0) result.RemoveAt(idx);
+}
+return result;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#intersect
+//   "INTERSECT ALL: Returns rows that appear in both inputs, preserving min(count_left, count_right) duplicates."
+private static List<TableRow> IntersectAll(List<TableRow> left, List<TableRow> right)
+{
+var result = new List<TableRow>();
+var rightRemaining = new List<TableRow>(right);
+foreach (var lr in left)
+{
+    var idx = rightRemaining.FindIndex(rr => RowEquals(lr, rr));
+    if (idx >= 0)
+    {
+        result.Add(lr);
+        rightRemaining.RemoveAt(idx);
+    }
+}
+return result;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
+//   "ORDER BY, LIMIT, and OFFSET after a set operation apply to the entire result, not just the last SELECT."
+private InMemoryBigQueryResult ApplySetOpOrderByLimitOffset(InMemoryBigQueryResult result, SetOperationStatement setOp)
+{
+    if (setOp.OrderBy is null && setOp.Limit is null && setOp.Offset is null)
+        return result;
+
+    var rows = result.Rows;
+
+    if (setOp.OrderBy is { Count: > 0 })
+    {
+        var schema = result.Schema;
+        var dicts = rows.Select(r => ParseTypedRow(RowToDict(r, schema), schema)).ToList();
+        var contexts = dicts.Select(d => new RowContext(d, null)).ToList();
+        contexts = OrderBy(contexts, setOp.OrderBy.ToList());
+        var fieldNames = schema.Fields.Select(f => f.Name).ToHashSet();
+        rows = contexts.Select(c =>
+        {
+            var proj = new Dictionary<string, object?>();
+            foreach (var kv in c.Fields)
+                if (fieldNames.Contains(kv.Key))
+                    proj[kv.Key] = kv.Value;
+            return DictToTableRow(proj);
+        }).ToList();
+    }
+
+    if (setOp.Offset.HasValue)
+        rows = rows.Skip(setOp.Offset.Value).ToList();
+
+    if (setOp.Limit.HasValue)
+        rows = rows.Take(setOp.Limit.Value).ToList();
+
+    return new InMemoryBigQueryResult(result.Schema, rows);
 }
 
 #endregion
@@ -7101,7 +7188,7 @@ bool b => b ? "true" : "false",
             //   CAST(FLOAT64 AS STRING) returns "inf", "-inf", "NaN" for special values.
             double d when double.IsPositiveInfinity(d) => "inf",
             double d when double.IsNegativeInfinity(d) => "-inf",
-            double d when double.IsNaN(d) => "nan",
+            double d when double.IsNaN(d) => "NaN",
 DateTimeOffset dto => dto.ToString("yyyy-MM-dd HH:mm:ss.ffffff zzz", CultureInfo.InvariantCulture),
 DateOnly d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
 DateTime dt => dt.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture),
