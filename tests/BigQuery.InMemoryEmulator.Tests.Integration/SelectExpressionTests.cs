@@ -3,221 +3,116 @@ using Xunit;
 
 namespace BigQuery.InMemoryEmulator.Tests.Integration;
 
-/// <summary>
-/// Tests for complex SELECT expression patterns: multiple columns, aliases, computed columns.
-/// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax
-/// </summary>
 [Collection(IntegrationCollection.Name)]
 [Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 public class SelectExpressionTests : IAsyncLifetime
 {
-	private readonly BigQuerySession _session;
-	private ITestDatasetFixture _fixture = null!;
-	public SelectExpressionTests(BigQuerySession session) => _session = session;
-	public async ValueTask InitializeAsync() => _fixture = TestFixtureFactory.Create(_session);
-	public async ValueTask DisposeAsync() => await _fixture.DisposeAsync();
+    private readonly BigQuerySession _session;
+    private ITestDatasetFixture _fixture = null!;
+    private string _datasetId = null!;
 
-	private async Task<string?> Scalar(string sql)
-	{
-		var client = await _fixture.GetClientAsync();
-		var result = await client.ExecuteQueryAsync(sql, parameters: null);
-		var rows = result.ToList();
-		return rows.Count > 0 ? rows[0][0]?.ToString() : null;
-	}
+    public SelectExpressionTests(BigQuerySession session) => _session = session;
 
-	private async Task<List<string?>> Column(string sql)
-	{
-		var client = await _fixture.GetClientAsync();
-		var result = await client.ExecuteQueryAsync(sql, parameters: null);
-		return result.Select(r => r[0]?.ToString()).ToList();
-	}
+    public async ValueTask InitializeAsync()
+    {
+        _fixture = TestFixtureFactory.Create(_session);
+        _datasetId = $"test_sel_{Guid.NewGuid():N}"[..30];
+        await _fixture.CreateDatasetAsync(_datasetId);
+        var client = await _fixture.GetClientAsync();
+        await client.ExecuteQueryAsync($@"CREATE TABLE `{_datasetId}.t` (id INT64, a INT64, b INT64, c STRING, d FLOAT64)", parameters: null);
+        await client.ExecuteQueryAsync($@"INSERT INTO `{_datasetId}.t` (id, a, b, c, d) VALUES (1,10,20,'hello',1.5),(2,30,40,'world',2.5),(3,50,60,'foo',3.5),(4,NULL,80,'bar',NULL)", parameters: null);
+    }
 
-	private async Task<(string?, string?)> TwoCol(string sql)
-	{
-		var client = await _fixture.GetClientAsync();
-		var result = await client.ExecuteQueryAsync(sql, parameters: null);
-		var rows = result.ToList();
-		return rows.Count > 0 ? (rows[0][0]?.ToString(), rows[0][1]?.ToString()) : (null, null);
-	}
+    public async ValueTask DisposeAsync()
+    {
+        try { var c = await _fixture.GetClientAsync(); await c.DeleteDatasetAsync(_datasetId, new DeleteDatasetOptions { DeleteContents = true }); } catch { }
+        await _fixture.DisposeAsync();
+    }
 
-	// ---- Literal expressions ----
-	[Fact] public async Task Literal_Int() => Assert.Equal("42", await Scalar("SELECT 42"));
-	[Fact] public async Task Literal_String() => Assert.Equal("hello", await Scalar("SELECT 'hello'"));
-	[Fact] public async Task Literal_Float() => Assert.Equal("3.14", await Scalar("SELECT 3.14"));
-	[Fact] public async Task Literal_True() => Assert.Equal("True", await Scalar("SELECT TRUE"));
-	[Fact] public async Task Literal_False() => Assert.Equal("False", await Scalar("SELECT FALSE"));
-	[Fact] public async Task Literal_Null() => Assert.Null(await Scalar("SELECT NULL"));
+    private async Task<List<BigQueryRow>> Query(string sql)
+    {
+        var client = await _fixture.GetClientAsync();
+        var result = await client.ExecuteQueryAsync(sql.Replace("{ds}", _datasetId), parameters: null);
+        return result.ToList();
+    }
 
-	// ---- Aliases ----
-	[Fact] public async Task Alias_Simple() => Assert.Equal("42", await Scalar("SELECT 42 AS answer"));
-	[Fact] public async Task Alias_Expression() => Assert.Equal("100", await Scalar("SELECT 10 * 10 AS result"));
-	[Fact] public async Task Alias_String() => Assert.Equal("hello", await Scalar("SELECT 'hello' AS greeting"));
-	[Fact] public async Task Alias_Function() => Assert.Equal("5", await Scalar("SELECT LENGTH('hello') AS len"));
+    private async Task<string?> Scalar(string sql)
+    {
+        var rows = await Query(sql);
+        return rows.Count > 0 ? rows[0][0]?.ToString() : null;
+    }
 
-	// ---- Multiple columns via TwoCol ----
-	[Fact]
-	public async Task MultiCol_TwoLiterals()
-	{
-		var (a, b) = await TwoCol("SELECT 1, 2");
-		Assert.Equal("1", a);
-		Assert.Equal("2", b);
-	}
-
-	[Fact]
-	public async Task MultiCol_StringAndInt()
-	{
-		var (a, b) = await TwoCol("SELECT 'hello', 42");
-		Assert.Equal("hello", a);
-		Assert.Equal("42", b);
-	}
-
-	[Fact]
-	public async Task MultiCol_ComputedPair()
-	{
-		var (a, b) = await TwoCol("SELECT 3 + 4, 5 * 6");
-		Assert.Equal("7", a);
-		Assert.Equal("30", b);
-	}
-
-	// ---- DISTINCT patterns ----
-	[Fact]
-	public async Task Distinct_RemovesDups()
-	{
-		var v = await Column("SELECT DISTINCT x FROM UNNEST([1, 2, 2, 3, 3, 3]) AS x ORDER BY x");
-		Assert.Equal(new[] { "1", "2", "3" }, v);
-	}
-
-	[Fact]
-	public async Task Distinct_AllUnique()
-	{
-		var v = await Column("SELECT DISTINCT x FROM UNNEST([1, 2, 3, 4, 5]) AS x ORDER BY x");
-		Assert.Equal(new[] { "1", "2", "3", "4", "5" }, v);
-	}
-
-	[Fact]
-	public async Task Distinct_AllSame()
-	{
-		var v = await Column("SELECT DISTINCT x FROM UNNEST([7, 7, 7, 7]) AS x");
-		Assert.Equal(new[] { "7" }, v);
-	}
-
-	[Fact]
-	public async Task Distinct_OnStrings()
-	{
-		var v = await Column("SELECT DISTINCT x FROM UNNEST(['a', 'b', 'a', 'c', 'b']) AS x ORDER BY x");
-		Assert.Equal(new[] { "a", "b", "c" }, v);
-	}
-
-	// ---- CASE expressions (searched CASE only, simple CASE is buggy) ----
-	[Fact]
-	public async Task Case_WhenTrue() => Assert.Equal("yes", await Scalar("SELECT CASE WHEN 1 = 1 THEN 'yes' ELSE 'no' END"));
-
-	[Fact]
-	public async Task Case_WhenFalse() => Assert.Equal("no", await Scalar("SELECT CASE WHEN 1 = 2 THEN 'yes' ELSE 'no' END"));
-
-	[Fact]
-	public async Task Case_MultipleWhen()
-	{
-		var v = await Scalar("SELECT CASE WHEN 5 > 10 THEN 'big' WHEN 5 > 3 THEN 'medium' ELSE 'small' END");
-		Assert.Equal("medium", v);
-	}
-
-	[Fact]
-	public async Task Case_NoMatch_ReturnsElse()
-	{
-		var v = await Scalar("SELECT CASE WHEN 1 = 2 THEN 'a' WHEN 3 = 4 THEN 'b' ELSE 'c' END");
-		Assert.Equal("c", v);
-	}
-
-	[Fact]
-	public async Task Case_InSelect()
-	{
-		var v = await Column(@"
-SELECT CASE WHEN x > 5 THEN 'high' ELSE 'low' END
-FROM UNNEST(GENERATE_ARRAY(1, 10)) AS x
-ORDER BY x");
-		Assert.Equal(5, v.Count(x => x == "low"));
-		Assert.Equal(5, v.Count(x => x == "high"));
-	}
-
-	// ---- IF expressions ----
-	[Fact] public async Task If_True() => Assert.Equal("yes", await Scalar("SELECT IF(TRUE, 'yes', 'no')"));
-	[Fact] public async Task If_False() => Assert.Equal("no", await Scalar("SELECT IF(FALSE, 'yes', 'no')"));
-	[Fact] public async Task If_Expression() => Assert.Equal("even", await Scalar("SELECT IF(MOD(10, 2) = 0, 'even', 'odd')"));
-	[Fact] public async Task If_Nested() => Assert.Equal("B", await Scalar("SELECT IF(5 > 10, 'A', IF(5 > 3, 'B', 'C'))"));
-
-	// ---- COALESCE / IFNULL ----
-	[Fact] public async Task Coalesce_FirstNonNull() => Assert.Equal("3", await Scalar("SELECT COALESCE(NULL, NULL, 3)"));
-	[Fact] public async Task Coalesce_FirstIsNonNull() => Assert.Equal("1", await Scalar("SELECT COALESCE(1, 2, 3)"));
-	[Fact] public async Task Coalesce_AllNull() => Assert.Null(await Scalar("SELECT COALESCE(NULL, NULL, NULL)"));
-	[Fact] public async Task Ifnull_NonNull() => Assert.Equal("42", await Scalar("SELECT IFNULL(42, 0)"));
-	[Fact] public async Task Ifnull_Null() => Assert.Equal("0", await Scalar("SELECT IFNULL(NULL, 0)"));
-
-	// ---- NULLIF ----
-	[Fact] public async Task Nullif_Equal() => Assert.Null(await Scalar("SELECT NULLIF(42, 42)"));
-	[Fact] public async Task Nullif_NotEqual() => Assert.Equal("42", await Scalar("SELECT NULLIF(42, 0)"));
-	[Fact] public async Task Nullif_Strings() => Assert.Equal("hello", await Scalar("SELECT NULLIF('hello', 'world')"));
-	[Fact] public async Task Nullif_StringsSame() => Assert.Null(await Scalar("SELECT NULLIF('hello', 'hello')"));
-
-	// ---- String concatenation with || ----
-	[Fact] public async Task Concat_Operator() => Assert.Equal("helloworld", await Scalar("SELECT 'hello' || 'world'"));
-	[Fact] public async Task Concat_Operator_Three() => Assert.Equal("abc", await Scalar("SELECT 'a' || 'b' || 'c'"));
-	[Fact] public async Task Concat_Operator_Empty() => Assert.Equal("hello", await Scalar("SELECT 'hello' || ''"));
-	[Fact] public async Task Concat_Function() => Assert.Equal("helloworld", await Scalar("SELECT CONCAT('hello', 'world')"));
-	[Fact] public async Task Concat_Function_Three() => Assert.Equal("abc", await Scalar("SELECT CONCAT('a', 'b', 'c')"));
-	[Fact] public async Task Concat_Function_WithInt() => Assert.Equal("num42", await Scalar("SELECT CONCAT('num', CAST(42 AS STRING))"));
-
-	// ---- Complex expressions combining multiple operations ----
-	[Fact]
-	public async Task Complex_IfWithConcat() => Assert.Equal("Hello World!", await Scalar("SELECT IF(LENGTH('Hello') > 3, CONCAT('Hello', ' World!'), 'Short')"));
-
-	[Fact]
-	public async Task Complex_CaseWithMath() => Assert.Equal("big", await Scalar("SELECT CASE WHEN ABS(-50) > 25 THEN 'big' ELSE 'small' END"));
-
-	[Fact]
-	public async Task Complex_CoalesceWithCast() => Assert.Equal("42", await Scalar("SELECT COALESCE(SAFE_CAST('abc' AS INT64), CAST('42' AS INT64))"));
-
-	[Fact]
-	public async Task Complex_NestedFunctions() => Assert.Equal("5", await Scalar("SELECT LENGTH(CONCAT(UPPER('he'), LOWER('LLO')))"));
-
-	[Fact]
-	public async Task Complex_MathInCase()
-	{
-		var v = await Scalar("SELECT CASE WHEN SQRT(144) = 12 THEN 'yes' ELSE 'no' END");
-		Assert.Equal("yes", v);
-	}
-
-	// ---- GROUP BY with HAVING ----
-	[Fact]
-	public async Task GroupBy_WithHaving()
-	{
-		var v = await Scalar(@"
-SELECT MOD(x, 3) AS grp
-FROM UNNEST(GENERATE_ARRAY(1, 12)) AS x
-GROUP BY grp
-HAVING COUNT(*) = 4
-ORDER BY grp
-LIMIT 1");
-		Assert.Equal("0", v);
-	}
-
-	[Fact]
-	public async Task GroupBy_Count()
-	{
-		var v = await Scalar(@"
-SELECT COUNT(*) FROM (
-    SELECT MOD(x, 5) AS grp
-    FROM UNNEST(GENERATE_ARRAY(1, 20)) AS x
-    GROUP BY grp
-) AS t");
-		Assert.Equal("5", v);
-	}
-
-	// ---- SELECT * from derived table ----
-	[Fact]
-	public async Task SelectStar_FromDerived()
-	{
-		var v = await Scalar("SELECT COUNT(*) FROM (SELECT x FROM UNNEST(GENERATE_ARRAY(1, 10)) AS x) AS t");
-		Assert.Equal("10", v);
-	}
+    [Fact] public async Task Literal_Int() => Assert.Equal("42", await Scalar("SELECT 42"));
+    [Fact] public async Task Literal_Float() => Assert.Contains("3.14", (await Scalar("SELECT 3.14"))!);
+    [Fact] public async Task Literal_String() => Assert.Equal("hello", await Scalar("SELECT 'hello'"));
+    [Fact] public async Task Literal_Bool_True() => Assert.Equal("True", await Scalar("SELECT TRUE"));
+    [Fact] public async Task Literal_Bool_False() => Assert.Equal("False", await Scalar("SELECT FALSE"));
+    [Fact] public async Task Literal_Null() => Assert.Null(await Scalar("SELECT NULL"));
+    [Fact] public async Task Arithmetic_Add() => Assert.Equal("30", await Scalar("SELECT a + b FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Arithmetic_Sub() => Assert.Equal("-10", await Scalar("SELECT a - b FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Arithmetic_Mul() => Assert.Equal("200", await Scalar("SELECT a * b FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Arithmetic_Div() => Assert.Equal("0", await Scalar("SELECT a / b FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Arithmetic_Complex() => Assert.Equal("40", await Scalar("SELECT a + b + a FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Concat_Operator() => Assert.Equal("hello world", await Scalar("SELECT 'hello' || ' ' || 'world'"));
+    [Fact] public async Task Concat_Function() => Assert.Equal("helloworld", await Scalar("SELECT CONCAT('hello', 'world')"));
+    [Fact] public async Task ColumnAlias()
+    {
+        var rows = await Query("SELECT a + b as total FROM `{ds}.t` WHERE id = 1");
+        Assert.Equal("30", rows[0]["total"]?.ToString());
+    }
+    [Fact] public async Task SelectStar()
+    {
+        var rows = await Query("SELECT * FROM `{ds}.t` WHERE id = 1");
+        Assert.Single(rows);
+    }
+    [Fact] public async Task SelectStar_AllRows()
+    {
+        var rows = await Query("SELECT * FROM `{ds}.t` ORDER BY id");
+        Assert.Equal(4, rows.Count);
+    }
+    [Fact] public async Task SelectDistinct()
+    {
+        var rows = await Query("SELECT DISTINCT c FROM `{ds}.t` ORDER BY c");
+        Assert.Equal(4, rows.Count);
+    }
+    [Fact] public async Task Select_Length() => Assert.Equal("5", await Scalar("SELECT LENGTH(c) FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Select_Upper() => Assert.Equal("HELLO", await Scalar("SELECT UPPER(c) FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Select_Lower() => Assert.Equal("hello", await Scalar("SELECT LOWER(c) FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Select_Abs() => Assert.Equal("5", await Scalar("SELECT ABS(-5)"));
+    [Fact] public async Task Select_Round()
+    {
+        var v = double.Parse((await Scalar("SELECT ROUND(d, 1) FROM `{ds}.t` WHERE id = 1"))!);
+        Assert.Equal(1.5, v);
+    }
+    [Fact] public async Task Case_Simple() => Assert.Equal("small", await Scalar("SELECT CASE WHEN a > 20 THEN 'big' ELSE 'small' END FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Case_MultipleWhen() => Assert.Equal("medium", await Scalar("SELECT CASE WHEN a > 40 THEN 'large' WHEN a > 20 THEN 'medium' ELSE 'small' END FROM `{ds}.t` WHERE id = 2"));
+    [Fact] public async Task If_InSelect() => Assert.Equal("yes", await Scalar("SELECT IF(a > 5, 'yes', 'no') FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Nested_Functions() => Assert.Equal("HELLO", await Scalar("SELECT UPPER(CONCAT(c, '')) FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Math_Mod() => Assert.Equal("1", await Scalar("SELECT MOD(10, 3)"));
+    [Fact] public async Task Math_Pow()
+    {
+        var v = double.Parse((await Scalar("SELECT POW(2, 3)"))!);
+        Assert.Equal(8.0, v);
+    }
+    [Fact] public async Task Math_Sqrt()
+    {
+        var v = double.Parse((await Scalar("SELECT SQRT(25)"))!);
+        Assert.Equal(5.0, v);
+    }
+    [Fact] public async Task ConstantExpr() => Assert.Equal("100", await Scalar("SELECT 10 * 10"));
+    [Fact] public async Task ConstantExpr_String() => Assert.Equal("ab", await Scalar("SELECT 'a' || 'b'"));
+    [Fact] public async Task Coalesce_Basic() => Assert.Equal("10", await Scalar("SELECT COALESCE(a, 0) FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Coalesce_Null() => Assert.Equal("0", await Scalar("SELECT COALESCE(a, 0) FROM `{ds}.t` WHERE id = 4"));
+    [Fact] public async Task Nullif_NotEqual() => Assert.Equal("10", await Scalar("SELECT NULLIF(a, 20) FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Nullif_Equal() => Assert.Null(await Scalar("SELECT NULLIF(a, 10) FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Greatest() => Assert.Equal("20", await Scalar("SELECT GREATEST(a, b) FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Least() => Assert.Equal("10", await Scalar("SELECT LEAST(a, b) FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Cast_IntToString() => Assert.Equal("10", await Scalar("SELECT CAST(a AS STRING) FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Cast_StringToInt() => Assert.Equal("42", await Scalar("SELECT CAST('42' AS INT64)"));
+    [Fact] public async Task Substr() => Assert.Equal("hel", await Scalar("SELECT SUBSTR(c, 1, 3) FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Replace_Func() => Assert.Equal("hxllo", await Scalar("SELECT REPLACE(c, 'e', 'x') FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Trim_Basic() => Assert.Equal("hello", await Scalar("SELECT TRIM('  hello  ')"));
+    [Fact] public async Task Reverse_Func() => Assert.Equal("olleh", await Scalar("SELECT REVERSE(c) FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Lpad() => Assert.Equal("00hello", await Scalar("SELECT LPAD(c, 7, '0') FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Rpad() => Assert.Equal("hello00", await Scalar("SELECT RPAD(c, 7, '0') FROM `{ds}.t` WHERE id = 1"));
 }

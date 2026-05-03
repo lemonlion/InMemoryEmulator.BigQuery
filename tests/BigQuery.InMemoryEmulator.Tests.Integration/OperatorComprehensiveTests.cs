@@ -133,7 +133,7 @@ public class OperatorComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task Like_SingleChar() => Assert.Equal("True", await Scalar("SELECT 'hello' LIKE 'hell_'"));
 	[Fact] public async Task Like_NoMatch() => Assert.Equal("False", await Scalar("SELECT 'hello' LIKE 'world'"));
 	[Fact] public async Task Like_Exact() => Assert.Equal("True", await Scalar("SELECT 'hello' LIKE 'hello'"));
-	[Fact] public async Task Like_CaseSensitive() => Assert.Equal("True", await Scalar("SELECT 'Hello' LIKE 'hello'"));
+	[Fact] public async Task Like_CaseSensitive() => Assert.Equal("False", await Scalar("SELECT 'Hello' LIKE 'hello'"));
 	[Fact] public async Task NotLike_True() => Assert.Equal("True", await Scalar("SELECT 'hello' NOT LIKE 'world'"));
 	[Fact] public async Task NotLike_False() => Assert.Equal("False", await Scalar("SELECT 'hello' NOT LIKE 'hello'"));
 

@@ -1731,7 +1731,9 @@ if (val is null || pattern is null) return null;
 // Convert SQL LIKE to regex
 var regex = "^" + System.Text.RegularExpressions.Regex.Escape(pattern)
 .Replace("%", ".*").Replace("_", ".") + "$";
-var result = System.Text.RegularExpressions.Regex.IsMatch(val, regex, RegexOptions.IgnoreCase);
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#like_operator
+// "LIKE is case-sensitive."
+var result = System.Text.RegularExpressions.Regex.IsMatch(val, regex);
 return like.IsNot ? !result : result;
 }
 
@@ -2964,8 +2966,12 @@ _ => ts.AddSeconds(-interval)
 
 private object? EvaluateTimestampDiff(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-var ts1 = ToDateTimeOffset(Evaluate(args[0], row));
-var ts2 = ToDateTimeOffset(Evaluate(args[1], row));
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#timestamp_diff
+var raw1 = Evaluate(args[0], row);
+var raw2 = Evaluate(args[1], row);
+if (raw1 is null || raw2 is null) return null;
+var ts1 = ToDateTimeOffset(raw1);
+var ts2 = ToDateTimeOffset(raw2);
 var part = Evaluate(args[2], row)?.ToString()?.ToUpperInvariant() ?? "SECOND";
 var diff = ts1 - ts2;
 return part switch
