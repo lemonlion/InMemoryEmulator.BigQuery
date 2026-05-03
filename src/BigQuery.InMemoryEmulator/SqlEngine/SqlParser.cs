@@ -69,6 +69,11 @@ internal static class SqlParser
 		// Require the b prefix to be preceded by whitespace, comma, open paren, or start of string
 		sql = Regex.Replace(sql, @"(?<=^|[\s,=(])[bB]'", "'");
 
+		// Raw string literal: r'...' or R'...' → '...' with backslashes doubled
+		// (raw strings don't process escape sequences, but the tokenizer does, so double them)
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#string_and_bytes_literals
+		sql = Regex.Replace(sql, @"(?<=^|[\s,=(])[rR]'([^']*)'", m => "'" + m.Groups[1].Value.Replace("\\", "\\\\") + "'");
+
 		// JSON 'string' → PARSE_JSON('string')
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#json_literals
 		sql = Regex.Replace(sql, @"\bJSON\s+'([^']*)'", "PARSE_JSON('$1')", RegexOptions.IgnoreCase);
@@ -1071,10 +1076,18 @@ Token.EqualTo(SqlToken.LParen)
 
     private static readonly TokenListParser<SqlToken, OrderByItem> OrderByItemParser =
         SP.Ref(() => Expression!).Then(expr =>
-            Token.EqualTo(SqlToken.Desc).Select(_ => new OrderByItem(expr, true))
+            Token.EqualTo(SqlToken.Desc).Select(_ => (expr, Descending: true))
                 .Try()
-            .Or(Token.EqualTo(SqlToken.Asc).Select(_ => new OrderByItem(expr, false)).Try())
-            .Or(Constant(new OrderByItem(expr, false)))
+            .Or(Token.EqualTo(SqlToken.Asc).Select(_ => (expr, Descending: false)).Try())
+            .Or(Constant((expr, Descending: false)))
+        ).Then(item =>
+            // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#order_by_clause
+            //   "NULLS FIRST | NULLS LAST specifies the sort position of NULL values."
+            IdentifierMatching("NULLS").IgnoreThen(
+                IdentifierMatching("FIRST").Select(_ => (bool?)true)
+                .Or(IdentifierMatching("LAST").Select(_ => (bool?)false))
+            ).OptionalOrDefault()
+            .Select(nullsFirst => new OrderByItem(item.expr, item.Descending, nullsFirst))
         );
 
 	private static readonly TokenListParser<SqlToken, IReadOnlyList<OrderByItem>> OrderByClause =

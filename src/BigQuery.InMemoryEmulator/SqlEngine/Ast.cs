@@ -49,7 +49,9 @@ internal enum SetOperationType { Union, Except, Intersect }
 internal record SelectItem(SqlExpression Expr, string? Alias);
 
 /// <summary>An ORDER BY item.</summary>
-internal record OrderByItem(SqlExpression Expr, bool Descending);
+/// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#order_by_clause
+///   "NULLS FIRST | NULLS LAST specifies the sort position of NULL values."
+internal record OrderByItem(SqlExpression Expr, bool Descending, bool? NullsFirst = null);
 
 // --- FROM clause hierarchy ---
 

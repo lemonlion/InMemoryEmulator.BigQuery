@@ -2548,7 +2548,6 @@ switch (type)
 case 'd':
 {
 long val = arg is long l ? l : Convert.ToInt64(arg, CultureInfo.InvariantCulture);
-// Extract width and flags from spec
 string csFmt = spec.Replace("%", "").TrimEnd('d');
 if (string.IsNullOrEmpty(csFmt)) return val.ToString(CultureInfo.InvariantCulture);
 bool zeroPad = csFmt.StartsWith('0');
@@ -2557,6 +2556,27 @@ string s = val.ToString(CultureInfo.InvariantCulture);
 if (zeroPad && width > 0) return s.PadLeft(width, '0');
 if (width > 0) return s.PadLeft(width);
 return s;
+}
+case 'x':
+{
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements
+//   "%x" formats as lowercase hexadecimal
+long val = arg is long l ? l : Convert.ToInt64(arg, CultureInfo.InvariantCulture);
+return val.ToString("x", CultureInfo.InvariantCulture);
+}
+case 'X':
+{
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements
+//   "%X" formats as uppercase hexadecimal
+long val = arg is long l ? l : Convert.ToInt64(arg, CultureInfo.InvariantCulture);
+return val.ToString("X", CultureInfo.InvariantCulture);
+}
+case 'o':
+{
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements
+//   "%o" formats as octal
+long val = arg is long l ? l : Convert.ToInt64(arg, CultureInfo.InvariantCulture);
+return Convert.ToString(val, 8);
 }
 case 'f':
 {
@@ -2567,18 +2587,40 @@ return val.ToString("F6", CultureInfo.InvariantCulture);
 case 'e':
 {
 double val = arg is double d ? d : Convert.ToDouble(arg, CultureInfo.InvariantCulture);
+if (precision >= 0) return val.ToString("e" + precision, CultureInfo.InvariantCulture);
+return val.ToString("e", CultureInfo.InvariantCulture);
+}
+case 'E':
+{
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements
+//   "%E" formats as scientific notation with uppercase E
+double val = arg is double d ? d : Convert.ToDouble(arg, CultureInfo.InvariantCulture);
 if (precision >= 0) return val.ToString("E" + precision, CultureInfo.InvariantCulture);
 return val.ToString("E", CultureInfo.InvariantCulture);
 }
+case 'g':
+{
+double val = arg is double d ? d : Convert.ToDouble(arg, CultureInfo.InvariantCulture);
+if (precision >= 0) return val.ToString("G" + precision, CultureInfo.InvariantCulture);
+return val.ToString("G", CultureInfo.InvariantCulture);
+}
 case 's':
-return ConvertToString(arg) ?? "NULL";
+{
+string sval = ConvertToString(arg) ?? "NULL";
+string csFmt = spec.Replace("%", "").TrimEnd('s');
+if (string.IsNullOrEmpty(csFmt)) return sval;
+bool leftAlign = csFmt.StartsWith('-');
+int width = int.TryParse(csFmt.TrimStart('-', '0'), out var w) ? w : 0;
+if (width > 0 && leftAlign) return sval.PadRight(width);
+if (width > 0) return sval.PadLeft(width);
+return sval;
+}
 case 't': case 'T':
 return ConvertToString(arg) ?? "NULL";
 default:
 return ConvertToString(arg) ?? "NULL";
 }
 }
-
 private object? EvaluateRegexpContains(IReadOnlyList<SqlExpression> args, RowContext row)
 {
 var str = Evaluate(args[0], row)?.ToString();
@@ -2603,6 +2645,9 @@ var str = Evaluate(args[0], row)?.ToString();
 var pattern = Evaluate(args[1], row)?.ToString();
 var replacement = Evaluate(args[2], row)?.ToString() ?? "";
 if (str is null || pattern is null) return null;
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#regexp_replace
+//   BigQuery uses \1, \2 for backreferences; .NET uses $1, $2.
+replacement = System.Text.RegularExpressions.Regex.Replace(replacement, @"\\(\d)", "$$$1");
 return System.Text.RegularExpressions.Regex.Replace(str, pattern, replacement);
 }
 
@@ -2845,6 +2890,7 @@ _ => throw new NotSupportedException("Unsupported EXTRACT part: " + partName)
 private object? EvaluateDateAdd(IReadOnlyList<SqlExpression> args, RowContext row)
 {
 var raw = Evaluate(args[0], row);
+if (raw is null) return null;
 var date = ToDateTime(raw);
 var interval = ToLong(Evaluate(args[1], row));
 var part = Evaluate(args[2], row)?.ToString()?.ToUpperInvariant() ?? "DAY";
@@ -2855,6 +2901,7 @@ return raw is DateOnly ? DateOnly.FromDateTime(result) : result;
 private object? EvaluateDateSub(IReadOnlyList<SqlExpression> args, RowContext row)
 {
 var raw = Evaluate(args[0], row);
+if (raw is null) return null;
 var date = ToDateTime(raw);
 var interval = ToLong(Evaluate(args[1], row));
 var part = Evaluate(args[2], row)?.ToString()?.ToUpperInvariant() ?? "DAY";
@@ -2864,8 +2911,11 @@ return raw is DateOnly ? DateOnly.FromDateTime(result) : result;
 
 private object? EvaluateDateDiff(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-var date1 = ToDateTime(Evaluate(args[0], row));
-var date2 = ToDateTime(Evaluate(args[1], row));
+var raw1 = Evaluate(args[0], row);
+var raw2 = Evaluate(args[1], row);
+if (raw1 is null || raw2 is null) return null;
+var date1 = ToDateTime(raw1);
+var date2 = ToDateTime(raw2);
 var part = Evaluate(args[2], row)?.ToString()?.ToUpperInvariant() ?? "DAY";
 return part switch
 {
@@ -2964,17 +3014,26 @@ _ => new DateTimeOffset(ts.Year, ts.Month, ts.Day, 0, 0, 0, TimeSpan.Zero)
 
 private object? EvaluateFormatTimestamp(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-var format = Evaluate(args[0], row)?.ToString() ?? "";
-var ts = ToDateTimeOffset(Evaluate(args[1], row));
+var format = Evaluate(args[0], row)?.ToString();
+if (format is null) return null;
+var tsVal = Evaluate(args[1], row);
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#format_timestamp
+//   "Returns NULL if any argument is NULL."
+if (tsVal is null) return null;
+var ts = ToDateTimeOffset(tsVal);
 return FormatTimestamp(ts, format);
 }
 
 private object? EvaluateParseTimestamp(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-var format = Evaluate(args[0], row)?.ToString() ?? "";
-var str = Evaluate(args[1], row)?.ToString() ?? "";
-return ParseTimestamp(str, format);
-}
+var formatVal = Evaluate(args[0], row);
+var strVal = Evaluate(args[1], row);
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#parse_timestamp
+//   "Returns NULL if any argument is NULL."
+if (formatVal is null || strVal is null) return null;
+var format = formatVal.ToString() ?? "";
+var str = strVal.ToString() ?? "";
+return ParseTimestamp(str, format);}
 
 private object? EvaluateFormatDate(IReadOnlyList<SqlExpression> args, RowContext row)
 {
@@ -2989,10 +3048,14 @@ return FormatTimestamp(new DateTimeOffset(date, TimeSpan.Zero), format);
 
 private object? EvaluateParseDate(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-var format = Evaluate(args[0], row)?.ToString() ?? "";
-var str = Evaluate(args[1], row)?.ToString() ?? "";
-return DateOnly.FromDateTime(ParseTimestamp(str, format).DateTime);
-}
+var formatVal = Evaluate(args[0], row);
+var strVal = Evaluate(args[1], row);
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#parse_date
+//   "Returns NULL if any argument is NULL."
+if (formatVal is null || strVal is null) return null;
+var format = formatVal.ToString() ?? "";
+var str = strVal.ToString() ?? "";
+return DateOnly.FromDateTime(ParseTimestamp(str, format).DateTime);}
 
 private object? EvaluateUnixSeconds(IReadOnlyList<SqlExpression> args, RowContext row)
 {
@@ -3142,8 +3205,13 @@ private object? EvaluateDatetimeTrunc(IReadOnlyList<SqlExpression> args, RowCont
 //   "Formats a DATETIME value according to a specified format string."
 private object? EvaluateFormatDatetime(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-	var format = Evaluate(args[0], row)?.ToString() ?? "";
-	var dt = ToDateTime(Evaluate(args[1], row));
+	var format = Evaluate(args[0], row)?.ToString();
+	if (format is null) return null;
+	var dtVal = Evaluate(args[1], row);
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/datetime_functions#format_datetime
+	//   "Returns NULL if any argument is NULL."
+	if (dtVal is null) return null;
+	var dt = ToDateTime(dtVal);
 	return FormatTimestamp(new DateTimeOffset(dt, TimeSpan.Zero), format);
 }
 
@@ -3151,8 +3219,13 @@ private object? EvaluateFormatDatetime(IReadOnlyList<SqlExpression> args, RowCon
 //   "Converts a STRING value to a DATETIME value."
 private object? EvaluateParseDatetime(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-	var format = Evaluate(args[0], row)?.ToString() ?? "";
-	var str = Evaluate(args[1], row)?.ToString() ?? "";
+	var formatVal = Evaluate(args[0], row);
+	var strVal = Evaluate(args[1], row);
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/datetime_functions#parse_datetime
+	//   Returns NULL if any argument is NULL.
+	if (formatVal is null || strVal is null) return null;
+	var format = formatVal.ToString() ?? "";
+	var str = strVal.ToString() ?? "";
 	return ParseTimestamp(str, format).DateTime;
 }
 
@@ -3276,9 +3349,13 @@ private object? EvaluateTimeTrunc(IReadOnlyList<SqlExpression> args, RowContext 
 //   "Formats a TIME value according to the specified format string."
 private object? EvaluateFormatTime(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-	var format = Evaluate(args[0], row)?.ToString() ?? "";
-	var time = ToTimeSpan(Evaluate(args[1], row));
-	// Reuse FormatTimestamp with a fake date
+	var format = Evaluate(args[0], row)?.ToString();
+	if (format is null) return null;
+	var timeVal = Evaluate(args[1], row);
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/time_functions#format_time
+	//   "Returns NULL if any argument is NULL."
+	if (timeVal is null) return null;
+	var time = ToTimeSpan(timeVal);
 	var dto = new DateTimeOffset(2000, 1, 1, time.Hours, time.Minutes, time.Seconds, TimeSpan.Zero);
 	return FormatTimestamp(dto, format);
 }
@@ -3287,11 +3364,16 @@ private object? EvaluateFormatTime(IReadOnlyList<SqlExpression> args, RowContext
 //   "Converts a STRING value to a TIME value."
 private object? EvaluateParseTime(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-	var format = Evaluate(args[0], row)?.ToString() ?? "";
-	var str = Evaluate(args[1], row)?.ToString() ?? "";
+	var formatVal = Evaluate(args[0], row);
+	var strVal = Evaluate(args[1], row);
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/time_functions#parse_time
+	//   Returns NULL if any argument is NULL.
+	if (formatVal is null || strVal is null) return null;
+	var format = formatVal.ToString() ?? "";
+	var str = strVal.ToString() ?? "";
 	var netFormat = format
 		.Replace("%H", "HH").Replace("%M", "mm").Replace("%S", "ss")
-		.Replace("%T", "HH:mm:ss");
+		.Replace("%T", "HH:mm:ss").Replace("%I", "hh").Replace("%p", "tt");
 	if (DateTime.TryParseExact(str, netFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
 		return dt.TimeOfDay;
 	if (TimeSpan.TryParse(str, CultureInfo.InvariantCulture, out var ts))
@@ -3347,7 +3429,7 @@ var netFormat = format
 .Replace("%Y", "yyyy").Replace("%m", "MM").Replace("%d", "dd")
 .Replace("%H", "HH").Replace("%M", "mm").Replace("%S", "ss")
 .Replace("%F", "yyyy-MM-dd").Replace("%T", "HH:mm:ss")
-.Replace("%Z", "zzz").Replace("%E4Y", "yyyy")
+.Replace("%E4Y", "yyyy").Replace("%Z", "zzz").Replace("%I", "hh").Replace("%p", "tt").Replace("%y", "yy")
 .Replace("%b", "MMM").Replace("%B", "MMMM")
 .Replace("%j", "DDD").Replace("%A", "dddd").Replace("%a", "ddd");
 return ts.ToString(netFormat, CultureInfo.InvariantCulture);
@@ -3359,7 +3441,7 @@ var netFormat = format
 .Replace("%Y", "yyyy").Replace("%m", "MM").Replace("%d", "dd")
 .Replace("%H", "HH").Replace("%M", "mm").Replace("%S", "ss")
 .Replace("%F", "yyyy-MM-dd").Replace("%T", "HH:mm:ss")
-.Replace("%Z", "zzz").Replace("%E4Y", "yyyy")
+.Replace("%E4Y", "yyyy").Replace("%Z", "zzz").Replace("%I", "hh").Replace("%p", "tt").Replace("%y", "yy")
 .Replace("%b", "MMM").Replace("%B", "MMMM");
 if (DateTimeOffset.TryParseExact(str, netFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var result))
 return result;
@@ -6664,18 +6746,27 @@ IOrderedEnumerable<RowContext>? ordered = null;
 for (int i = 0; i < orderBy.Count; i++)
 {
 var item = orderBy[i];
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#order_by_clause
+//   Default: ASC -> NULLS FIRST, DESC -> NULLS LAST.
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#order_by_clause
+//   Default: ASC -> NULLS FIRST, DESC -> NULLS LAST.
+bool nullsFirst = item.NullsFirst ?? !item.Descending;
+// For LINQ OrderBy/OrderByDescending: null must compare as 'small' to go first in ASC,
+// or 'large' to go first in DESC. XOR gives the correct polarity.
+bool nullIsSmall = nullsFirst != item.Descending;
+var comparer = new NullSafeComparer(nullIsSmall);
 var idx = i;
 if (idx == 0)
 {
 ordered = item.Descending
-? rows.OrderByDescending(r => Evaluate(item.Expr, r), NullSafeComparer.Instance)
-: rows.OrderBy(r => Evaluate(item.Expr, r), NullSafeComparer.Instance);
+? rows.OrderByDescending(r => Evaluate(item.Expr, r), comparer)
+: rows.OrderBy(r => Evaluate(item.Expr, r), comparer);
 }
 else
 {
 ordered = item.Descending
-? ordered!.ThenByDescending(r => Evaluate(item.Expr, r), NullSafeComparer.Instance)
-: ordered!.ThenBy(r => Evaluate(item.Expr, r), NullSafeComparer.Instance);
+? ordered!.ThenByDescending(r => Evaluate(item.Expr, r), comparer)
+: ordered!.ThenBy(r => Evaluate(item.Expr, r), comparer);
 }
 }
 return ordered?.ToList() ?? rows;
@@ -6868,6 +6959,18 @@ if (a is DateTime dta2 && b is DateOnly dob2) return dta2.CompareTo(dob2.ToDateT
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#comparison_operators
 //   "Comparison operators work across numeric types."
 if ((a is long || a is double) && (b is long || b is double)) return ToDouble(a).CompareTo(ToDouble(b));
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
+//   Struct comparison is field-by-field in declaration order.
+if (a is IDictionary<string, object?> da3 && b is IDictionary<string, object?> db3)
+{
+foreach (var key in da3.Keys)
+{
+if (!db3.ContainsKey(key)) return 1;
+var cmp = CompareRaw(da3[key], db3[key]);
+if (cmp != 0) return cmp;
+}
+return da3.Count.CompareTo(db3.Count);
+}
 if (a is IComparable ca) return ca.CompareTo(b);
 return string.Compare(a.ToString(), b.ToString(), StringComparison.OrdinalIgnoreCase);
 }
@@ -7479,15 +7582,28 @@ Alias = alias;
 
 internal class NullSafeComparer : IComparer<object?>
 {
-public static readonly NullSafeComparer Instance = new();
+public static readonly NullSafeComparer Instance = new(nullIsSmall: true);
+private readonly bool _nullIsSmall;
+public NullSafeComparer(bool nullIsSmall = true) { _nullIsSmall = nullIsSmall; }
 public int Compare(object? x, object? y)
 {
 if (x is null && y is null) return 0;
-if (x is null) return -1;
-if (y is null) return 1;
+if (x is null) return _nullIsSmall ? -1 : 1;
+if (y is null) return _nullIsSmall ? 1 : -1;
 if (x is long la && y is double db) return ((double)la).CompareTo(db);
 if (x is double da && y is long lb) return da.CompareTo((double)lb);
+if (x is IDictionary<string, object?> dx && y is IDictionary<string, object?> dy) return CompareStructs(dx, dy);
 if (x is IComparable cx) return cx.CompareTo(y);
 return string.Compare(x.ToString(), y.ToString(), StringComparison.Ordinal);
+}
+private static int CompareStructs(IDictionary<string, object?> a, IDictionary<string, object?> b)
+{
+foreach (var key in a.Keys.OrderBy(k => k))
+{
+if (!b.ContainsKey(key)) return 1;
+var cmp = Instance.Compare(a[key], b[key]);
+if (cmp != 0) return cmp;
+}
+return a.Count.CompareTo(b.Count);
 }
 }
