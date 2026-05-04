@@ -2189,7 +2189,8 @@ return name switch
 "STARTS_WITH" => Evaluate(args[0], row)?.ToString()?.StartsWith(Evaluate(args[1], row)?.ToString() ?? "", StringComparison.Ordinal),
 "ENDS_WITH" => Evaluate(args[0], row)?.ToString()?.EndsWith(Evaluate(args[1], row)?.ToString() ?? "", StringComparison.Ordinal),
 "CONTAINS_SUBSTR" => Evaluate(args[0], row)?.ToString()?.Contains(Evaluate(args[1], row)?.ToString() ?? "", StringComparison.OrdinalIgnoreCase),
-"STRPOS" or "INSTR" => EvaluateStrPos(args, row),
+"STRPOS" => EvaluateStrPos(args, row),
+"INSTR" => EvaluateInstr(args, row),
 "LPAD" => EvaluateLpad(args, row),
 "RPAD" => EvaluateRpad(args, row),
 "LEFT" => EvaluateLeftRight(args, row, true),
@@ -2606,7 +2607,10 @@ private object? EvaluateSubstr(IReadOnlyList<SqlExpression> args, RowContext row
 var str = Evaluate(args[0], row)?.ToString();
 if (str is null) return null;
 var pos = (int)ToLong(Evaluate(args[1], row));
-// BigQuery SUBSTR is 1-based
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#substr
+//   "If position is 0, it is treated as 1."
+//   "If position is negative, the function counts from the end of value, where -1 indicates the last character."
+if (pos == 0) pos = 1;
 var startIdx = pos > 0 ? pos - 1 : Math.Max(0, str.Length + pos);
 if (startIdx >= str.Length) return "";
 if (args.Count > 2)
@@ -2623,6 +2627,29 @@ var str = Evaluate(args[0], row)?.ToString();
 var sub = Evaluate(args[1], row)?.ToString();
 if (str is null || sub is null) return null;
 return (long)(str.IndexOf(sub, StringComparison.Ordinal) + 1);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#instr
+//   "INSTR(source_value, search_value[, position[, occurrence]])"
+//   Returns the 1-based position of the specified occurrence starting from position.
+private object? EvaluateInstr(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var str = Evaluate(args[0], row)?.ToString();
+    var sub = Evaluate(args[1], row)?.ToString();
+    if (str is null || sub is null) return null;
+    int position = args.Count > 2 ? (int)ToLong(Evaluate(args[2], row)) : 1;
+    int occurrence = args.Count > 3 ? (int)ToLong(Evaluate(args[3], row)) : 1;
+    if (position <= 0) position = 1;
+    int startIdx = position - 1;
+    for (int i = 0; i < occurrence; i++)
+    {
+        if (startIdx > str.Length) return 0L;
+        int found = str.IndexOf(sub, startIdx, StringComparison.Ordinal);
+        if (found < 0) return 0L;
+        if (i == occurrence - 1) return (long)(found + 1);
+        startIdx = found + 1;
+    }
+    return 0L;
 }
 
 private object? EvaluateLpad(IReadOnlyList<SqlExpression> args, RowContext row)
@@ -3741,9 +3768,9 @@ var nullText = args.Count > 2 ? Evaluate(args[2], row)?.ToString() : null;
 if (val is IEnumerable<object?> en)
 {
 	if (nullText is not null)
-		return string.Join(delimiter, en.Select(v => v?.ToString() ?? nullText));
+		return string.Join(delimiter, en.Select(v => ConvertToString(v) ?? nullText));
 	else
-		return string.Join(delimiter, en.Where(v => v is not null).Select(v => v!.ToString()));
+		return string.Join(delimiter, en.Where(v => v is not null).Select(v => ConvertToString(v) ?? ""));
 }
 return null;
 }
@@ -7495,12 +7522,35 @@ bool b => b ? "true" : "false",
             //   BigQuery FLOAT64 whole numbers format with ".0" suffix (e.g., ROUND(2.5) → "3.0")
             double d when d == Math.Floor(d) && d >= long.MinValue && d <= long.MaxValue => $"{(long)d}.0",
             double d => d.ToString(CultureInfo.InvariantCulture),
-DateTimeOffset dto => dto.ToString("yyyy-MM-dd HH:mm:ss.ffffff zzz", CultureInfo.InvariantCulture),
+DateTimeOffset dto => FormatTimestampAsString(dto),
 DateOnly d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
 DateTime dt => dt.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture),
 TimeSpan ts => ts.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture),
 _ => val.ToString()
 };
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_string
+//   CAST(TIMESTAMP AS STRING) format: "yyyy-MM-dd HH:mm:ss[.SSSSSS]+HH[:MM]"
+//   Fractional seconds are omitted if zero; trailing zeros in fractional part are trimmed.
+//   Timezone offset uses short form "+HH" when minutes are zero.
+private static string FormatTimestampAsString(DateTimeOffset dto)
+{
+    var sb = new System.Text.StringBuilder();
+    sb.Append(dto.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+    long ticks = dto.TimeOfDay.Ticks % TimeSpan.TicksPerSecond;
+    if (ticks > 0)
+    {
+        var microseconds = ticks / (TimeSpan.TicksPerMillisecond / 1000);
+        var frac = microseconds.ToString("D6").TrimEnd('0');
+        sb.Append('.').Append(frac);
+    }
+    var offset = dto.Offset;
+    sb.Append(offset < TimeSpan.Zero ? '-' : '+');
+    sb.Append(Math.Abs(offset.Hours).ToString("D2"));
+    if (offset.Minutes != 0)
+        sb.Append(':').Append(Math.Abs(offset.Minutes).ToString("D2"));
+    return sb.ToString();
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•

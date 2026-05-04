@@ -70,7 +70,9 @@ public class StringFunctionBoundaryTests : IAsyncLifetime
 	[Fact] public async Task Substr_FullString() => Assert.Equal("Hello", await Scalar("SELECT SUBSTR('Hello', 1)"));
 	[Fact] public async Task Substr_LastChar() => Assert.Equal("o", await Scalar("SELECT SUBSTR('Hello', 5)"));
 	[Fact] public async Task Substr_LengthBeyond() => Assert.Equal("llo", await Scalar("SELECT SUBSTR('Hello', 3, 100)"));
-	[Fact] public async Task Substr_ZeroStart() => Assert.Equal("", await Scalar("SELECT SUBSTR('Hello', 0)"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#substr
+	//   "If position is 0, it is treated as 1."
+	[Fact] public async Task Substr_ZeroStart() => Assert.Equal("Hello", await Scalar("SELECT SUBSTR('Hello', 0)"));
 	[Fact] public async Task Substr_NegOne() => Assert.Equal("o", await Scalar("SELECT SUBSTR('Hello', -1)"));
 	[Fact] public async Task Substr_NegThree() => Assert.Equal("llo", await Scalar("SELECT SUBSTR('Hello', -3)"));
 	[Fact] public async Task Substr_SingleChar() => Assert.Equal("H", await Scalar("SELECT SUBSTR('Hello', 1, 1)"));
