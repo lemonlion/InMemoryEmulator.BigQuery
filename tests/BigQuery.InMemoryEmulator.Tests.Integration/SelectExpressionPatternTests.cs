@@ -49,7 +49,7 @@ public class SelectExpressionPatternTests : IAsyncLifetime
 	[Fact] public async Task Arith_Add() => Assert.Equal("5", await S("SELECT 2 + 3"));
 	[Fact] public async Task Arith_Sub() => Assert.Equal("7", await S("SELECT 10 - 3"));
 	[Fact] public async Task Arith_Mul() => Assert.Equal("24", await S("SELECT 6 * 4"));
-	[Fact] public async Task Arith_IntDiv() => Assert.Equal("3", await S("SELECT 7 / 2")); // integer div
+	[Fact] public async Task Arith_IntDiv() => Assert.Equal("3", await S("SELECT DIV(7, 2)")); // BigQuery integer division uses DIV()
 	[Fact] public async Task Arith_FloatDiv() => Assert.Equal("3.5", await S("SELECT 7.0 / 2"));
 	[Fact] public async Task Arith_Mod() => Assert.Equal("1", await S("SELECT MOD(7, 2)"));
 	[Fact] public async Task Arith_Parens() => Assert.Equal("14", await S("SELECT (2 + 5) * 2"));

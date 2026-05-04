@@ -40,7 +40,7 @@ public class TypeCoercionPatternTests : IAsyncLifetime
 
 	// INT64 casts
 	[Fact] public async Task Cast_StringToInt() => Assert.Equal("42", await Scalar("SELECT CAST('42' AS INT64)"));
-	[Fact] public async Task Cast_FloatToInt() => Assert.Equal("3", await Scalar("SELECT CAST(3.7 AS INT64)"));
+	[Fact] public async Task Cast_FloatToInt() => Assert.Equal("4", await Scalar("SELECT CAST(3.7 AS INT64)"));
 	[Fact] public async Task Cast_BoolToInt_True() => Assert.Equal("1", await Scalar("SELECT CAST(TRUE AS INT64)"));
 	[Fact] public async Task Cast_BoolToInt_False() => Assert.Equal("0", await Scalar("SELECT CAST(FALSE AS INT64)"));
 	[Fact] public async Task Cast_NullToInt() => Assert.Null(await Scalar("SELECT CAST(NULL AS INT64)"));

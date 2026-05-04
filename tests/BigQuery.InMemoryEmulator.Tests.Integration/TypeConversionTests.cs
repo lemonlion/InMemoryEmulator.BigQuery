@@ -37,10 +37,10 @@ public class TypeConversionTests : IAsyncLifetime
 	[Fact] public async Task Cast_ZeroStr_To_Int() => Assert.Equal("0", await Scalar("SELECT CAST('0' AS INT64)"));
 
 	// ---- CAST FLOAT64 to INT64 ----
-	[Fact] public async Task Cast_Float_To_Int() => Assert.Equal("3", await Scalar("SELECT CAST(3.7 AS INT64)"));
+	[Fact] public async Task Cast_Float_To_Int() => Assert.Equal("4", await Scalar("SELECT CAST(3.7 AS INT64)"));
 	[Fact] public async Task Cast_FloatDown_To_Int() => Assert.Equal("3", await Scalar("SELECT CAST(3.2 AS INT64)"));
 	[Fact] public async Task Cast_NegFloat_To_Int() => Assert.Equal("-3", await Scalar("SELECT CAST(-3.2 AS INT64)"));
-	[Fact] public async Task Cast_FloatZero_To_Int() => Assert.Equal("0", await Scalar("SELECT CAST(0.5 AS INT64)"));
+	[Fact] public async Task Cast_FloatZero_To_Int() => Assert.Equal("1", await Scalar("SELECT CAST(0.5 AS INT64)"));
 
 	// ---- CAST INT64 to FLOAT64 ----
 	[Fact] public async Task Cast_Int_To_Float() => Assert.Equal("42", await Scalar("SELECT CAST(42 AS FLOAT64)"));
@@ -93,8 +93,8 @@ public class TypeConversionTests : IAsyncLifetime
 
 	// ---- Chained CAST ----
 	[Fact] public async Task Cast_IntToStrToInt() => Assert.Equal("42", await Scalar("SELECT CAST(CAST(42 AS STRING) AS INT64)"));
-	[Fact] public async Task Cast_FloatToIntToStr() => Assert.Equal("3", await Scalar("SELECT CAST(CAST(3.7 AS INT64) AS STRING)"));
-	[Fact] public async Task Cast_StrToFloatToInt() => Assert.Equal("3", await Scalar("SELECT CAST(CAST('3.7' AS FLOAT64) AS INT64)"));
+	[Fact] public async Task Cast_FloatToIntToStr() => Assert.Equal("4", await Scalar("SELECT CAST(CAST(3.7 AS INT64) AS STRING)"));
+	[Fact] public async Task Cast_StrToFloatToInt() => Assert.Equal("4", await Scalar("SELECT CAST(CAST('3.7' AS FLOAT64) AS INT64)"));
 
 	// ---- CAST in WHERE ----
 	[Fact]

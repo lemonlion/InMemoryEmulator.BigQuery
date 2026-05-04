@@ -110,6 +110,20 @@ public class QueryExecutorTests
 	}
 
 	[Fact]
+	public void CeilResult_FormatsAsFloat()
+	{
+		var store = new InMemoryDataStore("test-project");
+		var executor = new QueryExecutor(store);
+		var (schema, rows) = executor.Execute("SELECT CEIL(2.3)");
+
+		Assert.Single(rows);
+		// FormatValue converts whole floats to integer strings for SDK compatibility
+		Assert.Equal("3", rows[0].F[0].V);
+		// But the schema correctly reports FLOAT type
+		Assert.Equal("FLOAT", schema.Fields[0].Type);
+	}
+
+	[Fact]
 	public void WhereStringComparison_Works()
 	{
 		var (store, _) = CreateTestData();

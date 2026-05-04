@@ -49,7 +49,7 @@ public class SafeFunctionTests : IAsyncLifetime
 	[Fact] public async Task SafeCast_InvalidDate() => Assert.Null(await Scalar("SELECT SAFE_CAST('not-a-date' AS DATE)"));
 	[Fact] public async Task SafeCast_NullInput() => Assert.Null(await Scalar("SELECT SAFE_CAST(NULL AS INT64)"));
 	[Fact] public async Task SafeCast_IntToString() => Assert.Equal("100", await Scalar("SELECT SAFE_CAST(100 AS STRING)"));
-	[Fact] public async Task SafeCast_FloatToInt() => Assert.Equal("3", await Scalar("SELECT SAFE_CAST(3.7 AS INT64)"));
+	[Fact] public async Task SafeCast_FloatToInt() => Assert.Equal("4", await Scalar("SELECT SAFE_CAST(3.7 AS INT64)"));
 	[Fact] public async Task SafeCast_StringToBytes() => Assert.NotNull(await Scalar("SELECT SAFE_CAST('hello' AS BYTES)"));
 
 	// SAFE_DIVIDE

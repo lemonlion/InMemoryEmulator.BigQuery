@@ -34,7 +34,7 @@ public class CastAndConversionTests : IAsyncLifetime
 	// ---- INT64 casts ----
 	[Fact] public async Task Cast_StringToInt() => Assert.Equal("42", await Scalar("SELECT CAST('42' AS INT64)"));
 	[Fact] public async Task Cast_NegStringToInt() => Assert.Equal("-42", await Scalar("SELECT CAST('-42' AS INT64)"));
-	[Fact] public async Task Cast_FloatToInt() => Assert.Equal("3", await Scalar("SELECT CAST(3.9 AS INT64)"));
+	[Fact] public async Task Cast_FloatToInt() => Assert.Equal("4", await Scalar("SELECT CAST(3.9 AS INT64)"));
 	[Fact] public async Task Cast_BoolTrueToInt() => Assert.Equal("1", await Scalar("SELECT CAST(TRUE AS INT64)"));
 	[Fact] public async Task Cast_BoolFalseToInt() => Assert.Equal("0", await Scalar("SELECT CAST(FALSE AS INT64)"));
 	[Fact] public async Task Cast_IntToInt() => Assert.Equal("42", await Scalar("SELECT CAST(42 AS INT64)"));

@@ -1,4 +1,4 @@
-#pragma warning disable CS8600, CS8602, CS8604
+﻿#pragma warning disable CS8600, CS8602, CS8604
 
 using System.Globalization;
 using System.Text.RegularExpressions;
@@ -1739,8 +1739,11 @@ BinaryOp.Sub => left is DateOnly dSubLeft && right is long rSubDays ? dSubLeft.A
     : left is DateOnly dSubL && right is DateOnly dSubR ? (object)(long)(dSubL.ToDateTime(TimeOnly.MinValue) - dSubR.ToDateTime(TimeOnly.MinValue)).Days
     : ArithmeticOp(left, right, (a, b) => a - b, (a, b) => a - b),
 BinaryOp.Mul => ArithmeticOp(left, right, (a, b) => a * b, (a, b) => a * b),
-BinaryOp.Div => ArithmeticOp(left, right, (a, b) => b == 0 ? throw new DivideByZeroException() : a / b,
-(a, b) => b == 0.0 ? throw new DivideByZeroException() : a / b),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#division
+//   "Division always returns a FLOAT64, even for integer operands."
+BinaryOp.Div => left is null || right is null ? null
+    : ToDouble(right) == 0.0 ? throw new DivideByZeroException()
+    : (object)(ToDouble(left) / ToDouble(right)),
 BinaryOp.Mod => ArithmeticOp(left, right, (a, b) => a % b, (a, b) => a % b),
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#concatenation_operator
 //   "If one of the operands is NULL, the result is NULL."
@@ -1944,7 +1947,9 @@ return targetType.ToUpperInvariant() switch
 "INT64" or "INTEGER" or "INT" => val switch
 {
 long l => l,
-double d => (long)d,
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_int64
+//   "Halfway cases such as 1.5 or -0.5 round away from zero."
+double d => (long)Math.Round(d, MidpointRounding.AwayFromZero),
 bool b => b ? 1L : 0L,
 string s => long.Parse(s, CultureInfo.InvariantCulture),
 _ => Convert.ToInt64(val, CultureInfo.InvariantCulture)
@@ -2041,7 +2046,10 @@ var operand = Evaluate(caseExpr.Operand, row);
 foreach (var (when, then) in caseExpr.Branches)
 {
 var whenVal = Evaluate(when, row);
-if (Equals(operand, whenVal)) return Evaluate(then, row);
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conditional_expressions#case_expr
+//   Simple CASE uses equality comparison; NULL = NULL is NULL (not TRUE) in SQL.
+if (operand is not null && whenVal is not null && Equals(operand, whenVal))
+	return Evaluate(then, row);
 }
 }
 else
@@ -2673,6 +2681,10 @@ private object? EvaluateSplit(IReadOnlyList<SqlExpression> args, RowContext row)
 var str = Evaluate(args[0], row)?.ToString();
 if (str is null) return null;
 var delimiter = args.Count > 1 ? Evaluate(args[1], row)?.ToString() ?? "," : ",";
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#split
+//   "If delimiter is an empty string, each character in value becomes a separate element."
+if (delimiter.Length == 0)
+return str.Select(c => (object?)c.ToString()).ToList();
 return str.Split(delimiter).Cast<object?>().ToList();
 }
 
@@ -6418,9 +6430,19 @@ if (insert.Columns is not null && insert.Columns.Count > 0)
 }
 else
 {
-	// No explicit columns â€” map by schema field names
-	foreach (var f in result.Schema.Fields)
-		fields[f.Name] = dict.GetValueOrDefault(f.Name);
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#insert_statement
+	// No explicit columns - map positionally using target table schema
+	var targetFields = table.Schema?.Fields;
+	if (targetFields != null && targetFields.Count >= result.Schema.Fields.Count)
+	{
+		for (int i = 0; i < result.Schema.Fields.Count; i++)
+			fields[targetFields[i].Name] = dict.GetValueOrDefault(result.Schema.Fields[i].Name);
+	}
+	else
+	{
+		foreach (var f in result.Schema.Fields)
+			fields[f.Name] = dict.GetValueOrDefault(f.Name);
+	}
 }
 table.Rows.Add(new InMemoryRow(fields));
 count++;
@@ -7469,6 +7491,10 @@ bool b => b ? "true" : "false",
             double d when double.IsPositiveInfinity(d) => "inf",
             double d when double.IsNegativeInfinity(d) => "-inf",
             double d when double.IsNaN(d) => "NaN",
+            // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions
+            //   BigQuery FLOAT64 whole numbers format with ".0" suffix (e.g., ROUND(2.5) → "3.0")
+            double d when d == Math.Floor(d) && d >= long.MinValue && d <= long.MaxValue => $"{(long)d}.0",
+            double d => d.ToString(CultureInfo.InvariantCulture),
 DateTimeOffset dto => dto.ToString("yyyy-MM-dd HH:mm:ss.ffffff zzz", CultureInfo.InvariantCulture),
 DateOnly d => d.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
 DateTime dt => dt.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture),

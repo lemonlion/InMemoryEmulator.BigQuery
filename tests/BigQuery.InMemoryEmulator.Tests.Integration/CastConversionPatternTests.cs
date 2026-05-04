@@ -34,10 +34,10 @@ public class CastConversionPatternTests : IAsyncLifetime
 
 	// ---- CAST to INT64 ----
 	[Fact] public async Task Cast_StringToInt() => Assert.Equal("42", await S("SELECT CAST('42' AS INT64)"));
-	[Fact] public async Task Cast_FloatToInt() => Assert.Equal("3", await S("SELECT CAST(3.7 AS INT64)"));
+	[Fact] public async Task Cast_FloatToInt() => Assert.Equal("4", await S("SELECT CAST(3.7 AS INT64)"));
 	[Fact] public async Task Cast_BoolToInt_True() => Assert.Equal("1", await S("SELECT CAST(true AS INT64)"));
 	[Fact] public async Task Cast_BoolToInt_False() => Assert.Equal("0", await S("SELECT CAST(false AS INT64)"));
-	[Fact] public async Task Cast_NegFloatToInt() => Assert.Equal("-3", await S("SELECT CAST(-3.7 AS INT64)"));
+	[Fact] public async Task Cast_NegFloatToInt() => Assert.Equal("-4", await S("SELECT CAST(-3.7 AS INT64)"));
 
 	// ---- CAST to FLOAT64 ----
 	[Fact] public async Task Cast_StringToFloat()

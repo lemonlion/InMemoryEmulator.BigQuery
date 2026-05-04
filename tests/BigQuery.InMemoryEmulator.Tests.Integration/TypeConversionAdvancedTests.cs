@@ -40,7 +40,7 @@ public class TypeConversionAdvancedTests : IAsyncLifetime
 
 	// ---- CAST INT64 ----
 	[Fact] public async Task Cast_StringToInt64() => Assert.Equal("42", await S("SELECT CAST('42' AS INT64)"));
-	[Fact] public async Task Cast_FloatToInt64() => Assert.Equal("3", await S("SELECT CAST(3.7 AS INT64)"));
+	[Fact] public async Task Cast_FloatToInt64() => Assert.Equal("4", await S("SELECT CAST(3.7 AS INT64)"));
 	[Fact] public async Task Cast_BoolToInt64_True() => Assert.Equal("1", await S("SELECT CAST(TRUE AS INT64)"));
 	[Fact] public async Task Cast_BoolToInt64_False() => Assert.Equal("0", await S("SELECT CAST(FALSE AS INT64)"));
 

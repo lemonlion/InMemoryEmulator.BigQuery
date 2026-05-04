@@ -158,12 +158,14 @@ public class CaseExpressionAdvancedTests : IAsyncLifetime
 	}
 
 	// CASE with functions
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_string
+	//   CAST(FLOAT64 AS STRING) preserves decimal notation: 300.0 → "300.0"
 	[Fact] public async Task Case_WithConcat()
 	{
 		var result = await Scalar(@"
 			SELECT CASE WHEN amount > 200 THEN CONCAT('HIGH:', CAST(amount AS STRING)) ELSE 'low' END
 			FROM `{ds}.orders` WHERE id = 4");
-		Assert.Equal("HIGH:300", result);
+		Assert.Equal("HIGH:300.0", result);
 	}
 
 	// CASE with comparison operators

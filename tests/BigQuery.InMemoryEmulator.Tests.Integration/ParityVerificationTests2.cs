@@ -130,19 +130,21 @@ public class ParityVerificationTests2 : IAsyncLifetime
 
 	// ===== Integer division =====
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#division_operator
-	// "Division with INT64 operands truncates toward zero."
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#div
+	// "DIV(X, Y) - Returns the result of integer division of X by Y."
+	// Note: The / operator always returns FLOAT64 in BigQuery.
 
 	[Fact]
 	public async Task IntegerDivision_Truncates()
 	{
-		var result = await S("SELECT 7 / 2");
+		var result = await S("SELECT DIV(7, 2)");
 		Assert.Equal("3", result);
 	}
 
 	[Fact]
 	public async Task IntegerDivision_Negative_TruncatesTowardZero()
 	{
-		var result = await S("SELECT -7 / 2");
+		var result = await S("SELECT DIV(-7, 2)");
 		Assert.Equal("-3", result);
 	}
 

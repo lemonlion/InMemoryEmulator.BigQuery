@@ -51,7 +51,7 @@ public class SelectExpressionTests : IAsyncLifetime
     [Fact] public async Task Arithmetic_Add() => Assert.Equal("30", await Scalar("SELECT a + b FROM `{ds}.t` WHERE id = 1"));
     [Fact] public async Task Arithmetic_Sub() => Assert.Equal("-10", await Scalar("SELECT a - b FROM `{ds}.t` WHERE id = 1"));
     [Fact] public async Task Arithmetic_Mul() => Assert.Equal("200", await Scalar("SELECT a * b FROM `{ds}.t` WHERE id = 1"));
-    [Fact] public async Task Arithmetic_Div() => Assert.Equal("0", await Scalar("SELECT a / b FROM `{ds}.t` WHERE id = 1"));
+    [Fact] public async Task Arithmetic_Div() => Assert.Equal("0.5", await Scalar("SELECT a / b FROM `{ds}.t` WHERE id = 1"));  // BigQuery / returns FLOAT64
     [Fact] public async Task Arithmetic_Complex() => Assert.Equal("40", await Scalar("SELECT a + b + a FROM `{ds}.t` WHERE id = 1"));
     [Fact] public async Task Concat_Operator() => Assert.Equal("hello world", await Scalar("SELECT 'hello' || ' ' || 'world'"));
     [Fact] public async Task Concat_Function() => Assert.Equal("helloworld", await Scalar("SELECT CONCAT('hello', 'world')"));

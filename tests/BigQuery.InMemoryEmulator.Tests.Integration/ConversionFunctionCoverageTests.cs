@@ -34,7 +34,7 @@ public class ConversionFunctionCoverageTests : IAsyncLifetime
 
 	// ---- CAST to INT64 ----
 	[Fact] public async Task Cast_StringToInt() => Assert.Equal("42", await S("SELECT CAST('42' AS INT64)"));
-	[Fact] public async Task Cast_FloatToInt() => Assert.Equal("3", await S("SELECT CAST(3.7 AS INT64)"));
+	[Fact] public async Task Cast_FloatToInt() => Assert.Equal("4", await S("SELECT CAST(3.7 AS INT64)"));
 	[Fact] public async Task Cast_BoolToInt_True() => Assert.Equal("1", await S("SELECT CAST(true AS INT64)"));
 	[Fact] public async Task Cast_BoolToInt_False() => Assert.Equal("0", await S("SELECT CAST(false AS INT64)"));
 	[Fact] public async Task Cast_NullToInt() => Assert.Null(await S("SELECT CAST(NULL AS INT64)"));
@@ -88,5 +88,5 @@ public class ConversionFunctionCoverageTests : IAsyncLifetime
 
 	// ---- Multiple CAST chain ----
 	[Fact] public async Task CastChain_IntToStringToInt() => Assert.Equal("42", await S("SELECT CAST(CAST(42 AS STRING) AS INT64)"));
-	[Fact] public async Task CastChain_FloatToIntToString() => Assert.Equal("3", await S("SELECT CAST(CAST(3.7 AS INT64) AS STRING)"));
+	[Fact] public async Task CastChain_FloatToIntToString() => Assert.Equal("4", await S("SELECT CAST(CAST(3.7 AS INT64) AS STRING)"));
 }

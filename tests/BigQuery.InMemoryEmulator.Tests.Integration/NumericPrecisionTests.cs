@@ -38,7 +38,7 @@ public class NumericPrecisionTests : IAsyncLifetime
     [Fact] public async Task Int_Add() => Assert.Equal("30", await Scalar("SELECT 10 + 20"));
     [Fact] public async Task Int_Sub() => Assert.Equal("-5", await Scalar("SELECT 10 - 15"));
     [Fact] public async Task Int_Mul() => Assert.Equal("200", await Scalar("SELECT 10 * 20"));
-    [Fact] public async Task Int_Div() => Assert.Equal("3", await Scalar("SELECT 10 / 3"));
+    [Fact] public async Task Int_Div() => Assert.Equal("3", await Scalar("SELECT DIV(10, 3)"));  // / returns FLOAT64; use DIV for integer division
     [Fact] public async Task Int_Mod() => Assert.Equal("1", await Scalar("SELECT MOD(10, 3)"));
     [Fact] public async Task Int_Negative() => Assert.Equal("-42", await Scalar("SELECT -42"));
     [Fact] public async Task Int_Large() => Assert.Equal("9999999999", await Scalar("SELECT 9999999999"));

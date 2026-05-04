@@ -171,7 +171,7 @@ public class ConditionalAndCastComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task Add_Integers() => Assert.Equal("5", await Scalar("SELECT 2 + 3"));
 	[Fact] public async Task Subtract_Integers() => Assert.Equal("7", await Scalar("SELECT 10 - 3"));
 	[Fact] public async Task Multiply_Integers() => Assert.Equal("12", await Scalar("SELECT 3 * 4"));
-	[Fact] public async Task Divide_Integers() => Assert.Equal("2", await Scalar("SELECT 5 / 2"));
+	[Fact] public async Task Divide_Integers() => Assert.Equal("2.5", await Scalar("SELECT 5 / 2"));  // BigQuery / returns FLOAT64
 	[Fact] public async Task Modulo_Integers() => Assert.Equal("1", await Scalar("SELECT 7 % 3"));
 	[Fact] public async Task Negate_Integer() => Assert.Equal("-5", await Scalar("SELECT -5"));
 	[Fact] public async Task Add_Floats() { var v = double.Parse(await Scalar("SELECT 1.5 + 2.5") ?? "0"); Assert.Equal(4.0, v); }

@@ -152,7 +152,7 @@ public class LiteralExpressionTests : IAsyncLifetime
 	// ---- CAST literals ----
 	[Fact] public async Task Cast_IntToString() => Assert.Equal("42", await S("SELECT CAST(42 AS STRING)"));
 	[Fact] public async Task Cast_StringToInt() => Assert.Equal("42", await S("SELECT CAST('42' AS INT64)"));
-	[Fact] public async Task Cast_FloatToInt() => Assert.Equal("3", await S("SELECT CAST(3.7 AS INT64)"));
+	[Fact] public async Task Cast_FloatToInt() => Assert.Equal("4", await S("SELECT CAST(3.7 AS INT64)"));
 	[Fact] public async Task Cast_IntToFloat()
 	{
 		var v = await S("SELECT CAST(5 AS FLOAT64)");

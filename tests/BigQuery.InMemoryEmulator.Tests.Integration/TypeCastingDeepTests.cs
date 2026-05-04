@@ -72,8 +72,8 @@ public class TypeCastingDeepTests : IAsyncLifetime
 	// ============================================================
 
 	[Fact] public async Task Cast_Int64ToFloat64() => Assert.Equal("42", await Scalar("SELECT CAST(CAST(42 AS FLOAT64) AS INT64)"));
-	[Fact] public async Task Cast_Float64ToInt64_Truncates() => Assert.Equal("3", await Scalar("SELECT CAST(3.99 AS INT64)"));
-	[Fact] public async Task Cast_NegativeFloat64ToInt64() => Assert.Equal("-3", await Scalar("SELECT CAST(-3.7 AS INT64)"));
+	[Fact] public async Task Cast_Float64ToInt64_Truncates() => Assert.Equal("4", await Scalar("SELECT CAST(3.99 AS INT64)"));
+	[Fact] public async Task Cast_NegativeFloat64ToInt64() => Assert.Equal("-4", await Scalar("SELECT CAST(-3.7 AS INT64)"));
 
 	// ============================================================
 	// BOOL <-> INT64/STRING
