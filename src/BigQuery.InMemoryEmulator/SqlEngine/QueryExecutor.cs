@@ -3775,15 +3775,34 @@ if (val is IEnumerable<object?> en)
 return null;
 }
 
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#generate_array
+//   "GENERATE_ARRAY generates an array of values. Supports INT64 and FLOAT64 types."
 private object? EvaluateGenerateArray(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-var start = ToLong(Evaluate(args[0], row));
-var end = ToLong(Evaluate(args[1], row));
-var step = args.Count > 2 ? ToLong(Evaluate(args[2], row)) : 1L;
-var result = new List<object?>();
-if (step > 0) for (var i = start; i <= end; i += step) result.Add(i);
-else if (step < 0) for (var i = start; i >= end; i += step) result.Add(i);
-return result;
+var rawStart = Evaluate(args[0], row);
+var rawEnd = Evaluate(args[1], row);
+var rawStep = args.Count > 2 ? Evaluate(args[2], row) : null;
+// Use floating point if any arg is a double
+if (rawStart is double || rawEnd is double || rawStep is double)
+{
+    var dStart = ToDouble(rawStart);
+    var dEnd = ToDouble(rawEnd);
+    var dStep = rawStep is not null ? ToDouble(rawStep) : 1.0;
+    var result = new List<object?>();
+    if (dStep > 0) for (var i = dStart; i <= dEnd + dStep * 1e-10; i += dStep) result.Add(i);
+    else if (dStep < 0) for (var i = dStart; i >= dEnd + dStep * 1e-10; i += dStep) result.Add(i);
+    return result;
+}
+else
+{
+    var start = ToLong(rawStart);
+    var end = ToLong(rawEnd);
+    var step = rawStep is not null ? ToLong(rawStep) : 1L;
+    var result = new List<object?>();
+    if (step > 0) for (var i = start; i <= end; i += step) result.Add(i);
+    else if (step < 0) for (var i = start; i >= end; i += step) result.Add(i);
+    return result;
+}
 }
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_concat
