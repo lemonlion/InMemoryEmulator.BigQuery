@@ -347,9 +347,12 @@ foreach (var group in groups)
 var groupRows = group.ToList();
 
 // HAVING (evaluate before adding to results)
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#having_clause
+//   "The HAVING clause can reference aliases defined in the SELECT list."
 if (sel.Having is not null)
 {
-var havingVal = EvaluateWithAggregates(sel.Having, groupRows);
+var havingExpr = ResolveAliasesInExpression(sel.Having, sel.Columns);
+var havingVal = EvaluateWithAggregates(havingExpr, groupRows);
 if (!IsTruthy(havingVal)) continue;
 }
 
@@ -463,7 +466,8 @@ private InMemoryBigQueryResult ExecuteRollup(SelectStatement sel, List<RowContex
             var groupRows = group.ToList();
             if (sel.Having is not null)
             {
-                var hv = EvaluateWithAggregates(sel.Having, groupRows);
+                var havingExpr2 = ResolveAliasesInExpression(sel.Having, sel.Columns);
+                var hv = EvaluateWithAggregates(havingExpr2, groupRows);
                 if (!IsTruthy(hv)) continue;
             }
 
@@ -7508,6 +7512,27 @@ ArraySubscriptExpr sub => ContainsAggregate(sub.Array) || ContainsAggregate(sub.
 FieldAccessExpr fa => ContainsAggregate(fa.Object),
 _ => false
 };
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#having_clause
+//   "The HAVING clause can reference aliases defined in the SELECT list."
+private static SqlExpression ResolveAliasesInExpression(SqlExpression expr, IReadOnlyList<SelectItem> columns)
+{
+	if (expr is ColumnRef col && col.TableAlias is null)
+	{
+		var match = columns.FirstOrDefault(c => 
+			c.Alias != null && c.Alias.Equals(col.ColumnName, StringComparison.OrdinalIgnoreCase));
+		if (match is not null)
+			return match.Expr;
+	}
+	return expr switch
+	{
+		BinaryExpr bin => new BinaryExpr(
+			ResolveAliasesInExpression(bin.Left, columns), bin.Op,
+			ResolveAliasesInExpression(bin.Right, columns)),
+		UnaryExpr un => new UnaryExpr(un.Op, ResolveAliasesInExpression(un.Operand, columns)),
+		_ => expr
+	};
 }
 
 private static string DeriveColumnName(SqlExpression expr)
