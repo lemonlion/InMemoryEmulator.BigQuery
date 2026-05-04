@@ -151,6 +151,11 @@ internal record ExistsExpr(SelectStatement Subquery) : SqlExpression;
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/subqueries#in_subquery
 internal record InSubqueryExpr(SqlExpression Expr, SelectStatement Subquery) : SqlExpression;
 
+/// <summary>expr IN UNNEST(array_expression)</summary>
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
+//   "value [NOT] IN UNNEST(array_expression)"
+internal record InUnnestExpr(SqlExpression Expr, SqlExpression ArrayExpr) : SqlExpression;
+
 /// <summary>A window function: func() OVER(PARTITION BY ... ORDER BY ... [frame])</summary>
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls
 internal record WindowFunction(

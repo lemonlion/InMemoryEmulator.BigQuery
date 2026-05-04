@@ -133,7 +133,10 @@ internal static class SqlParser
 		.Or(Token.EqualTo(SqlToken.Range).Select(t => t.ToStringValue()))
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conditional_expressions#if
 		//   "IF(expr, true_result, else_result)"
-		.Or(Token.EqualTo(SqlToken.If).Select(t => t.ToStringValue()));
+		.Or(Token.EqualTo(SqlToken.If).Select(t => t.ToStringValue()))
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#unnest_operator
+		//   "WITH OFFSET" produces a column named "offset" that must be referenceable in SELECT/WHERE/ORDER BY
+		.Or(Token.EqualTo(SqlToken.Offset).Select(t => t.ToStringValue()));
 
 	/// <summary>Helper: matches an Identifier token whose text equals the given value (case-insensitive).</summary>
 	private static TokenListParser<SqlToken, Token<SqlToken>> IdentifierMatching(string value) =>
@@ -677,6 +680,16 @@ Token.EqualTo(SqlToken.LParen)
 				.Then(low => Token.EqualTo(SqlToken.And).IgnoreThen(IsNullSuffix)
 					.Select(high => (SqlExpression)new BetweenExpr(expr, low, high)))
 				.Try())
+			// NOT IN UNNEST(array_expr)
+			// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
+			//   "value NOT IN UNNEST(array_expression)"
+			.Or(Token.EqualTo(SqlToken.Not).IgnoreThen(Token.EqualTo(SqlToken.In))
+				.IgnoreThen(Token.EqualTo(SqlToken.Unnest))
+				.IgnoreThen(Token.EqualTo(SqlToken.LParen))
+				.IgnoreThen(SP.Ref(() => Expression!))
+				.Then(arrExpr => Token.EqualTo(SqlToken.RParen)
+					.Select(_ => (SqlExpression)new UnaryExpr(UnaryOp.Not, new InUnnestExpr(expr, arrExpr))))
+				.Try())
 			// NOT IN (SELECT ...) or NOT IN (values)
 			// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
 			.Or(Token.EqualTo(SqlToken.Not).IgnoreThen(Token.EqualTo(SqlToken.In))
@@ -690,6 +703,16 @@ Token.EqualTo(SqlToken.LParen)
 						.Then(vals => Token.EqualTo(SqlToken.RParen)
 							.Select(_ => (SqlExpression)new UnaryExpr(UnaryOp.Not, new InExpr(expr, vals.ToList())))))
 				)
+				.Try())
+			// IN UNNEST(array_expr)
+			// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
+			//   "value IN UNNEST(array_expression)"
+			.Or(Token.EqualTo(SqlToken.In)
+				.IgnoreThen(Token.EqualTo(SqlToken.Unnest))
+				.IgnoreThen(Token.EqualTo(SqlToken.LParen))
+				.IgnoreThen(SP.Ref(() => Expression!))
+				.Then(arrExpr => Token.EqualTo(SqlToken.RParen)
+					.Select(_ => (SqlExpression)new InUnnestExpr(expr, arrExpr)))
 				.Try())
 			// IN (SELECT ...) or IN (values)
 			.Or(Token.EqualTo(SqlToken.In)

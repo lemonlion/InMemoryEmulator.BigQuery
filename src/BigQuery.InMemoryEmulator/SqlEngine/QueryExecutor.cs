@@ -1517,6 +1517,7 @@ IsBoolExpr isBool => EvaluateIsBool(isBool, row),
 BetweenExpr btw => EvaluateBetween(btw, row),
 InExpr inExpr => EvaluateIn(inExpr, row),
 InSubqueryExpr inSub => EvaluateInSubquery(inSub, row),
+InUnnestExpr inUnnest => EvaluateInUnnest(inUnnest, row),
 LikeExpr like => EvaluateLike(like, row),
 CastExpr cast => EvaluateCast(cast, row),
 ArraySubscriptExpr sub => EvaluateArraySubscript(sub, row),
@@ -1728,6 +1729,28 @@ var result = ExecuteSelect(inSub.Subquery, _activeCteResults);
 var values = result.Rows.Select(r => r.F?[0]?.V).ToList();
 var found = values.Any(v => CompareRaw(val, v) == 0);
 return found;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
+//   "value [NOT] IN UNNEST(array_expression)"
+//   "Returns NULL if search_value is NULL."
+private object? EvaluateInUnnest(InUnnestExpr inUnnest, RowContext row)
+{
+var val = Evaluate(inUnnest.Expr, row);
+if (val is null) return null;
+var arrayVal = Evaluate(inUnnest.ArrayExpr, row);
+if (arrayVal is null) return null;
+if (arrayVal is IEnumerable<object?> list)
+{
+    bool hasNull = false;
+    foreach (var item in list)
+    {
+        if (item is null) { hasNull = true; continue; }
+        if (CompareRaw(val, item) == 0) return true;
+    }
+    return hasNull ? null : false;
+}
+return false;
 }
 
 private object? EvaluateLike(LikeExpr like, RowContext row)
@@ -2092,8 +2115,7 @@ return name switch
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions
 //   "All mathematical functions return NULL for NULL input parameters."
 "SQRT" => EvaluateUnaryMathOrNull(args, row, Math.Sqrt),
-"LOG" => args.Count > 1 ? Math.Log(ToDouble(Evaluate(args[0], row)), ToDouble(Evaluate(args[1], row)))
-: Math.Log(ToDouble(Evaluate(args[0], row))),
+"LOG" => EvaluateLogOrNull(args, row),
 "LOG10" => EvaluateUnaryMathOrNull(args, row, Math.Log10),
 "LN" => EvaluateUnaryMathOrNull(args, row, Math.Log),
 "EXP" => EvaluateUnaryMathOrNull(args, row, Math.Exp),
@@ -2458,9 +2480,16 @@ return (long)(str.IndexOf(sub, StringComparison.Ordinal) + 1);
 
 private object? EvaluateLpad(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-var str = Evaluate(args[0], row)?.ToString() ?? "";
-var len = (int)ToLong(Evaluate(args[1], row));
-var pad = args.Count > 2 ? Evaluate(args[2], row)?.ToString() ?? " " : " ";
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#lpad
+//   "Returns NULL if any input is NULL."
+var rawStr = Evaluate(args[0], row);
+if (rawStr is null) return null;
+var str = rawStr.ToString() ?? "";
+var rawLen = Evaluate(args[1], row);
+if (rawLen is null) return null;
+var len = (int)ToLong(rawLen);
+var pad = args.Count > 2 ? Evaluate(args[2], row)?.ToString() : " ";
+if (pad is null) return null;
 if (str.Length >= len) return str[..len];
 while (str.Length < len) str = pad + str;
 return str[..len];
@@ -2468,9 +2497,16 @@ return str[..len];
 
 private object? EvaluateRpad(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-var str = Evaluate(args[0], row)?.ToString() ?? "";
-var len = (int)ToLong(Evaluate(args[1], row));
-var pad = args.Count > 2 ? Evaluate(args[2], row)?.ToString() ?? " " : " ";
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#rpad
+//   "Returns NULL if any input is NULL."
+var rawStr = Evaluate(args[0], row);
+if (rawStr is null) return null;
+var str = rawStr.ToString() ?? "";
+var rawLen = Evaluate(args[1], row);
+if (rawLen is null) return null;
+var len = (int)ToLong(rawLen);
+var pad = args.Count > 2 ? Evaluate(args[2], row)?.ToString() : " ";
+if (pad is null) return null;
 if (str.Length >= len) return str[..len];
 while (str.Length < len) str = str + pad;
 return str[..len];
@@ -2939,8 +2975,14 @@ _ => (long)(date1 - date2).TotalDays
 
 private object? EvaluateTimestampAdd(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-var ts = ToDateTimeOffset(Evaluate(args[0], row));
-var interval = ToLong(Evaluate(args[1], row));
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#timestamp_add
+//   "Returns NULL if any argument is NULL."
+var rawTs = Evaluate(args[0], row);
+if (rawTs is null) return null;
+var ts = ToDateTimeOffset(rawTs);
+var rawInterval = Evaluate(args[1], row);
+if (rawInterval is null) return null;
+var interval = ToLong(rawInterval);
 var part = Evaluate(args[2], row)?.ToString()?.ToUpperInvariant() ?? "SECOND";
 return part switch
 {
@@ -2956,8 +2998,14 @@ _ => ts.AddSeconds(interval)
 
 private object? EvaluateTimestampSub(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-var ts = ToDateTimeOffset(Evaluate(args[0], row));
-var interval = ToLong(Evaluate(args[1], row));
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#timestamp_sub
+//   "Returns NULL if any argument is NULL."
+var rawTs = Evaluate(args[0], row);
+if (rawTs is null) return null;
+var ts = ToDateTimeOffset(rawTs);
+var rawInterval = Evaluate(args[1], row);
+if (rawInterval is null) return null;
+var interval = ToLong(rawInterval);
 var part = Evaluate(args[2], row)?.ToString()?.ToUpperInvariant() ?? "SECOND";
 return part switch
 {
@@ -2995,7 +3043,11 @@ _ => (long)diff.TotalSeconds
 
 private object? EvaluateDateTrunc(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-var date = ToDateTime(Evaluate(args[0], row));
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#date_trunc
+//   "Returns NULL if date_expression is NULL."
+var rawDate = Evaluate(args[0], row);
+if (rawDate is null) return null;
+var date = ToDateTime(rawDate);
 var part = Evaluate(args[1], row)?.ToString()?.ToUpperInvariant() ?? "DAY";
 var result = part switch
 {
@@ -3011,7 +3063,11 @@ return DateOnly.FromDateTime(result);
 
 private object? EvaluateTimestampTrunc(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-var ts = ToDateTimeOffset(Evaluate(args[0], row));
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#timestamp_trunc
+//   "Returns NULL if timestamp_expression is NULL."
+var rawTs = Evaluate(args[0], row);
+if (rawTs is null) return null;
+var ts = ToDateTimeOffset(rawTs);
 var part = Evaluate(args[1], row)?.ToString()?.ToUpperInvariant() ?? "DAY";
 return part switch
 {
@@ -7565,6 +7621,21 @@ private object? EvaluateUnaryMathOrNull(IReadOnlyList<SqlExpression> args, RowCo
     var val = Evaluate(args[0], row);
     if (val is null) return null;
     return fn(ToDouble(val));
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#log
+//   "Returns NULL if X or Y is NULL."
+private object? EvaluateLogOrNull(IReadOnlyList<SqlExpression> args, RowContext row)
+{
+    var val = Evaluate(args[0], row);
+    if (val is null) return null;
+    if (args.Count > 1)
+    {
+        var baseVal = Evaluate(args[1], row);
+        if (baseVal is null) return null;
+        return Math.Log(ToDouble(val), ToDouble(baseVal));
+    }
+    return Math.Log(ToDouble(val));
 }
 
 private object? EvaluateBinaryMathOrNull(IReadOnlyList<SqlExpression> args, RowContext row, Func<double, double, double> fn)
