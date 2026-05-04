@@ -674,14 +674,19 @@ Token.EqualTo(SqlToken.LParen)
 			.Or(Constant(expr))
 		);
 
-	// --- IS [NOT] NULL / IS [NOT] TRUE / IS [NOT] FALSE suffix ---
+	// --- IS [NOT] NULL / IS [NOT] TRUE / IS [NOT] FALSE / IS [NOT] DISTINCT FROM suffix ---
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#is_operators
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#is_distinct_from
 	private static readonly TokenListParser<SqlToken, SqlExpression> IsNullSuffix =
 		OverSuffix.Then(expr =>
 			Token.EqualTo(SqlToken.Is).IgnoreThen(
 				Token.EqualTo(SqlToken.Not).Select(_ => true).OptionalOrDefault(false)
 			).Then(isNot =>
-				Token.EqualTo(SqlToken.Null).Select(_ => (SqlExpression)new IsNullExpr(expr, isNot))
+				Token.EqualTo(SqlToken.Distinct).IgnoreThen(Token.EqualTo(SqlToken.From))
+					.IgnoreThen(SP.Ref(() => OverSuffix!))
+					.Select(right => (SqlExpression)new IsDistinctFromExpr(expr, right, isNot))
+					.Try()
+				.Or(Token.EqualTo(SqlToken.Null).Select(_ => (SqlExpression)new IsNullExpr(expr, isNot)))
 				.Or(Token.EqualTo(SqlToken.True).Select(_ => (SqlExpression)new IsBoolExpr(expr, isNot, true)))
 				.Or(Token.EqualTo(SqlToken.False).Select(_ => (SqlExpression)new IsBoolExpr(expr, isNot, false)))
 			).Try()

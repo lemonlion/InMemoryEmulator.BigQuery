@@ -121,6 +121,12 @@ internal record IsNullExpr(SqlExpression Expr, bool IsNot) : SqlExpression;
 //   "expr IS TRUE" returns TRUE if expr evaluates to TRUE (not NULL, not FALSE)
 internal record IsBoolExpr(SqlExpression Expr, bool IsNot, bool Value) : SqlExpression;
 
+/// <summary>expr1 IS [NOT] DISTINCT FROM expr2.</summary>
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#is_distinct_from
+//   "IS DISTINCT FROM" returns TRUE if two values are not equal (treating NULLs as equal).
+//   "IS NOT DISTINCT FROM" returns TRUE if two values are equal (treating NULLs as equal).
+internal record IsDistinctFromExpr(SqlExpression Left, SqlExpression Right, bool IsNot) : SqlExpression;
+
 /// <summary>expr BETWEEN low AND high.</summary>
 internal record BetweenExpr(SqlExpression Expr, SqlExpression Low, SqlExpression High) : SqlExpression;
 

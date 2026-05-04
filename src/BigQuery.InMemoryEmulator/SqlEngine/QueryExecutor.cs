@@ -1614,6 +1614,7 @@ FunctionCall fn => EvaluateFunctionCall(fn, row),
 AggregateCall _ => throw new InvalidOperationException("Aggregate outside GROUP BY"),
 IsNullExpr isNull => Evaluate(isNull.Expr, row) is null == !isNull.IsNot,
 IsBoolExpr isBool => EvaluateIsBool(isBool, row),
+IsDistinctFromExpr isDistinct => EvaluateIsDistinctFrom(isDistinct, row),
 BetweenExpr btw => EvaluateBetween(btw, row),
 InExpr inExpr => EvaluateIn(inExpr, row),
 InSubqueryExpr inSub => EvaluateInSubquery(inSub, row),
@@ -1807,6 +1808,23 @@ private object? EvaluateIsBool(IsBoolExpr isBool, RowContext row)
         ? boolVal == true    // IS TRUE
         : boolVal == false;  // IS FALSE
     return isBool.IsNot ? !result : result;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#is_distinct_from
+//   "IS DISTINCT FROM returns TRUE if values are different (NULLs treated as equal)."
+//   "IS NOT DISTINCT FROM returns TRUE if values are the same (NULLs treated as equal)."
+private object? EvaluateIsDistinctFrom(IsDistinctFromExpr isDistinct, RowContext row)
+{
+    var left = Evaluate(isDistinct.Left, row);
+    var right = Evaluate(isDistinct.Right, row);
+    bool areDistinct;
+    if (left is null && right is null)
+        areDistinct = false; // both null → not distinct
+    else if (left is null || right is null)
+        areDistinct = true; // one null → distinct
+    else
+        areDistinct = CompareRaw(left, right) != 0;
+    return isDistinct.IsNot ? !areDistinct : areDistinct;
 }
 
 private object? EvaluateBetween(BetweenExpr btw, RowContext row)
@@ -3748,9 +3766,12 @@ var netFormat = format
 .Replace("%F", "yyyy-MM-dd").Replace("%T", "HH:mm:ss")
 .Replace("%E4Y", "yyyy").Replace("%Z", "zzz").Replace("%I", "hh").Replace("%p", "tt").Replace("%y", "yy")
 .Replace("%b", "MMM").Replace("%B", "MMMM");
-if (DateTimeOffset.TryParseExact(str, netFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var result))
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#parse_timestamp
+//   "When no timezone is specified in the format string, the input is interpreted as UTC."
+var styles = format.Contains("%Z") ? DateTimeStyles.None : DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal;
+if (DateTimeOffset.TryParseExact(str, netFormat, CultureInfo.InvariantCulture, styles, out var result))
 return result;
-return DateTimeOffset.Parse(str, CultureInfo.InvariantCulture);
+return DateTimeOffset.Parse(str, CultureInfo.InvariantCulture, styles);
 }
 
 #endregion
@@ -7034,6 +7055,7 @@ private object? EvaluateWithAggregates(SqlExpression expr, List<RowContext> grou
         CastExpr cast => CastValue(EvaluateWithAggregates(cast.Expr, groupRows), cast.TargetType, cast.Safe),
         IsNullExpr isNull => EvaluateWithAggregates(isNull.Expr, groupRows) is null == !isNull.IsNot,
         IsBoolExpr isBool => EvaluateIsBool(isBool, groupRows[0]),
+        IsDistinctFromExpr isDistinct => EvaluateIsDistinctFrom(isDistinct, groupRows[0]),
         ArraySubscriptExpr arrSub => EvaluateArraySubscript(
             new ArraySubscriptExpr(
                 new LiteralExpr(EvaluateWithAggregates(arrSub.Array, groupRows)),
