@@ -338,16 +338,23 @@ internal static class SqlParser
 					.Select(o => (IReadOnlyList<OrderByItem>?)o.ToList())
 					.OptionalOrDefault()
 				.Then(aggOrderBy =>
-					Token.EqualTo(SqlToken.RParen).Select(_ =>
-					{
-						var upper = name.ToUpperInvariant();
-						if (AggregateNames.Contains(upper))
+					// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#array_agg
+					//   "ARRAY_AGG([DISTINCT] expression [...] [LIMIT n])"
+					Token.EqualTo(SqlToken.Limit)
+						.IgnoreThen(Token.EqualTo(SqlToken.Number).Select(t => (int?)int.Parse(t.ToStringValue())))
+						.OptionalOrDefault()
+					.Then(aggLimit =>
+						Token.EqualTo(SqlToken.RParen).Select(_ =>
 						{
-							var extraArgs = args.Length > 1 ? args.Skip(1).ToList() : null;
-							return (SqlExpression)new AggregateCall(upper, args.Length > 0 ? args[0] : null, false, extraArgs, aggOrderBy);
-						}
-						return (SqlExpression)new FunctionCall(upper, args.ToList());
-					})
+							var upper = name.ToUpperInvariant();
+							if (AggregateNames.Contains(upper))
+							{
+								var extraArgs = args.Length > 1 ? args.Skip(1).ToList() : null;
+								return (SqlExpression)new AggregateCall(upper, args.Length > 0 ? args[0] : null, false, extraArgs, aggOrderBy, aggLimit);
+							}
+							return (SqlExpression)new FunctionCall(upper, args.ToList());
+						})
+					)
 				)
 			)
 			.Try()
@@ -380,11 +387,16 @@ internal static class SqlParser
 							.Select(o => (IReadOnlyList<OrderByItem>?)o.ToList())
 							.OptionalOrDefault()
 						.Then(aggOrderBy =>
-							Token.EqualTo(SqlToken.RParen).Select(_ =>
-							{
-								var extra = extraArgs.Length > 0 ? extraArgs.ToList() : null;
-								return (SqlExpression)new AggregateCall(name.ToUpperInvariant(), firstArg, true, extra, aggOrderBy);
-							})
+							Token.EqualTo(SqlToken.Limit)
+								.IgnoreThen(Token.EqualTo(SqlToken.Number).Select(t => (int?)int.Parse(t.ToStringValue())))
+								.OptionalOrDefault()
+							.Then(aggLimit =>
+								Token.EqualTo(SqlToken.RParen).Select(_ =>
+								{
+									var extra = extraArgs.Length > 0 ? extraArgs.ToList() : null;
+									return (SqlExpression)new AggregateCall(name.ToUpperInvariant(), firstArg, true, extra, aggOrderBy, aggLimit);
+								})
+							)
 						)
 					)
 				)

@@ -111,7 +111,7 @@ internal record FunctionCall(string FunctionName, IReadOnlyList<SqlExpression> A
 /// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_subscript_operator
 internal record ArraySubscriptExpr(SqlExpression Array, string AccessMode, SqlExpression Index) : SqlExpression;
 
-internal record AggregateCall(string FunctionName, SqlExpression? Arg, bool Distinct, IReadOnlyList<SqlExpression>? ExtraArgs = null, IReadOnlyList<OrderByItem>? AggOrderBy = null) : SqlExpression;
+internal record AggregateCall(string FunctionName, SqlExpression? Arg, bool Distinct, IReadOnlyList<SqlExpression>? ExtraArgs = null, IReadOnlyList<OrderByItem>? AggOrderBy = null, int? AggLimit = null) : SqlExpression;
 
 /// <summary>IS [NOT] NULL check.</summary>
 internal record IsNullExpr(SqlExpression Expr, bool IsNot) : SqlExpression;

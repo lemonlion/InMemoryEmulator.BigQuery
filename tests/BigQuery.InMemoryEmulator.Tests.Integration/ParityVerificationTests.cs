@@ -169,7 +169,7 @@ public class ParityVerificationTests : IAsyncLifetime
 	public async Task IeeeDivide_ZeroByZero()
 	{
 		var v = await S("SELECT CAST(IEEE_DIVIDE(0.0, 0.0) AS STRING)");
-		Assert.Equal("NaN", v);
+		Assert.Equal("nan", v);
 	}
 
 	// ===== String functions edge cases =====

@@ -3235,11 +3235,29 @@ var result = part switch
 "YEAR" => new DateTime(date.Year, 1, 1),
 "MONTH" => new DateTime(date.Year, date.Month, 1),
 "QUARTER" => new DateTime(date.Year, ((date.Month - 1) / 3) * 3 + 1, 1),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#date_trunc
+//   "WEEK: Truncates date_expression to the preceding Sunday."
 "WEEK" => date.AddDays(-(int)date.DayOfWeek),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#date_trunc
+//   "ISOWEEK: Truncates date_expression to the preceding Monday."
+"ISOWEEK" => date.AddDays(-((int)date.DayOfWeek == 0 ? 6 : (int)date.DayOfWeek - 1)),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#date_trunc
+//   "ISOYEAR: Returns the Monday of the first week of the ISO year."
+"ISOYEAR" => GetIsoYearStart(date),
 "DAY" => date.Date,
 _ => date.Date
 };
 return DateOnly.FromDateTime(result);
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#date_trunc
+//   "ISOYEAR: Returns the Monday of the first week of the ISO year."
+//   The first ISO week is the week containing the first Thursday of the year.
+private static DateTime GetIsoYearStart(DateTime date)
+{
+	var isoYear = System.Globalization.ISOWeek.GetYear(date);
+	// First day of ISO year is the Monday of ISO week 1
+	return System.Globalization.ISOWeek.ToDateTime(isoYear, 1, DayOfWeek.Monday);
 }
 
 private object? EvaluateTimestampTrunc(IReadOnlyList<SqlExpression> args, RowContext row)
@@ -3250,15 +3268,32 @@ var rawTs = Evaluate(args[0], row);
 if (rawTs is null) return null;
 var ts = ToDateTimeOffset(rawTs);
 var part = Evaluate(args[1], row)?.ToString()?.ToUpperInvariant() ?? "DAY";
+var offset = ts.Offset;
 return part switch
 {
-"YEAR" => new DateTimeOffset(ts.Year, 1, 1, 0, 0, 0, TimeSpan.Zero),
-"MONTH" => new DateTimeOffset(ts.Year, ts.Month, 1, 0, 0, 0, TimeSpan.Zero),
-"DAY" => new DateTimeOffset(ts.Year, ts.Month, ts.Day, 0, 0, 0, TimeSpan.Zero),
-"HOUR" => new DateTimeOffset(ts.Year, ts.Month, ts.Day, ts.Hour, 0, 0, TimeSpan.Zero),
-"MINUTE" => new DateTimeOffset(ts.Year, ts.Month, ts.Day, ts.Hour, ts.Minute, 0, TimeSpan.Zero),
-"SECOND" => new DateTimeOffset(ts.Year, ts.Month, ts.Day, ts.Hour, ts.Minute, ts.Second, TimeSpan.Zero),
-_ => new DateTimeOffset(ts.Year, ts.Month, ts.Day, 0, 0, 0, TimeSpan.Zero)
+"YEAR" => new DateTimeOffset(ts.Year, 1, 1, 0, 0, 0, offset),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#timestamp_trunc
+//   "ISOYEAR: Returns the Monday of the first week of the ISO year."
+"ISOYEAR" => new DateTimeOffset(GetIsoYearStart(ts.DateTime), offset),
+"QUARTER" => new DateTimeOffset(ts.Year, ((ts.Month - 1) / 3) * 3 + 1, 1, 0, 0, 0, offset),
+"MONTH" => new DateTimeOffset(ts.Year, ts.Month, 1, 0, 0, 0, offset),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#timestamp_trunc
+//   "WEEK: Truncates timestamp_expression to the preceding Sunday."
+"WEEK" => new DateTimeOffset(ts.DateTime.AddDays(-(int)ts.DayOfWeek).Date, offset),
+// "ISOWEEK: Truncates timestamp_expression to the preceding Monday."
+"ISOWEEK" => new DateTimeOffset(ts.DateTime.AddDays(-((int)ts.DayOfWeek == 0 ? 6 : (int)ts.DayOfWeek - 1)).Date, offset),
+"DAY" => new DateTimeOffset(ts.Year, ts.Month, ts.Day, 0, 0, 0, offset),
+"HOUR" => new DateTimeOffset(ts.Year, ts.Month, ts.Day, ts.Hour, 0, 0, offset),
+"MINUTE" => new DateTimeOffset(ts.Year, ts.Month, ts.Day, ts.Hour, ts.Minute, 0, offset),
+"SECOND" => new DateTimeOffset(ts.Year, ts.Month, ts.Day, ts.Hour, ts.Minute, ts.Second, offset),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#timestamp_trunc
+//   "MILLISECOND: Truncates to the millisecond boundary."
+"MILLISECOND" => new DateTimeOffset(ts.Year, ts.Month, ts.Day, ts.Hour, ts.Minute, ts.Second, offset)
+	.AddTicks(ts.Millisecond * TimeSpan.TicksPerMillisecond),
+// "MICROSECOND: Truncates to the microsecond boundary."
+"MICROSECOND" => new DateTimeOffset(ts.Year, ts.Month, ts.Day, ts.Hour, ts.Minute, ts.Second, offset)
+	.AddTicks(ts.Microsecond * TimeSpan.TicksPerMillisecond / 1000 + ts.Millisecond * TimeSpan.TicksPerMillisecond),
+_ => new DateTimeOffset(ts.Year, ts.Month, ts.Day, 0, 0, 0, offset)
 };
 }
 
@@ -6028,7 +6063,8 @@ return funcName switch
 "STRING_AGG" => EvaluateStringAgg(agg, rows),
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#array_agg
 //   "By default, ARRAY_AGG includes NULLs." Only filtered with IGNORE NULLS.
-"ARRAY_AGG" => HasIgnoreNullsMarker(agg) ? values.Where(v => v is not null).ToList() : values.ToList(),
+//   "LIMIT n: Limits the number of elements in the resulting array to n."
+"ARRAY_AGG" => ApplyAggLimit(HasIgnoreNullsMarker(agg) ? values.Where(v => v is not null).ToList() : values.ToList(), agg.AggLimit),
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#array_concat_agg
 //   "Concatenates elements from expression of type ARRAY, returning a single ARRAY as a result."
 "ARRAY_CONCAT_AGG" => values.Where(v => v is not null)
@@ -6085,6 +6121,12 @@ return funcName switch
 _ => throw new NotSupportedException("Unsupported aggregate: " + funcName)
 };
 }
+
+/// <summary>
+/// Applies aggregate LIMIT clause to a result list.
+/// </summary>
+private static List<object?> ApplyAggLimit(List<object?> values, int? limit) =>
+	limit.HasValue ? values.Take(limit.Value).ToList() : values;
 
 /// <summary>
 /// Checks if an AggregateCall has the '__IGNORE_NULLS__' marker injected by the preprocessor.
@@ -7536,7 +7578,7 @@ bool b => b ? "true" : "false",
             //   CAST(FLOAT64 AS STRING) returns "inf", "-inf", "NaN" for special values.
             double d when double.IsPositiveInfinity(d) => "inf",
             double d when double.IsNegativeInfinity(d) => "-inf",
-            double d when double.IsNaN(d) => "NaN",
+            double d when double.IsNaN(d) => "nan",
             // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions
             //   BigQuery FLOAT64 whole numbers format with ".0" suffix (e.g., ROUND(2.5) → "3.0")
             double d when d == Math.Floor(d) && d >= long.MinValue && d <= long.MaxValue => $"{(long)d}.0",
