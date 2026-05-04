@@ -359,10 +359,20 @@ var fields = new List<TableFieldSchema>();
 foreach (var col in sel.Columns)
 {
 var name = col.Alias ?? DeriveColumnName(col.Expr);
-var value = EvaluateWithAggregates(col.Expr, groupRows);
-dict[name] = value;
-if (schema is null)
-fields.Add(new TableFieldSchema { Name = name, Type = InferType(value) });
+// Skip window functions in first pass — they'll be evaluated after all groups are processed
+if (ContainsWindowFunction(col.Expr))
+{
+	dict[name] = null; // placeholder
+	if (schema is null)
+		fields.Add(new TableFieldSchema { Name = name, Type = "STRING" });
+}
+else
+{
+	var value = EvaluateWithAggregates(col.Expr, groupRows);
+	dict[name] = value;
+	if (schema is null)
+		fields.Add(new TableFieldSchema { Name = name, Type = InferType(value) });
+}
 }
 
 schema ??= new TableSchema { Fields = fields };
@@ -371,6 +381,51 @@ resultRows.Add(dict);
 
 schema ??= new TableSchema { Fields = sel.Columns.Select(c =>
 new TableFieldSchema { Name = c.Alias ?? DeriveColumnName(c.Expr), Type = "STRING" }).ToList() };
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls
+//   "Window functions can be applied to the result of GROUP BY aggregation."
+// Second pass: evaluate window functions over aggregated result rows
+bool hasWindowInGroupBy = sel.Columns.Any(c => ContainsWindowFunction(c.Expr));
+if (hasWindowInGroupBy && resultRows.Count > 0)
+{
+	var aggregatedRowContexts = resultRows.Select(d => new RowContext(d, null)).ToList();
+	// Build a mapping from SELECT alias -> column expression for resolving aggregates inside window ORDER BY
+	var colAliasMap = new Dictionary<string, SqlExpression>(StringComparer.OrdinalIgnoreCase);
+	foreach (var col in sel.Columns)
+	{
+		var name = col.Alias ?? DeriveColumnName(col.Expr);
+		colAliasMap[name] = col.Expr;
+	}
+	for (int i = 0; i < resultRows.Count; i++)
+	{
+		var currentRow = aggregatedRowContexts[i];
+		foreach (var col in sel.Columns)
+		{
+			if (!ContainsWindowFunction(col.Expr)) continue;
+			var name = col.Alias ?? DeriveColumnName(col.Expr);
+			if (col.Expr is WindowFunction wf)
+			{
+				// Replace aggregates in window ORDER BY with resolved column refs that match the aggregated row
+				var resolvedWf = ResolveWindowAggregates(wf, sel.Columns);
+				resultRows[i][name] = EvaluateWindow(resolvedWf, currentRow, aggregatedRowContexts);
+			}
+			else
+			{
+				// Expression containing a window function nested somewhere
+				_windowContext = (currentRow, aggregatedRowContexts);
+				resultRows[i][name] = Evaluate(col.Expr, currentRow);
+				_windowContext = null;
+			}
+		}
+	}
+	// Update schema types based on actual values
+	schema = new TableSchema { Fields = sel.Columns.Select(c =>
+	{
+		var name = c.Alias ?? DeriveColumnName(c.Expr);
+		var val = resultRows[0].GetValueOrDefault(name);
+		return new TableFieldSchema { Name = name, Type = InferType(val) };
+	}).ToList() };
+}
 
 if (sel.OrderBy is { Count: > 0 })
 {
@@ -909,15 +964,56 @@ if (join.Type == JoinType.Cross && join.Right is UnnestClause unnest)
 return CorrelatedCrossJoinUnnest(left, unnest);
 }
 var right = ResolveFrom(join.Right, cteResults);
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#using_clause
+//   "The USING clause is equivalent to an ON clause that tests equality for each named column."
+var onExpr = join.On;
+if (onExpr is null && join.UsingColumns is { Count: > 0 })
+{
+	// Synthesize ON condition: col1 = col1 AND col2 = col2 ...
+	// Use unqualified column refs since both sides have the column
+	SqlExpression? condition = null;
+	foreach (var col in join.UsingColumns)
+	{
+		// Find which aliases the left and right rows use so we can qualify the refs
+		var leftAlias = FindAliasForColumn(left, col);
+		var rightAlias = FindAliasForColumn(right, col);
+		var leftRef = leftAlias != null ? new ColumnRef(leftAlias, col) : new ColumnRef(null, col);
+		var rightRef = rightAlias != null ? new ColumnRef(rightAlias, col) : new ColumnRef(null, col);
+		// If both are unqualified, try to differentiate using table alias from the row
+		SqlExpression eq;
+		if (leftAlias != null || rightAlias != null)
+			eq = new BinaryExpr(leftRef, BinaryOp.Eq, rightRef);
+		else
+			eq = new UsingJoinCondition(col);
+		condition = condition is null ? eq : new BinaryExpr(condition, BinaryOp.And, eq);
+	}
+	onExpr = condition;
+}
+
 return join.Type switch
 {
 JoinType.Cross => CrossJoin(left, right),
-JoinType.Inner => InnerJoin(left, right, join.On!),
-JoinType.Left => LeftJoin(left, right, join.On!),
-JoinType.Right => RightJoin(left, right, join.On!),
-JoinType.Full => FullJoin(left, right, join.On!),
+JoinType.Inner => InnerJoin(left, right, onExpr!),
+JoinType.Left => LeftJoin(left, right, onExpr!),
+JoinType.Right => RightJoin(left, right, onExpr!),
+JoinType.Full => FullJoin(left, right, onExpr!),
 _ => throw new NotSupportedException("Unsupported join type: " + join.Type)
 };
+}
+
+private static string? FindAliasForColumn(List<RowContext> rows, string column)
+{
+	if (rows.Count == 0) return null;
+	var row = rows[0];
+	// Check if there's a qualified key pattern: alias.column
+	foreach (var key in row.Fields.Keys)
+	{
+		var dotIdx = key.IndexOf('.');
+		if (dotIdx > 0 && key.Substring(dotIdx + 1).Equals(column, StringComparison.OrdinalIgnoreCase))
+			return key.Substring(0, dotIdx);
+	}
+	return null;
 }
 
 private List<RowContext> CorrelatedCrossJoinUnnest(List<RowContext> left, UnnestClause unnest)
@@ -1519,6 +1615,9 @@ InExpr inExpr => EvaluateIn(inExpr, row),
 InSubqueryExpr inSub => EvaluateInSubquery(inSub, row),
 InUnnestExpr inUnnest => EvaluateInUnnest(inUnnest, row),
 LikeExpr like => EvaluateLike(like, row),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#using_clause
+//   "USING compares columns of the same name from both sides of the join."
+UsingJoinCondition ujc => EvaluateUsingJoinCondition(ujc, row),
 CastExpr cast => EvaluateCast(cast, row),
 ArraySubscriptExpr sub => EvaluateArraySubscript(sub, row),
 CaseExpr caseExpr => EvaluateCase(caseExpr, row),
@@ -1628,8 +1727,17 @@ BinaryOp.Lt => left is null || right is null ? null : CompareRaw(left, right) < 
 BinaryOp.Lte => left is null || right is null ? null : CompareRaw(left, right) <= 0,
 BinaryOp.Gt => left is null || right is null ? null : CompareRaw(left, right) > 0,
 BinaryOp.Gte => left is null || right is null ? null : CompareRaw(left, right) >= 0,
-BinaryOp.Add => ArithmeticOp(left, right, (a, b) => a + b, (a, b) => a + b),
-BinaryOp.Sub => ArithmeticOp(left, right, (a, b) => a - b, (a, b) => a - b),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#date_arithmetics
+//   "DATE + INT64 → DATE: adds a number of days to the date."
+BinaryOp.Add => left is DateOnly dLeft && right is long rDays ? dLeft.AddDays((int)rDays)
+    : right is DateOnly dRight && left is long lDays ? dRight.AddDays((int)lDays)
+    : ArithmeticOp(left, right, (a, b) => a + b, (a, b) => a + b),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#date_arithmetics
+//   "DATE - INT64 → DATE: subtracts a number of days from the date."
+//   "DATE - DATE → INT64: returns the number of days between two dates."
+BinaryOp.Sub => left is DateOnly dSubLeft && right is long rSubDays ? dSubLeft.AddDays(-(int)rSubDays)
+    : left is DateOnly dSubL && right is DateOnly dSubR ? (object)(long)(dSubL.ToDateTime(TimeOnly.MinValue) - dSubR.ToDateTime(TimeOnly.MinValue)).Days
+    : ArithmeticOp(left, right, (a, b) => a - b, (a, b) => a - b),
 BinaryOp.Mul => ArithmeticOp(left, right, (a, b) => a * b, (a, b) => a * b),
 BinaryOp.Div => ArithmeticOp(left, right, (a, b) => b == 0 ? throw new DivideByZeroException() : a / b,
 (a, b) => b == 0.0 ? throw new DivideByZeroException() : a / b),
@@ -1729,6 +1837,37 @@ var result = ExecuteSelect(inSub.Subquery, _activeCteResults);
 var values = result.Rows.Select(r => r.F?[0]?.V).ToList();
 var found = values.Any(v => CompareRaw(val, v) == 0);
 return found;
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#using_clause
+//   "The USING clause requires that the column exists on both sides of the join."
+private object? EvaluateUsingJoinCondition(UsingJoinCondition ujc, RowContext row)
+{
+	var col = ujc.ColumnName;
+	// Find all instances of this column in the row (left.col, right.col, or unqualified col)
+	var values = new List<object?>();
+	foreach (var kv in row.Fields)
+	{
+		var dotIdx = kv.Key.IndexOf('.');
+		var fieldName = dotIdx > 0 ? kv.Key.Substring(dotIdx + 1) : kv.Key;
+		if (fieldName.Equals(col, StringComparison.OrdinalIgnoreCase))
+			values.Add(kv.Value);
+	}
+	// If we found at least 2, compare them; if they are all equal, return true
+	if (values.Count >= 2)
+	{
+		var first = values[0];
+		for (int i = 1; i < values.Count; i++)
+		{
+			if (first is null && values[i] is null) continue;
+			if (first is null || values[i] is null) return false;
+			if (CompareRaw(first, values[i]) != 0) return false;
+		}
+		return true;
+	}
+	// Fallback: use unqualified lookup
+	if (row.Fields.TryGetValue(col, out _)) return true;
+	return null;
 }
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
@@ -2928,6 +3067,9 @@ return partName switch
 "DATE" => (object)DateOnly.FromDateTime(dto.Date),
 "TIME" => dto.TimeOfDay.ToString(),
 "ISOWEEK" => (long)CultureInfo.InvariantCulture.Calendar.GetWeekOfYear(dto.DateTime, CalendarWeekRule.FirstFourDayWeek, DayOfWeek.Monday),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#extract
+//   "ISOYEAR: Returns the ISO 8601 week-numbering year."
+"ISOYEAR" => (long)System.Globalization.ISOWeek.GetYear(dto.DateTime),
 _ => throw new NotSupportedException("Unsupported EXTRACT part: " + partName)
 };
 }
@@ -3493,14 +3635,30 @@ _ => DateTime.Parse(val?.ToString() ?? "", CultureInfo.InvariantCulture)
 
 private static string FormatTimestamp(DateTimeOffset ts, string format)
 {
+// Handle format specifiers that don't have .NET equivalents via pre-substitution
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#format_elements_date_time
+//   "%j: The day of the year as a decimal number (001-366)."
+//   "%V: The ISO 8601 week number of the current year as a decimal number (01-53)."
+//   "%G: The ISO 8601 year with century as a decimal number."
+//   "%u: The weekday (Monday as the first day of the week) as a decimal number (1-7)."
+var result = format;
+if (result.Contains("%j"))
+	result = result.Replace("%j", ts.DayOfYear.ToString("D3"));
+if (result.Contains("%V"))
+	result = result.Replace("%V", System.Globalization.ISOWeek.GetWeekOfYear(ts.DateTime).ToString("D2"));
+if (result.Contains("%G"))
+	result = result.Replace("%G", System.Globalization.ISOWeek.GetYear(ts.DateTime).ToString("D4"));
+if (result.Contains("%u"))
+	result = result.Replace("%u", (ts.DayOfWeek == DayOfWeek.Sunday ? 7 : (int)ts.DayOfWeek).ToString());
+
 // Convert BigQuery format specifiers to .NET
-var netFormat = format
+var netFormat = result
 .Replace("%Y", "yyyy").Replace("%m", "MM").Replace("%d", "dd")
 .Replace("%H", "HH").Replace("%M", "mm").Replace("%S", "ss")
 .Replace("%F", "yyyy-MM-dd").Replace("%T", "HH:mm:ss")
 .Replace("%E4Y", "yyyy").Replace("%Z", "zzz").Replace("%I", "hh").Replace("%p", "tt").Replace("%y", "yy")
 .Replace("%b", "MMM").Replace("%B", "MMMM")
-.Replace("%j", "DDD").Replace("%A", "dddd").Replace("%a", "ddd");
+.Replace("%A", "dddd").Replace("%a", "ddd");
 return ts.ToString(netFormat, CultureInfo.InvariantCulture);
 }
 
@@ -5810,7 +5968,9 @@ return funcName switch
 : null,
 "ANY_VALUE" => values.FirstOrDefault(v => v is not null),
 "STRING_AGG" => EvaluateStringAgg(agg, rows),
-"ARRAY_AGG" => values.Where(v => v is not null).ToList(),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#array_agg
+//   "By default, ARRAY_AGG includes NULLs." Only filtered with IGNORE NULLS.
+"ARRAY_AGG" => HasIgnoreNullsMarker(agg) ? values.Where(v => v is not null).ToList() : values.ToList(),
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#array_concat_agg
 //   "Concatenates elements from expression of type ARRAY, returning a single ARRAY as a result."
 "ARRAY_CONCAT_AGG" => values.Where(v => v is not null)
@@ -5866,6 +6026,15 @@ return funcName switch
 "HLL_COUNT_MERGE" or "HLL_COUNT_MERGE_PARTIAL" => (long)values.Where(v => v is not null).Distinct().Count(),
 _ => throw new NotSupportedException("Unsupported aggregate: " + funcName)
 };
+}
+
+/// <summary>
+/// Checks if an AggregateCall has the '__IGNORE_NULLS__' marker injected by the preprocessor.
+/// </summary>
+private static bool HasIgnoreNullsMarker(AggregateCall agg)
+{
+    if (agg.ExtraArgs is null) return false;
+    return agg.ExtraArgs.Any(a => a is LiteralExpr { Value: "__IGNORE_NULLS__" });
 }
 
 private object? EvaluateStringAgg(AggregateCall agg, List<RowContext> rows)
@@ -6757,6 +6926,17 @@ private object? EvaluateWithAggregates(SqlExpression expr, List<RowContext> grou
                 arrSub.AccessMode,
                 new LiteralExpr(EvaluateWithAggregates(arrSub.Index, groupRows))),
             groupRows[0]),
+        BetweenExpr btw => EvaluateBetween(new BetweenExpr(
+            new LiteralExpr(EvaluateWithAggregates(btw.Expr, groupRows)),
+            new LiteralExpr(EvaluateWithAggregates(btw.Low, groupRows)),
+            new LiteralExpr(EvaluateWithAggregates(btw.High, groupRows))), groupRows[0]),
+        InExpr inE => EvaluateIn(new InExpr(
+            new LiteralExpr(EvaluateWithAggregates(inE.Expr, groupRows)),
+            inE.Values.Select(v => (SqlExpression)new LiteralExpr(EvaluateWithAggregates(v, groupRows))).ToList()), groupRows[0]),
+        LikeExpr lk => EvaluateLike(new LikeExpr(
+            new LiteralExpr(EvaluateWithAggregates(lk.Expr, groupRows)),
+            new LiteralExpr(EvaluateWithAggregates(lk.Pattern, groupRows)),
+            lk.IsNot), groupRows[0]),
         _ => Evaluate(expr, groupRows[0])
     };
 }
@@ -6829,6 +7009,9 @@ return typed;
 private static object? ParseTypedValue(object? val, string? type)
 {
 if (val is null) return null;
+// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tabledata/list
+//   REPEATED fields are stored as lists — preserve them without string conversion.
+if (val is IList<object?> list) return list;
 var s = val.ToString();
 if (s is null) return null;
 return type?.ToUpperInvariant() switch
@@ -6882,7 +7065,10 @@ DateTime dt => dt.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff", CultureInfo.Invariant
 //   TIME values are returned as "HH:mm:ss.FFFFFF" strings.
 TimeSpan ts => ts.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture),
 byte[] bytes => Convert.ToBase64String(bytes),
-IList<object?> list => string.Join(", ", list.Select(v => FormatValue(v)?.ToString() ?? "NULL")),
+// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tabledata/list
+//   REPEATED fields are represented as arrays of cell values.
+//   Preserve list structure for CTE materialization while keeping ToString() output for SDK.
+IList<object?> list => new FormattedList(list.Select(v => FormatValue(v)).ToList()),
 RangeValue rv => $"[{FormatValue(rv.Start)}, {FormatValue(rv.End)})",
 IDictionary<string, object?> dict => dict,
 _ => val.ToString()
@@ -6947,6 +7133,44 @@ private static bool ContainsWindow(List<SelectItem> items)
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls
 //   Window functions can appear in expressions like al * 100.0 / SUM(val) OVER ().
+/// <summary>
+/// Replaces aggregate expressions inside a WindowFunction's ORDER BY / PARTITION BY 
+/// with ColumnRef nodes that can be resolved against the aggregated row context.
+/// This is needed because window functions over grouped aggregates reference aggregated values.
+/// </summary>
+private static WindowFunction ResolveWindowAggregates(WindowFunction wf, IReadOnlyList<SelectItem> columns)
+{
+	// Build a map from aggregate expression structure to the column alias/name in the aggregated result
+	var aggToName = new Dictionary<string, string>();
+	foreach (var col in columns)
+	{
+		if (col.Expr is AggregateCall || (col.Expr is not WindowFunction && ContainsAggregate(col.Expr)))
+		{
+			var name = col.Alias ?? DeriveColumnName(col.Expr);
+			// Use a string representation of the expression as key
+			aggToName[col.Expr.ToString()!] = name;
+		}
+	}
+	if (aggToName.Count == 0) return wf;
+
+	var resolvedOrderBy = wf.OrderBy?.Select(o => new OrderByItem(
+		ResolveAggExpr(o.Expr, aggToName), o.Descending, o.NullsFirst)).ToList();
+	var resolvedPartition = wf.PartitionBy?.Select(p => ResolveAggExpr(p, aggToName)).ToList();
+	return wf with { OrderBy = resolvedOrderBy, PartitionBy = resolvedPartition };
+}
+
+private static SqlExpression ResolveAggExpr(SqlExpression expr, Dictionary<string, string> aggToName)
+{
+	var key = expr.ToString()!;
+	if (aggToName.TryGetValue(key, out var name))
+		return new ColumnRef(null, name);
+	return expr switch
+	{
+		BinaryExpr bin => new BinaryExpr(ResolveAggExpr(bin.Left, aggToName), bin.Op, ResolveAggExpr(bin.Right, aggToName)),
+		_ => expr
+	};
+}
+
 private static bool ContainsWindowFunction(SqlExpression expr)
 {
     return expr switch
@@ -7770,4 +7994,14 @@ if (cmp != 0) return cmp;
 }
 return a.Count.CompareTo(b.Count);
 }
+}
+
+/// <summary>
+/// A list wrapper that preserves array structure for CTE round-trip while providing
+/// comma-separated ToString() output for SDK consumption.
+/// </summary>
+internal class FormattedList : List<object?>, IList<object?>
+{
+public FormattedList(List<object?> items) : base(items) { }
+public override string ToString() => string.Join(", ", this.Select(v => v?.ToString() ?? "NULL"));
 }

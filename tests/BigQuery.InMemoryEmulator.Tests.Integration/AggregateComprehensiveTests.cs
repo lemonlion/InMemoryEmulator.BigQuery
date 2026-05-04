@@ -133,8 +133,10 @@ public class AggregateComprehensiveTests : IAsyncLifetime
 	// ---- ARRAY_AGG ----
 	[Fact] public async Task ArrayAgg_Basic()
 	{
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#array_agg
+		//   "By default, ARRAY_AGG includes NULLs."
 		var v = await Scalar("SELECT ARRAY_LENGTH(ARRAY_AGG(val)) FROM `{ds}.data`");
-		Assert.Equal("7", v); // NULLs excluded by emulator default
+		Assert.Equal("9", v); // NULLs included by default (RESPECT NULLS)
 	}
 	[Fact] public async Task ArrayAgg_IgnoreNulls()
 	{

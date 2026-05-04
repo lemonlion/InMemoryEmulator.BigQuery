@@ -65,9 +65,9 @@ internal abstract record FromClause;
 /// <summary>A table reference: dataset.table or just table.</summary>
 internal record TableRef(string? DatasetId, string TableId, string? Alias) : FromClause;
 
-/// <summary>A JOIN clause: left JOIN right ON condition.</summary>
+/// <summary>A JOIN clause: left JOIN right ON condition or USING (columns).</summary>
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#join_types
-internal record JoinClause(FromClause Left, JoinType Type, FromClause Right, SqlExpression? On) : FromClause;
+internal record JoinClause(FromClause Left, JoinType Type, FromClause Right, SqlExpression? On, IReadOnlyList<string>? UsingColumns = null) : FromClause;
 
 /// <summary>UNNEST(expr) [AS alias] [WITH OFFSET [AS offset_alias]]</summary>
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#unnest_operator
@@ -155,6 +155,9 @@ internal record InSubqueryExpr(SqlExpression Expr, SelectStatement Subquery) : S
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
 //   "value [NOT] IN UNNEST(array_expression)"
 internal record InUnnestExpr(SqlExpression Expr, SqlExpression ArrayExpr) : SqlExpression;
+
+/// <summary>Special join condition for USING clause — matches a column by name across both sides of a join.</summary>
+internal record UsingJoinCondition(string ColumnName) : SqlExpression;
 
 /// <summary>A window function: func() OVER(PARTITION BY ... ORDER BY ... [frame])</summary>
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls

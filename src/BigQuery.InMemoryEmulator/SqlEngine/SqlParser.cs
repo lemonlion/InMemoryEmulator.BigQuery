@@ -57,11 +57,13 @@ internal static class SqlParser
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#interval_type
 		sql = Regex.Replace(sql, @"\bINTERVAL\s+(-?\d+)\s+(\w+)", "$1, '$2'", RegexOptions.IgnoreCase);
 
-		// ARRAY_AGG(expr IGNORE NULLS) → ARRAY_AGG(expr) — remove IGNORE NULLS modifier
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#array_agg
-		sql = Regex.Replace(sql, @"\bIGNORE\s+NULLS\b", "", RegexOptions.IgnoreCase);
+		//   "By default, ARRAY_AGG includes NULLs."
+		// Transform IGNORE NULLS to a trailing marker argument so the executor can detect it.
+		// Must run BEFORE the generic IGNORE NULLS strip below.
+		sql = Regex.Replace(sql, @"\bIGNORE\s+NULLS\b", ", '__IGNORE_NULLS__'", RegexOptions.IgnoreCase);
 
-		// RESPECT NULLS modifier — remove
+		// RESPECT NULLS modifier — strip (it's the default for aggregates)
 		sql = Regex.Replace(sql, @"\bRESPECT\s+NULLS\b", "", RegexOptions.IgnoreCase);
 
 		// Byte literal: b'...' or B'...' → '...' (emulator treats bytes as strings)
@@ -371,11 +373,19 @@ internal static class SqlParser
 				.Then(firstArg =>
 					Token.EqualTo(SqlToken.Comma).IgnoreThen(SP.Ref(() => Expression!)).Many()
 					.Then(extraArgs =>
-						Token.EqualTo(SqlToken.RParen).Select(_ =>
-						{
-							var extra = extraArgs.Length > 0 ? extraArgs.ToList() : null;
-							return (SqlExpression)new AggregateCall(name.ToUpperInvariant(), firstArg, true, extra);
-						})
+						// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#string_agg
+						//   "STRING_AGG([DISTINCT] expression [, delimiter] [ORDER BY key [{ASC|DESC}]])"
+						Token.EqualTo(SqlToken.Order).IgnoreThen(Token.EqualTo(SqlToken.By))
+							.IgnoreThen(SP.Ref(() => OrderByItemParser!).ManyDelimitedBy(Token.EqualTo(SqlToken.Comma)))
+							.Select(o => (IReadOnlyList<OrderByItem>?)o.ToList())
+							.OptionalOrDefault()
+						.Then(aggOrderBy =>
+							Token.EqualTo(SqlToken.RParen).Select(_ =>
+							{
+								var extra = extraArgs.Length > 0 ? extraArgs.ToList() : null;
+								return (SqlExpression)new AggregateCall(name.ToUpperInvariant(), firstArg, true, extra, aggOrderBy);
+							})
+						)
 					)
 				)
 			);
@@ -1053,16 +1063,23 @@ Token.EqualTo(SqlToken.LParen)
 				JoinTypeParser.Then(joinType =>
 					SingleTableRef.Then(right =>
 						(joinType == JoinType.Cross
-							? Constant((SqlExpression?)null)
-							: Token.EqualTo(SqlToken.On).IgnoreThen(Expression).Select(e => (SqlExpression?)e)
-						).Select(on => (JoinType: joinType, Right: right, On: on))
+							? Constant(((SqlExpression?)null, (IReadOnlyList<string>?)null))
+							// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#join_types
+							//   "USING clause: equivalent to ON with equality for named columns."
+							: Token.EqualTo(SqlToken.Using)
+								.IgnoreThen(Token.EqualTo(SqlToken.LParen))
+								.IgnoreThen(IdentifierOrKeyword.ManyDelimitedBy(Token.EqualTo(SqlToken.Comma)))
+								.Then(cols => Token.EqualTo(SqlToken.RParen).Select(_ => ((SqlExpression?)null, (IReadOnlyList<string>?)cols.ToList())))
+								.Try()
+								.Or(Token.EqualTo(SqlToken.On).IgnoreThen(Expression).Select(e => ((SqlExpression?)e, (IReadOnlyList<string>?)null)))
+						).Select(cond => (JoinType: joinType, Right: right, On: cond.Item1, UsingCols: cond.Item2))
 					)
 				).AtLeastOnce()
 				.Select(joins =>
 				{
 					FromClause result = left;
 					foreach (var j in joins)
-						result = new JoinClause(result, j.JoinType, j.Right, j.On);
+						result = new JoinClause(result, j.JoinType, j.Right, j.On, j.UsingCols);
 					return result;
 				})
 				.Try()
@@ -1316,7 +1333,13 @@ Token.EqualTo(SqlToken.LParen)
 					.Select(_ => (Op: SetOperationType.Intersect, All: false)))
 			)
 			// Use BareSelectStmt for RHS operands — ORDER BY/LIMIT/OFFSET apply to the whole result
-			.Then(op => BareSelectStmt.Select(right => (SqlStatement)right).Select(right => (op, right)))
+			// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
+			//   "Parenthesized queries are allowed as operands to set operations."
+			.Then(op => BareSelectStmt.Select(right => (SqlStatement)right)
+				.Or(Token.EqualTo(SqlToken.LParen)
+					.IgnoreThen(WithSetOps(SelectStmt.Select(s => (SqlStatement)s)))
+					.Then(s => Token.EqualTo(SqlToken.RParen).Select(_ => s)))
+				.Select(right => (op, right)))
 			.Try()
 			.Many()
 			.Then(ops =>
@@ -1357,7 +1380,15 @@ Token.EqualTo(SqlToken.LParen)
 		SP.Ref(() => DdlStatement!).Try()
 		.Or(SP.Ref(() => DmlStatement!).Try())
 		.Or(WithDmlStmt.Try())
-		.Or(WithSetOps(WithSelectStmt.Select(s => (SqlStatement)s).Try().Or(SelectStmt.Select(s => (SqlStatement)s))));
+		.Or(WithSetOps(
+			WithSelectStmt.Select(s => (SqlStatement)s).Try()
+			.Or(SelectStmt.Select(s => (SqlStatement)s))
+			// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
+			//   "Parenthesized queries are allowed as operands to set operations."
+			.Or(Token.EqualTo(SqlToken.LParen)
+				.IgnoreThen(WithSetOps(SelectStmt.Select(s => (SqlStatement)s)))
+				.Then(s => Token.EqualTo(SqlToken.RParen).Select(_ => s))
+				.Try())));
 
 	// --- DML Parsers ---
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax
