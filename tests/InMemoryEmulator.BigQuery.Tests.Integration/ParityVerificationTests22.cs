@@ -95,7 +95,7 @@ public class ParityVerificationTests22 : IAsyncLifetime
 	[Fact] public async Task ArrayAgg_OrderByLimit()
 	{
 		var result = await S(@"
-			SELECT ARRAY_TO_STRING(ARRAY_AGG(x ORDER BY x LIMIT 3), ',')
+			SELECT ARRAY_TO_STRING(ARRAY_AGG(CAST(x AS STRING) ORDER BY x LIMIT 3), ',')
 			FROM UNNEST([5, 3, 1, 4, 2]) AS x");
 		Assert.Equal("1,2,3", result);
 	}
@@ -103,7 +103,7 @@ public class ParityVerificationTests22 : IAsyncLifetime
 	[Fact] public async Task ArrayAgg_OrderByDescLimit()
 	{
 		var result = await S(@"
-			SELECT ARRAY_TO_STRING(ARRAY_AGG(x ORDER BY x DESC LIMIT 2), ',')
+			SELECT ARRAY_TO_STRING(ARRAY_AGG(CAST(x AS STRING) ORDER BY x DESC LIMIT 2), ',')
 			FROM UNNEST([5, 3, 1, 4, 2]) AS x");
 		Assert.Equal("5,4", result);
 	}
@@ -235,7 +235,7 @@ public class ParityVerificationTests22 : IAsyncLifetime
 	[Fact] public async Task StringConcat_WithNull()
 	{
 		// || with NULL returns NULL
-		var result = await S("SELECT 'hello' || NULL");
+		var result = await S("SELECT 'hello' || CAST(NULL AS STRING)");
 		Assert.Null(result);
 	}
 
@@ -247,14 +247,14 @@ public class ParityVerificationTests22 : IAsyncLifetime
 	[Fact] public async Task ArraySubquery_Basic()
 	{
 		var result = await S(@"
-			SELECT ARRAY_TO_STRING(ARRAY(SELECT x * 2 FROM UNNEST([1, 2, 3]) AS x), ',')");
+			SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x * 2 AS STRING) FROM UNNEST([1, 2, 3]) AS x), ',')");
 		Assert.Equal("2,4,6", result);
 	}
 
 	[Fact] public async Task ArraySubquery_WithFilter()
 	{
 		var result = await S(@"
-			SELECT ARRAY_TO_STRING(ARRAY(SELECT x FROM UNNEST([1, 2, 3, 4, 5]) AS x WHERE x > 3 ORDER BY x), ',')");
+			SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST([1, 2, 3, 4, 5]) AS x WHERE x > 3 ORDER BY x), ',')");
 		Assert.Equal("4,5", result);
 	}
 

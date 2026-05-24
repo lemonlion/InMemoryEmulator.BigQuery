@@ -46,11 +46,14 @@ SELECT COUNT(*) FROM a CROSS JOIN b");
 		Assert.Equal("9", v);
 	}
 
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax
+	//   BigQuery restricts WHERE usage in certain FROM-less contexts within CTEs.
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task CrossJoin_EmptyLeft()
 	{
 		var v = await Scalar(@"
-WITH a AS (SELECT 1 AS x WHERE FALSE),
+WITH a AS (SELECT 1 AS x FROM UNNEST([1]) WHERE FALSE),
      b AS (SELECT 10 AS y UNION ALL SELECT 20)
 SELECT COUNT(*) FROM a CROSS JOIN b");
 		Assert.Equal("0", v);

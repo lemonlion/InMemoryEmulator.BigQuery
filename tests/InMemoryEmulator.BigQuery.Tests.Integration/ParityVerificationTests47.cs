@@ -88,10 +88,11 @@ public class ParityVerificationTests47 : IAsyncLifetime
 	public async Task RegexpExtractAll_NonParticipatingGroup_ReturnsNullElement()
 	{
 		// Pattern (a)?b: first match on 'b' has no 'a', second on 'ab' has 'a'
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#regexp_extract_all
+		//   Non-participating groups return empty string (observed on real BigQuery)
 		var result = await ScalarAsync(
 			"SELECT ARRAY_TO_STRING(REGEXP_EXTRACT_ALL('b ab', '(a)?b'), ',', 'N')");
-		// NULL elements in ARRAY_TO_STRING with null_text='N' become 'N'
-		Assert.Equal("N,a", result);
+		Assert.Equal(",a", result);
 	}
 
 	// ============================================================

@@ -182,12 +182,13 @@ public class AdvancedQueryTests : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/subqueries#exists_subquery_concepts
 	//   "EXISTS returns TRUE if the subquery produces one or more rows."
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Subquery_Exists()
 	{
 		var client = await _fixture.GetClientAsync();
 		// Non-correlated EXISTS — check that ANY employees exist
 		var results = await client.ExecuteQueryAsync(
-			$@"SELECT 'found' AS status WHERE EXISTS (
+			$@"SELECT 'found' AS status FROM UNNEST([1]) WHERE EXISTS (
 				SELECT 1 FROM `{_datasetId}.employees`
 			)",
 			parameters: null);

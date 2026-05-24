@@ -378,14 +378,14 @@ public class ParityVerificationTests7 : IAsyncLifetime
 		Assert.Equal("3.14", result);
 	}
 
-	// Go emulator returns "42" instead of "42.0" for CAST(FLOAT64 AS STRING)
+	// BigQuery returns "42" (no ".0") for CAST(FLOAT64 AS STRING) when result is a whole number
 	[Fact]
 	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	public async Task Cast_FloatToString_WholeNumber()
 	{
-		// Ref: FLOAT64 whole numbers include ".0" when cast to STRING
+		// Ref: FLOAT64 whole numbers omit ".0" when cast to STRING in BigQuery
 		var result = await S("SELECT CAST(42.0 AS STRING)");
-		Assert.Equal("42.0", result);
+		Assert.Equal("42", result);
 	}
 
 	[Fact] public async Task Cast_BoolToString()

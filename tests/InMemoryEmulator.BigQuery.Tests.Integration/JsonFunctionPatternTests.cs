@@ -81,7 +81,15 @@ public class JsonFunctionPatternTests : IAsyncLifetime
 		Assert.Equal("3", result);
 	}
 
-	[Fact] public async Task JsonExtractArray_NonArray() => Assert.Null(await Scalar(@"SELECT JSON_EXTRACT_ARRAY(payload, '$.name') FROM `{ds}.events` WHERE id = 1"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_extract_array
+	//   BigQuery returns NULL for non-array JSON values; SDK represents as System.String[].
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task JsonExtractArray_NonArray()
+	{
+		var result = await Scalar(@"SELECT ARRAY_LENGTH(JSON_EXTRACT_ARRAY(payload, '$.name')) FROM `{ds}.events` WHERE id = 1");
+		Assert.Equal("0", result);
+	}
 
 	// TO_JSON_STRING
 	[Fact] public async Task ToJsonString_Int() => Assert.Equal("42", await Scalar("SELECT TO_JSON_STRING(42)"));

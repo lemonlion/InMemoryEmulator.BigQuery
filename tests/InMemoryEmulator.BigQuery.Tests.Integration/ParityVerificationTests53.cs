@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -60,21 +61,27 @@ public class ParityVerificationTests53 : IAsyncLifetime
 	// --- Window function NULL offset ---
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#lag
-	//   Returns NULL if offset argument is NULL.
+	//   "Argument 2 to LAG must be non-NULL"
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Lag_NullOffset_ReturnsNull()
 	{
-		var result = await ScalarAsync(
-			"SELECT LAG(x, CAST(NULL AS INT64)) OVER (ORDER BY x) FROM UNNEST([1,2,3]) AS x LIMIT 1");
-		Assert.Equal("NULL", result);
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(async () =>
+			await client.ExecuteQueryAsync(
+				"SELECT LAG(x, CAST(NULL AS INT64)) OVER (ORDER BY x) FROM UNNEST([1,2,3]) AS x LIMIT 1",
+				parameters: null));
 	}
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Lead_NullOffset_ReturnsNull()
 	{
-		var result = await ScalarAsync(
-			"SELECT LEAD(x, CAST(NULL AS INT64)) OVER (ORDER BY x) FROM UNNEST([1,2,3]) AS x LIMIT 1");
-		Assert.Equal("NULL", result);
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(async () =>
+			await client.ExecuteQueryAsync(
+				"SELECT LEAD(x, CAST(NULL AS INT64)) OVER (ORDER BY x) FROM UNNEST([1,2,3]) AS x LIMIT 1",
+				parameters: null));
 	}
 }

@@ -90,10 +90,10 @@ public class Phase28IntegrationTests : IAsyncLifetime
 	public async Task ParseNumeric_ValidInput()
 	{
 		var client = await _fixture.GetClientAsync();
-		var results = await client.ExecuteQueryAsync("SELECT PARSE_NUMERIC('123.45') AS val", parameters: null);
+		var results = await client.ExecuteQueryAsync("SELECT CAST(PARSE_NUMERIC('123.45') AS STRING) AS val", parameters: null);
 		var rows = results.ToList();
 		Assert.Single(rows);
-		Assert.Equal(123.45, Convert.ToDouble(rows[0]["val"]), 6);
+		Assert.Equal("123.45", rows[0]["val"]?.ToString());
 	}
 
 	#endregion

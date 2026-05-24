@@ -36,12 +36,9 @@ public class DmlTests : IAsyncLifetime
 		};
 		await client.CreateTableAsync(_datasetId, "data", schema);
 
-		await client.InsertRowsAsync(_datasetId, "data", new[]
-		{
-			new BigQueryInsertRow("r1") { ["id"] = 1, ["name"] = "Alice", ["value"] = 10 },
-			new BigQueryInsertRow("r2") { ["id"] = 2, ["name"] = "Bob", ["value"] = 20 },
-			new BigQueryInsertRow("r3") { ["id"] = 3, ["name"] = "Charlie", ["value"] = 30 },
-		});
+		await client.ExecuteQueryAsync(
+			$"INSERT INTO `{_datasetId}.data` (id, name, value) VALUES (1, 'Alice', 10), (2, 'Bob', 20), (3, 'Charlie', 30)",
+			parameters: null);
 
 		// Empty target table for INSERT INTO ... SELECT
 		var targetSchema = new TableSchema
@@ -57,11 +54,9 @@ public class DmlTests : IAsyncLifetime
 
 		// Merge source table
 		await client.CreateTableAsync(_datasetId, "source", schema);
-		await client.InsertRowsAsync(_datasetId, "source", new[]
-		{
-			new BigQueryInsertRow("s1") { ["id"] = 2, ["name"] = "Bob Updated", ["value"] = 25 },
-			new BigQueryInsertRow("s2") { ["id"] = 4, ["name"] = "Dave", ["value"] = 40 },
-		});
+		await client.ExecuteQueryAsync(
+			$"INSERT INTO `{_datasetId}.source` (id, name, value) VALUES (2, 'Bob Updated', 25), (4, 'Dave', 40)",
+			parameters: null);
 	}
 
 	public async ValueTask DisposeAsync()

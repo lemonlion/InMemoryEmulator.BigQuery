@@ -67,7 +67,7 @@ public class ParityVerificationTests11 : IAsyncLifetime
 	[Fact] public async Task ArrayAgg_OrderByLimit()
 	{
 		var result = await S(@"
-			SELECT ARRAY_TO_STRING(ARRAY_AGG(x ORDER BY x LIMIT 3), ',')
+			SELECT ARRAY_TO_STRING(ARRAY_AGG(CAST(x AS STRING) ORDER BY x LIMIT 3), ',')
 			FROM UNNEST([5, 3, 1, 4, 2]) AS x");
 		Assert.Equal("1,2,3", result);
 	}
@@ -226,7 +226,7 @@ public class ParityVerificationTests11 : IAsyncLifetime
 	[Fact] public async Task ArrayAgg_IgnoreNulls()
 	{
 		var result = await S(@"
-			SELECT ARRAY_TO_STRING(ARRAY_AGG(x IGNORE NULLS ORDER BY x), ',')
+			SELECT ARRAY_TO_STRING(ARRAY_AGG(CAST(x AS STRING) IGNORE NULLS ORDER BY x), ',')
 			FROM UNNEST([CAST(3 AS INT64), NULL, 1, NULL, 2]) AS x");
 		Assert.Equal("1,2,3", result);
 	}
@@ -258,6 +258,6 @@ public class ParityVerificationTests11 : IAsyncLifetime
 	[Fact] public async Task Ieee_Divide_NaN()
 	{
 		var result = await S("SELECT CAST(IEEE_DIVIDE(0, 0) AS STRING)");
-		Assert.Equal("NaN", result);
+		Assert.Equal("nan", result);
 	}
 }

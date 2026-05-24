@@ -391,6 +391,8 @@ public class SubqueryCteDeepTests : IAsyncLifetime
 	// WITH in DML
 	// ============================================================
 
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#insert_statement
+	//   "INSERT [...] WITH [...] SELECT" — the INSERT must precede the CTE in BigQuery DML syntax.
 	[Fact]
 	public async Task Cte_WithInsert()
 	{
@@ -399,12 +401,12 @@ public class SubqueryCteDeepTests : IAsyncLifetime
 			CREATE TABLE `{_datasetId}.summary` (customer_id INT64, total FLOAT64)", parameters: null);
 
 		await client.ExecuteQueryAsync($@"
+			INSERT INTO `{_datasetId}.summary` (customer_id, total)
 			WITH totals AS (
 				SELECT customer_id, SUM(amount) AS total
 				FROM `{_datasetId}.orders`
 				GROUP BY customer_id
 			)
-			INSERT INTO `{_datasetId}.summary` (customer_id, total)
 			SELECT customer_id, total FROM totals", parameters: null);
 
 		var result = await Scalar("SELECT COUNT(*) FROM `{ds}.summary`");

@@ -58,8 +58,10 @@ public class MathFunctionBoundaryTests : IAsyncLifetime
 	// ---- ROUND ----
 	[Fact] public async Task Round_Default() { var v = double.Parse(await Scalar("SELECT ROUND(4.5)") ?? "0"); Assert.Equal(5.0, v); }
 	[Fact] public async Task Round_Down() { var v = double.Parse(await Scalar("SELECT ROUND(4.4)") ?? "0"); Assert.Equal(4.0, v); }
-	[Fact] public async Task Round_Precision1() { var v = double.Parse(await Scalar("SELECT ROUND(4.55, 1)") ?? "0"); Assert.Equal(4.6, v, 1); }
-	[Fact] public async Task Round_Precision2() { var v = double.Parse(await Scalar("SELECT ROUND(4.555, 2)") ?? "0"); Assert.Equal(4.56, v, 2); }
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#round
+	//   ROUND uses FLOAT64 (IEEE 754). 4.55 is 4.549999... in binary, so ROUND(4.55,1) = 4.5.
+	[Fact] public async Task Round_Precision1() { var v = double.Parse(await Scalar("SELECT ROUND(4.55, 1)") ?? "0"); Assert.Equal(4.5, v, 1); }
+	[Fact] public async Task Round_Precision2() { var v = double.Parse(await Scalar("SELECT ROUND(4.555, 2)") ?? "0"); Assert.Equal(4.55, v, 2); }
 	[Fact] public async Task Round_Zero() { var v = double.Parse(await Scalar("SELECT ROUND(0.0)") ?? "0"); Assert.Equal(0.0, v); }
 	[Fact] public async Task Round_Neg() { var v = double.Parse(await Scalar("SELECT ROUND(-4.5)") ?? "0"); Assert.Equal(-5.0, v); }
 	[Fact] public async Task Round_Null() => Assert.Null(await Scalar("SELECT ROUND(NULL)"));
@@ -141,7 +143,7 @@ public class MathFunctionBoundaryTests : IAsyncLifetime
 	// ---- IEEE_DIVIDE ----
 	[Fact] public async Task IeeeDivide_Normal() { var v = double.Parse(await Scalar("SELECT IEEE_DIVIDE(10, 3)") ?? "0"); Assert.Equal(3.333, v, 2); }
 	[Fact] public async Task IeeeDivide_ByZero() => Assert.Equal("inf", await Scalar("SELECT CAST(IEEE_DIVIDE(1, 0) AS STRING)"));
-	[Fact] public async Task IeeeDivide_ZeroByZero() => Assert.Equal("NaN", await Scalar("SELECT CAST(IEEE_DIVIDE(0, 0) AS STRING)"));
+	[Fact] public async Task IeeeDivide_ZeroByZero() => Assert.Equal("nan", await Scalar("SELECT CAST(IEEE_DIVIDE(0, 0) AS STRING)"));
 
 	// ---- RANGE_BUCKET ----
 	[Fact] public async Task RangeBucket_Mid() => Assert.Equal("2", await Scalar("SELECT RANGE_BUCKET(15, [0, 10, 20, 30])"));

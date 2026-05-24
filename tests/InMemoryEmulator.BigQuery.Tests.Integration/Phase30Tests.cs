@@ -40,6 +40,7 @@ public class Phase30Tests : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/search_functions
 	//   DOT_PRODUCT computes the inner product of two vectors.
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task DotProduct_KnownValues()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -50,6 +51,7 @@ public class Phase30Tests : IAsyncLifetime
 	}
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task DotProduct_OrthogonalVectors_ReturnsZero()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -66,6 +68,7 @@ public class Phase30Tests : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/search_functions
 	//   APPROX_COSINE_DISTANCE approximates cosine distance between vectors.
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ApproxCosineDistance_IdenticalVectors_ReturnsZero()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -77,6 +80,7 @@ public class Phase30Tests : IAsyncLifetime
 
 	// Ref: APPROX_EUCLIDEAN_DISTANCE approximates Euclidean distance.
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ApproxEuclideanDistance_KnownValues()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -88,6 +92,7 @@ public class Phase30Tests : IAsyncLifetime
 
 	// Ref: APPROX_DOT_PRODUCT approximates dot product.
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ApproxDotProduct_KnownValues()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -131,6 +136,7 @@ public class Phase30Tests : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/other-statements#export_data_statement
 	//   "EXPORT DATA statement exports the results of a query to an external data source."
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ExportData_NoOp_DoesNotThrow()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -142,6 +148,7 @@ public class Phase30Tests : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/other-statements#load_data_statement
 	//   "LOAD DATA statement loads data from external sources."
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task LoadData_NoOp_DoesNotThrow()
 	{
 		var client = await _fixture.GetClientAsync();

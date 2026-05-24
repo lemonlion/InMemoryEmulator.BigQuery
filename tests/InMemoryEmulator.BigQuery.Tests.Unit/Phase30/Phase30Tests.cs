@@ -83,13 +83,14 @@ public class Phase30Tests
 		Assert.Null(rows[0].F[0].V);
 	}
 
-	// Ref: DOT_PRODUCT with mismatched dimensions => NULL (lenient)
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#dot_product
+	//   "Both non-sparse vectors in this function must share the same dimensions, and if they don't, an error is produced."
 	[Fact]
-	public void DotProduct_MismatchedDimensions_ReturnsNull()
+	public void DotProduct_MismatchedDimensions_ThrowsError()
 	{
-		var (_, rows) = CreateExecutor().Execute(
-			"SELECT DOT_PRODUCT([1.0, 2.0], [3.0, 4.0, 5.0]) AS d");
-		Assert.Null(rows[0].F[0].V);
+		var ex = Assert.Throws<InvalidOperationException>(() => CreateExecutor().Execute(
+			"SELECT DOT_PRODUCT([1.0, 2.0], [3.0, 4.0, 5.0]) AS d"));
+		Assert.Contains("Array inputs are not equal in length", ex.Message);
 	}
 
 	// Ref: DOT_PRODUCT with negative values

@@ -84,7 +84,7 @@ public class ParityVerificationTests29 : IAsyncLifetime
 
 	[Fact] public async Task Array_Subquery_OrderBy()
 	{
-		var result = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT x FROM UNNEST([3,1,4,1,5]) AS x ORDER BY x), ',')");
+		var result = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST([3,1,4,1,5]) AS x ORDER BY x), ',')");
 		Assert.Equal("1,1,3,4,5", result);
 	}
 
@@ -276,10 +276,10 @@ public class ParityVerificationTests29 : IAsyncLifetime
 			ORDER BY dept");
 		Assert.Equal(2, rows.Count);
 		Assert.Equal("A", rows[0][0]?.ToString());
-		Assert.Equal("110.0", rows[0][1]?.ToString()); // CAST(110.0 AS STRING) = "110.0"
+		Assert.Equal("110", rows[0][1]?.ToString()); // CAST(110.0 AS STRING) = "110"
 		Assert.Equal("high", rows[0][2]?.ToString());
 		Assert.Equal("B", rows[1][0]?.ToString());
-		Assert.Equal("100.0", rows[1][1]?.ToString()); // CAST(100.0 AS STRING) = "100.0"
+		Assert.Equal("100", rows[1][1]?.ToString()); // CAST(100.0 AS STRING) = "100"
 		Assert.Equal("normal", rows[1][2]?.ToString());
 	}
 
@@ -358,15 +358,15 @@ public class ParityVerificationTests29 : IAsyncLifetime
 				FROM `{ds}.sales`
 				GROUP BY product
 			)
-			SELECT product, total, 
+			SELECT product, total,
 				ROUND(total / (SELECT SUM(total) FROM product_totals) * 100, 1) AS pct
 			FROM product_totals
-			ORDER BY total DESC");
+			ORDER BY total DESC, product ASC");
 		Assert.Equal(2, rows.Count);
-		Assert.Equal("Widget", rows[0][0]?.ToString());
+		Assert.Equal("Gadget", rows[0][0]?.ToString());
 		Assert.Equal("250", rows[0][1]?.ToString());
 		Assert.Equal("50", rows[0][2]?.ToString()); // ROUND returns FLOAT64, SDK renders 50.0 as "50"
-		Assert.Equal("Gadget", rows[1][0]?.ToString());
+		Assert.Equal("Widget", rows[1][0]?.ToString());
 		Assert.Equal("250", rows[1][1]?.ToString());
 		Assert.Equal("50", rows[1][2]?.ToString());
 	}

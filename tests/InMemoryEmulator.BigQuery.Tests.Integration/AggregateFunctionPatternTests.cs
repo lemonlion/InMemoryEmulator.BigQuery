@@ -47,7 +47,9 @@ public class AggregateFunctionPatternTests : IAsyncLifetime
 	// ---- SUM ----
 	[Fact] public async Task Sum_Basic() => Assert.Equal("575000", await S("SELECT SUM(salary) FROM `{ds}.t`"));
 	[Fact] public async Task Sum_WithWhere() => Assert.Equal("250000", await S("SELECT SUM(salary) FROM `{ds}.t` WHERE dept = 'Eng'"));
-	[Fact] public async Task Sum_Null() => Assert.Null(await S("SELECT SUM(CAST(NULL AS INT64))"));
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task Sum_Null() => Assert.Null(await S("SELECT SUM(x) FROM UNNEST([CAST(NULL AS INT64)]) AS x"));
 
 	// ---- AVG ----
 	[Fact] public async Task Avg_Basic()
@@ -68,7 +70,9 @@ public class AggregateFunctionPatternTests : IAsyncLifetime
 	[Fact] public async Task Max_Basic() => Assert.Equal("90000", await S("SELECT MAX(salary) FROM `{ds}.t`"));
 	[Fact] public async Task Min_String() => Assert.Equal("Eng", await S("SELECT MIN(dept) FROM `{ds}.t`"));
 	[Fact] public async Task Max_String() => Assert.Equal("Sales", await S("SELECT MAX(dept) FROM `{ds}.t`"));
-	[Fact] public async Task Min_Null() => Assert.Null(await S("SELECT MIN(CAST(NULL AS INT64))"));
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task Min_Null() => Assert.Null(await S("SELECT MIN(x) FROM UNNEST([CAST(NULL AS INT64)]) AS x"));
 
 	// ---- GROUP BY ----
 	[Fact] public async Task GroupBy_Count()

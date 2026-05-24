@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -34,11 +35,43 @@ public class NullSemanticsComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- NULL comparisons ----
-	[Fact] public async Task Null_Equals_Null_IsNull() { var v = await Scalar("SELECT NULL = NULL"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
-	[Fact] public async Task Null_NotEquals_Null_IsNull() { var v = await Scalar("SELECT NULL != NULL"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
-	[Fact] public async Task Null_LessThan_Null_IsNull() => Assert.Null(await Scalar("SELECT NULL < NULL"));
-	[Fact] public async Task Int_Equals_Null_IsNull() { var v = await Scalar("SELECT 1 = NULL"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
-	[Fact] public async Task Null_Equals_Int_IsNull() { var v = await Scalar("SELECT NULL = 1"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+	//   "Operands of <op> cannot be literal NULL"
+	[Fact]
+	public async Task Null_Equals_Null_IsNull()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL = NULL", parameters: null));
+	}
+	[Fact]
+	public async Task Null_NotEquals_Null_IsNull()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL != NULL", parameters: null));
+	}
+	[Fact]
+	public async Task Null_LessThan_Null_IsNull()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL < NULL", parameters: null));
+	}
+	[Fact]
+	public async Task Int_Equals_Null_IsNull()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT 1 = NULL", parameters: null));
+	}
+	[Fact]
+	public async Task Null_Equals_Int_IsNull()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL = 1", parameters: null));
+	}
 
 	// ---- IS NULL / IS NOT NULL ----
 	[Fact] public async Task IsNull_Null_True() => Assert.Equal("True", await Scalar("SELECT NULL IS NULL"));
@@ -48,12 +81,50 @@ public class NullSemanticsComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task IsNull_EmptyString_False() => Assert.Equal("False", await Scalar("SELECT '' IS NULL"));
 
 	// ---- NULL in arithmetic ----
-	[Fact] public async Task Null_Plus_Int() => Assert.Null(await Scalar("SELECT NULL + 1"));
-	[Fact] public async Task Int_Plus_Null() => Assert.Null(await Scalar("SELECT 1 + NULL"));
-	[Fact] public async Task Null_Minus_Int() => Assert.Null(await Scalar("SELECT NULL - 1"));
-	[Fact] public async Task Null_Times_Int() => Assert.Null(await Scalar("SELECT NULL * 5"));
-	[Fact] public async Task Null_Divide_Int() => Assert.Null(await Scalar("SELECT NULL / 2"));
-	[Fact] public async Task Int_Divide_Null() => Assert.Null(await Scalar("SELECT 10 / NULL"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+	//   "Operands of <op> cannot be literal NULL"
+	[Fact]
+	public async Task Null_Plus_Int()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL + 1", parameters: null));
+	}
+	[Fact]
+	public async Task Int_Plus_Null()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT 1 + NULL", parameters: null));
+	}
+	[Fact]
+	public async Task Null_Minus_Int()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL - 1", parameters: null));
+	}
+	[Fact]
+	public async Task Null_Times_Int()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL * 5", parameters: null));
+	}
+	[Fact]
+	public async Task Null_Divide_Int()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL / 2", parameters: null));
+	}
+	[Fact]
+	public async Task Int_Divide_Null()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT 10 / NULL", parameters: null));
+	}
 
 	// ---- NULL in logical operators ----
 	[Fact] public async Task Null_And_True() { var v = await Scalar("SELECT NULL AND TRUE"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
@@ -62,7 +133,13 @@ public class NullSemanticsComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task False_And_Null() => Assert.Equal("False", await Scalar("SELECT FALSE AND NULL"));
 	[Fact] public async Task Null_Or_True() => Assert.Equal("True", await Scalar("SELECT NULL OR TRUE"));
 	[Fact] public async Task Null_Or_False() { var v = await Scalar("SELECT NULL OR FALSE"); Assert.True(v == null || v == "", $"Expected null, got {v}"); }
-	[Fact] public async Task Not_Null() => Assert.Null(await Scalar("SELECT NOT NULL"));
+	[Fact]
+	public async Task Not_Null()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NOT NULL", parameters: null));
+	}
 
 	// ---- NULL in string operations ----
 	[Fact] public async Task Concat_Null_String() { var v = await Scalar("SELECT CONCAT(NULL, 'hello')"); Assert.True(v == null || v == "hello", $"Expected null or hello, got {v}"); }
@@ -101,11 +178,25 @@ public class NullSemanticsComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task In_ListContainsNull_Match() => Assert.Equal("True", await Scalar("SELECT 1 IN (1, 2, NULL)"));
 
 	// ---- NULL in BETWEEN ----
-	[Fact] public async Task Between_NullValue() => Assert.Null(await Scalar("SELECT NULL BETWEEN 1 AND 10"));
+	[Fact] public async Task Between_NullValue() => Assert.Null(await Scalar("SELECT CAST(NULL AS INT64) BETWEEN 1 AND 10"));
 
 	// ---- NULL in LIKE ----
-	[Fact] public async Task Like_NullValue() => Assert.Null(await Scalar("SELECT NULL LIKE '%test%'"));
-	[Fact] public async Task Like_NullPattern() => Assert.Null(await Scalar("SELECT 'test' LIKE NULL"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+	//   "Operands of LIKE cannot be literal NULL"
+	[Fact]
+	public async Task Like_NullValue()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL LIKE '%test%'", parameters: null));
+	}
+	[Fact]
+	public async Task Like_NullPattern()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT 'test' LIKE NULL", parameters: null));
+	}
 
 	// ---- NULL ordering ----
 	[Fact] public async Task OrderBy_NullsFirst_Asc()
@@ -120,7 +211,15 @@ public class NullSemanticsComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task Distinct_NullsAreEqual() => Assert.Equal("2", await Scalar("SELECT COUNT(*) FROM (SELECT DISTINCT x FROM (SELECT CAST(NULL AS INT64) AS x UNION ALL SELECT CAST(NULL AS INT64) UNION ALL SELECT 1) AS t) AS u"));
 
 	// ---- NULL in string concat operator ----
-	[Fact] public async Task ConcatOp_Null() { var v = await Scalar("SELECT 'a' || NULL"); Assert.True(v == null || v == "a", $"Expected null or a, got {v}"); }
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+	//   "Operands of || cannot be literal NULL"
+	[Fact]
+	public async Task ConcatOp_Null()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT 'a' || NULL", parameters: null));
+	}
 
 	// ---- NULL in IF ----
 	[Fact] public async Task If_NullCondition_ReturnsFalse() => Assert.Equal("no", await Scalar("SELECT IF(CAST(NULL AS BOOL), 'yes', 'no')"));

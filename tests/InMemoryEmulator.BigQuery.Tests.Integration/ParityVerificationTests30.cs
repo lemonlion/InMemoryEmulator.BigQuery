@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -199,17 +200,20 @@ public class ParityVerificationTests30 : IAsyncLifetime
 	// NULL-safe comparison operations
 	// ───────────────────────────────────────────────────────────────────────────
 
-	[Fact] public async Task NullComparison_Equals()
+	[Fact]
+	public async Task NullComparison_Equals()
 	{
-		// NULL = NULL is NULL (not TRUE)
-		var result = await S("SELECT CASE WHEN NULL = NULL THEN 'true' ELSE 'false' END");
-		Assert.Equal("false", result);
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT CASE WHEN NULL = NULL THEN 'true' ELSE 'false' END", parameters: null));
 	}
 
-	[Fact] public async Task NullComparison_NotEquals()
+	[Fact]
+	public async Task NullComparison_NotEquals()
 	{
-		var result = await S("SELECT CASE WHEN NULL != NULL THEN 'true' ELSE 'false' END");
-		Assert.Equal("false", result); // NULL != NULL is NULL → ELSE
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT CASE WHEN NULL != NULL THEN 'true' ELSE 'false' END", parameters: null));
 	}
 
 	[Fact] public async Task NullComparison_InWhere()

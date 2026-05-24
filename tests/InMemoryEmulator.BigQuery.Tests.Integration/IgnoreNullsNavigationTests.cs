@@ -93,14 +93,15 @@ public class IgnoreNullsNavigationTests : IAsyncLifetime
 	// ---- LAG IGNORE NULLS ----
 
 	/// <summary>
-	/// LAG(val IGNORE NULLS) with no offset - should return previous non-null value.
+	/// LAG(val IGNORE NULLS) with no offset - BigQuery rejects IGNORE NULLS for LAG.
 	/// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#lag
-	///   "If ignore_nulls is true, skips NULL values in the lookup."
+	///   "IGNORE NULLS and RESPECT NULLS are not allowed for analytic function LAG"
 	/// </summary>
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Lag_IgnoreNulls_NoOffset_ReturnsPreviousNonNull()
 	{
-		var rows = await Query(@"
+		var ex = await Assert.ThrowsAsync<Google.GoogleApiException>(() => Query(@"
 			SELECT id, val,
 				LAG(val IGNORE NULLS) OVER (ORDER BY id) AS lagged
 			FROM UNNEST([
@@ -108,46 +109,38 @@ public class IgnoreNullsNavigationTests : IAsyncLifetime
 				STRUCT(2, CAST(NULL AS INT64)),
 				STRUCT(3, CAST(NULL AS INT64)),
 				STRUCT(4, 40)
-			]) ORDER BY id");
+			]) ORDER BY id"));
 
-		// id=1: no previous → NULL
-		Assert.Null(rows[0]["lagged"]);
-		// id=2: previous non-null is 10
-		Assert.Equal("10", rows[1]["lagged"]?.ToString());
-		// id=3: previous non-null is 10 (skips null at id=2)
-		Assert.Equal("10", rows[2]["lagged"]?.ToString());
-		// id=4: previous non-null is 10 (skips nulls at id=2,3)
-		Assert.Equal("10", rows[3]["lagged"]?.ToString());
+		Assert.Contains("IGNORE NULLS and RESPECT NULLS are not allowed for analytic function LAG", ex.Message);
 	}
 
 	/// <summary>
-	/// LAG(val, 1 IGNORE NULLS) - same as above with explicit offset.
+	/// LAG(val, 1 IGNORE NULLS) - BigQuery rejects IGNORE NULLS for LAG.
 	/// </summary>
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Lag_IgnoreNulls_ExplicitOffset_ReturnsPreviousNonNull()
 	{
-		var rows = await Query(@"
+		var ex = await Assert.ThrowsAsync<Google.GoogleApiException>(() => Query(@"
 			SELECT id, val,
 				LAG(val, 1 IGNORE NULLS) OVER (ORDER BY id) AS lagged
 			FROM UNNEST([
 				STRUCT(1 AS id, 10 AS val),
 				STRUCT(2, CAST(NULL AS INT64)),
 				STRUCT(3, 30)
-			]) ORDER BY id");
+			]) ORDER BY id"));
 
-		Assert.Null(rows[0]["lagged"]);
-		Assert.Equal("10", rows[1]["lagged"]?.ToString());
-		// id=3: 1st non-null before it is 10 (skip the NULL at id=2)
-		Assert.Equal("10", rows[2]["lagged"]?.ToString());
+		Assert.Contains("IGNORE NULLS and RESPECT NULLS are not allowed for analytic function LAG", ex.Message);
 	}
 
 	/// <summary>
-	/// LAG(val, 2 IGNORE NULLS) - skip 2 non-null values backwards.
+	/// LAG(val, 2 IGNORE NULLS) - BigQuery rejects IGNORE NULLS for LAG.
 	/// </summary>
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Lag_IgnoreNulls_Offset2_Skips2NonNulls()
 	{
-		var rows = await Query(@"
+		var ex = await Assert.ThrowsAsync<Google.GoogleApiException>(() => Query(@"
 			SELECT id, val,
 				LAG(val, 2 IGNORE NULLS) OVER (ORDER BY id) AS lagged
 			FROM UNNEST([
@@ -156,42 +149,41 @@ public class IgnoreNullsNavigationTests : IAsyncLifetime
 				STRUCT(3, CAST(NULL AS INT64)),
 				STRUCT(4, 40),
 				STRUCT(5, 50)
-			]) ORDER BY id");
+			]) ORDER BY id"));
 
-		// id=5: 2nd non-null before it is 20 (skip nulls, count: 40, then 20)
-		Assert.Equal("20", rows[4]["lagged"]?.ToString());
+		Assert.Contains("IGNORE NULLS and RESPECT NULLS are not allowed for analytic function LAG", ex.Message);
 	}
 
 	/// <summary>
-	/// LAG with IGNORE NULLS and a default value.
+	/// LAG with IGNORE NULLS and a default value - BigQuery rejects IGNORE NULLS for LAG.
 	/// </summary>
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Lag_IgnoreNulls_WithDefault()
 	{
-		var rows = await Query(@"
+		var ex = await Assert.ThrowsAsync<Google.GoogleApiException>(() => Query(@"
 			SELECT id, val,
 				LAG(val, 1, -1 IGNORE NULLS) OVER (ORDER BY id) AS lagged
 			FROM UNNEST([
 				STRUCT(1 AS id, CAST(NULL AS INT64) AS val),
 				STRUCT(2, 20)
-			]) ORDER BY id");
+			]) ORDER BY id"));
 
-		// id=1: no previous non-null → default -1
-		Assert.Equal("-1", rows[0]["lagged"]?.ToString());
-		// id=2: previous non-null not found (null at id=1) → default -1
-		Assert.Equal("-1", rows[1]["lagged"]?.ToString());
+		Assert.Contains("IGNORE NULLS and RESPECT NULLS are not allowed for analytic function LAG", ex.Message);
 	}
 
 	// ---- LEAD IGNORE NULLS ----
 
 	/// <summary>
-	/// LEAD(val IGNORE NULLS) - should return next non-null value.
+	/// LEAD(val IGNORE NULLS) - BigQuery rejects IGNORE NULLS for LEAD.
 	/// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#lead
+	///   "IGNORE NULLS and RESPECT NULLS are not allowed for analytic function LEAD"
 	/// </summary>
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Lead_IgnoreNulls_NoOffset_ReturnsNextNonNull()
 	{
-		var rows = await Query(@"
+		var ex = await Assert.ThrowsAsync<Google.GoogleApiException>(() => Query(@"
 			SELECT id, val,
 				LEAD(val IGNORE NULLS) OVER (ORDER BY id) AS led
 			FROM UNNEST([
@@ -199,56 +191,45 @@ public class IgnoreNullsNavigationTests : IAsyncLifetime
 				STRUCT(2, CAST(NULL AS INT64)),
 				STRUCT(3, CAST(NULL AS INT64)),
 				STRUCT(4, 40)
-			]) ORDER BY id");
+			]) ORDER BY id"));
 
-		// id=1: next non-null is 40 (skip nulls at 2,3)
-		Assert.Equal("40", rows[0]["led"]?.ToString());
-		// id=2: next non-null is 40
-		Assert.Equal("40", rows[1]["led"]?.ToString());
-		// id=3: next non-null is 40
-		Assert.Equal("40", rows[2]["led"]?.ToString());
-		// id=4: no next → NULL
-		Assert.Null(rows[3]["led"]);
+		Assert.Contains("IGNORE NULLS and RESPECT NULLS are not allowed for analytic function LEAD", ex.Message);
 	}
 
 	/// <summary>
-	/// LEAD(val, 1 IGNORE NULLS) - explicit offset, skip nulls.
+	/// LEAD(val, 1 IGNORE NULLS) - BigQuery rejects IGNORE NULLS for LEAD.
 	/// </summary>
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Lead_IgnoreNulls_ExplicitOffset()
 	{
-		var rows = await Query(@"
+		var ex = await Assert.ThrowsAsync<Google.GoogleApiException>(() => Query(@"
 			SELECT id, val,
 				LEAD(val, 1 IGNORE NULLS) OVER (ORDER BY id) AS led
 			FROM UNNEST([
 				STRUCT(1 AS id, 10 AS val),
 				STRUCT(2, CAST(NULL AS INT64)),
 				STRUCT(3, 30)
-			]) ORDER BY id");
+			]) ORDER BY id"));
 
-		// id=1: 1st non-null after me = 30 (skip null at id=2)
-		Assert.Equal("30", rows[0]["led"]?.ToString());
-		Assert.Equal("30", rows[1]["led"]?.ToString());
-		Assert.Null(rows[2]["led"]);
+		Assert.Contains("IGNORE NULLS and RESPECT NULLS are not allowed for analytic function LEAD", ex.Message);
 	}
 
 	/// <summary>
-	/// LEAD with IGNORE NULLS and a default value.
+	/// LEAD with IGNORE NULLS and a default value - BigQuery rejects IGNORE NULLS for LEAD.
 	/// </summary>
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Lead_IgnoreNulls_WithDefault()
 	{
-		var rows = await Query(@"
+		var ex = await Assert.ThrowsAsync<Google.GoogleApiException>(() => Query(@"
 			SELECT id, val,
 				LEAD(val, 1, -1 IGNORE NULLS) OVER (ORDER BY id) AS led
 			FROM UNNEST([
 				STRUCT(1 AS id, 10 AS val),
 				STRUCT(2, CAST(NULL AS INT64))
-			]) ORDER BY id");
+			]) ORDER BY id"));
 
-		// id=1: next non-null not found → default -1
-		Assert.Equal("-1", rows[0]["led"]?.ToString());
-		// id=2: no next → default -1
-		Assert.Equal("-1", rows[1]["led"]?.ToString());
+		Assert.Contains("IGNORE NULLS and RESPECT NULLS are not allowed for analytic function LEAD", ex.Message);
 	}
 }

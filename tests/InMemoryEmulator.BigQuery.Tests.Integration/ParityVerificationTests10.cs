@@ -144,10 +144,10 @@ public class ParityVerificationTests10 : IAsyncLifetime
 			FROM UNNEST([10, 20, 30, 40, 50]) AS val
 			ORDER BY val");
 		// PERCENT_RANK = (rank - 1) / (total_rows - 1)
-		// val=10: (1-1)/(5-1) = 0.0
-		// val=50: (5-1)/(5-1) = 1.0
-		Assert.Equal("0.0", rows[0]["pct"]?.ToString());
-		Assert.Equal("1.0", rows[4]["pct"]?.ToString());
+		// val=10: (1-1)/(5-1) = 0
+		// val=50: (5-1)/(5-1) = 1
+		Assert.Equal("0", rows[0]["pct"]?.ToString());
+		Assert.Equal("1", rows[4]["pct"]?.ToString());
 	}
 
 	[Fact] public async Task CumeDist_Basic()
@@ -158,9 +158,9 @@ public class ParityVerificationTests10 : IAsyncLifetime
 			ORDER BY val");
 		// CUME_DIST = number_of_rows_with_value_lte / total_rows
 		// val=10: 1/5 = 0.2
-		// val=50: 5/5 = 1.0
+		// val=50: 5/5 = 1
 		Assert.Equal("0.2", rows[0]["cd"]?.ToString());
-		Assert.Equal("1.0", rows[4]["cd"]?.ToString());
+		Assert.Equal("1", rows[4]["cd"]?.ToString());
 	}
 
 	[Fact] public async Task LastValue_WithFrame()
@@ -327,7 +327,7 @@ public class ParityVerificationTests10 : IAsyncLifetime
 	[Fact] public async Task Cast_IntToFloat()
 	{
 		var result = await S("SELECT CAST(CAST(42 AS FLOAT64) AS STRING)");
-		Assert.Equal("42.0", result);
+		Assert.Equal("42", result);
 	}
 
 	// ───────────────────────────────────────────────────────────────────────────

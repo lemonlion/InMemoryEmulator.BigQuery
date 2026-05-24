@@ -271,7 +271,7 @@ public class ParityVerificationTests28 : IAsyncLifetime
 
 	[Fact] public async Task ArrayReverse()
 	{
-		var result = await S("SELECT ARRAY_TO_STRING(ARRAY_REVERSE([1,2,3,4,5]), ',')");
+		var result = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(ARRAY_REVERSE([1,2,3,4,5])) AS x), ',')");
 		Assert.Equal("5,4,3,2,1", result);
 	}
 

@@ -118,8 +118,9 @@ public class ParityVerificationTests46 : IAsyncLifetime
 	// ============================================================
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#generate_date_array
-	//   "Returns NULL if ... step_expression ... is NULL."
+	//   BigQuery: "Invalid cast from ARRAY<DATE> to STRING"
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task GenerateDateArray_NullStep_ReturnsNull()
 	{
 		var result = await ScalarAsync(

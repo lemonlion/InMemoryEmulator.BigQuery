@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -46,14 +47,14 @@ public class Round27BugFixTests : IAsyncLifetime
 	}
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task UnionAll_IntAndString_DoesNotError_DueToTypeInferenceLimitation()
 	{
-		var client = await _fixture.GetClientAsync();
-		// Note: Real BigQuery errors on incompatible types in UNION ALL (INT64 + STRING).
-		// However, since our InferType(null) returns "STRING", we treat STRING as a wildcard
-		// in set-operation type coercion to handle SELECT NULL UNION ALL SELECT 1 correctly.
-		// This means SELECT 1 UNION ALL SELECT 'abc' does NOT error (known divergence).
+		// Note: Real BigQuery errors with "Column 1 in UNION ALL has incompatible types: INT64, STRING"
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
+		// The emulator treats STRING as a wildcard type for NULL-inferred columns,
+		// which incorrectly allows INT64+STRING unions. This is a known limitation.
+		var client = await _fixture.GetClientAsync();
 		var result = await client.ExecuteQueryAsync(
 			"SELECT 1 AS x UNION ALL SELECT 'abc' AS x",
 			parameters: null);
@@ -144,15 +145,18 @@ public class Round27BugFixTests : IAsyncLifetime
 		Assert.Equal("hello", (string)rows[0]["b"]);
 	}
 
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax
+	//   "Query without FROM clause cannot have a WHERE clause"
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Select_WithoutFrom_WhereFalse_ProducesZeroRows()
 	{
 		var client = await _fixture.GetClientAsync();
-		var result = await client.ExecuteQueryAsync(
-			"SELECT 1 AS a WHERE FALSE",
-			parameters: null);
-		var rows = result.ToList();
-		Assert.Empty(rows);
+		var ex = await Assert.ThrowsAsync<Google.GoogleApiException>(async () =>
+			await client.ExecuteQueryAsync(
+				"SELECT 1 AS a WHERE FALSE",
+				parameters: null));
+		Assert.Contains("Query without FROM clause cannot have a WHERE clause", ex.Message);
 	}
 
 	// ===== 5. LIMIT 0 =====
@@ -187,19 +191,20 @@ public class Round27BugFixTests : IAsyncLifetime
 	}
 
 	// ===== 6. Aggregate on single-row result (SELECT without FROM) =====
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax
+	//   "Aggregate function COUNT(*) not allowed in SELECT without FROM clause"
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Aggregate_WithoutFrom()
 	{
 		var client = await _fixture.GetClientAsync();
-		var result = await client.ExecuteQueryAsync(
-			"SELECT COUNT(*) AS cnt, SUM(1) AS s, MAX(1) AS m",
-			parameters: null);
-		var rows = result.ToList();
-		Assert.Single(rows);
-		Assert.Equal(1L, (long)rows[0]["cnt"]);
-		Assert.Equal(1L, (long)rows[0]["s"]);
-		Assert.Equal(1L, (long)rows[0]["m"]);
+		var ex = await Assert.ThrowsAsync<Google.GoogleApiException>(async () =>
+			await client.ExecuteQueryAsync(
+				"SELECT COUNT(*) AS cnt, SUM(1) AS s, MAX(1) AS m",
+				parameters: null));
+		Assert.Contains("Aggregate function", ex.Message);
+		Assert.Contains("not allowed in SELECT without FROM clause", ex.Message);
 	}
 
 	// ===== 7. HAVING without GROUP BY (implicit single group) =====
@@ -298,16 +303,16 @@ public class Round27BugFixTests : IAsyncLifetime
 	}
 
 	// ===== 10. EXCEPT DISTINCT =====
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
+	//   "Different set operations cannot be used in the same query without using parentheses for grouping"
 
 	[Fact]
 	public async Task ExceptDistinct_Basic()
 	{
 		var client = await _fixture.GetClientAsync();
-		// Simple EXCEPT DISTINCT test
 		var result1 = await client.ExecuteQueryAsync(
-			"SELECT 1 AS x UNION ALL SELECT 2 AS x UNION ALL SELECT 1 AS x EXCEPT DISTINCT SELECT 1 AS x",
+			"SELECT * FROM (SELECT 1 AS x UNION ALL SELECT 2 AS x UNION ALL SELECT 1 AS x) EXCEPT DISTINCT SELECT 1 AS x",
 			parameters: null);
-		// Left-to-right: ((SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 1) EXCEPT DISTINCT SELECT 1) = {2}
 		var rows1 = result1.ToList();
 		Assert.Single(rows1);
 		Assert.Equal(2L, (long)rows1[0]["x"]);
@@ -318,11 +323,8 @@ public class Round27BugFixTests : IAsyncLifetime
 	{
 		var client = await _fixture.GetClientAsync();
 		var result = await client.ExecuteQueryAsync(
-			"SELECT 1 AS x UNION ALL SELECT 2 AS x UNION ALL SELECT 3 AS x EXCEPT DISTINCT SELECT 2 AS x",
+			"SELECT * FROM (SELECT 1 AS x UNION ALL SELECT 2 AS x UNION ALL SELECT 3 AS x) EXCEPT DISTINCT SELECT 2 AS x",
 			parameters: null);
-		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
-		//   "Set operations are evaluated left to right."
-		// ((SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3) EXCEPT DISTINCT SELECT 2) = {1, 3}
 		var rows = result.ToList();
 		Assert.Equal(2, rows.Count);
 	}

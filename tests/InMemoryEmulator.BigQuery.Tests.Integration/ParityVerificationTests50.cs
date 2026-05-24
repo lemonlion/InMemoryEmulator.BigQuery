@@ -32,21 +32,24 @@ public class ParityVerificationTests50 : IAsyncLifetime
 	// --- LIKE backslash escape ---
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#like_operator
-	//   "Use two backslashes (\\) in the pattern to match a single backslash."
-	//   The backslash is the default escape character for % and _.
+	//   BigQuery does not support \% or \_ escape sequences in LIKE patterns.
+	//   "Syntax error: Illegal escape sequence: \%"
+	//   Backslash is NOT a default escape character for % and _ in BigQuery LIKE.
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Like_EscapedPercent_MatchesLiteralPercent()
 	{
 		// SQL: 'test%' LIKE 'test\%'  (the \% matches literal %)
-		var row = await ScalarRowAsync("SELECT 'test%' LIKE 'test\\%'");
+		var row = await ScalarRowAsync("SELECT 'test%' LIKE r'test\\%'");
 		Assert.Equal(true, row[0]);
 	}
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Like_EscapedUnderscore_MatchesLiteralUnderscore()
 	{
-		var row = await ScalarRowAsync("SELECT 'test_' LIKE 'test\\_'");
+		var row = await ScalarRowAsync("SELECT 'test_' LIKE r'test\\_'");
 		Assert.Equal(true, row[0]);
 	}
 
@@ -60,9 +63,10 @@ public class ParityVerificationTests50 : IAsyncLifetime
 	}
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Like_EscapedPercentInMiddle_MatchesLiteralPercent()
 	{
-		var row = await ScalarRowAsync("SELECT 'a%b' LIKE 'a\\%b'");
+		var row = await ScalarRowAsync("SELECT 'a%b' LIKE r'a\\%b'");
 		Assert.Equal(true, row[0]);
 	}
 
@@ -74,10 +78,11 @@ public class ParityVerificationTests50 : IAsyncLifetime
 	}
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Like_EscapedPercent_DoesNotMatchWildcard()
 	{
 		// 'testX' should NOT match 'test\%' because \% means literal %
-		var row = await ScalarRowAsync("SELECT 'testX' LIKE 'test\\%'");
+		var row = await ScalarRowAsync("SELECT 'testX' LIKE r'test\\%'");
 		Assert.Equal(false, row[0]);
 	}
 

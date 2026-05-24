@@ -8,6 +8,7 @@ namespace InMemoryEmulator.BigQuery.Tests.Integration;
 /// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aead_encryption_functions
 /// </summary>
 [Collection(IntegrationCollection.Name)]
+[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 public class EncryptionFunctionTests : IAsyncLifetime
 {
 	private readonly BigQuerySession _session;

@@ -161,8 +161,8 @@ public class BugVerificationRound23Tests
 	[Fact]
 	public void Concat_WholeFloat_ShouldShowDecimalPoint()
 	{
-		// CONCAT(CAST(1 AS FLOAT64)) should give '1.0' (BigQuery CAST to STRING format)
+		// CONCAT(CAST(1 AS FLOAT64)) should give '1' (BigQuery omits ".0" for whole-number floats)
 		var (_, rows) = CreateExecutor().Execute("SELECT CONCAT(CAST(1 AS FLOAT64))");
-		Assert.Equal("1.0", rows[0].F[0].V?.ToString());
+		Assert.Equal("1", rows[0].F[0].V?.ToString());
 	}
 }

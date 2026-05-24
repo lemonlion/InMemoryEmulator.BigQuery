@@ -136,7 +136,7 @@ public class MissingStringFunctionIntegrationTests : IAsyncLifetime
 	{
 		var client = await _fixture.GetClientAsync();
 		var results = await client.ExecuteQueryAsync(
-			"SELECT ARRAY_TO_STRING(REGEXP_EXTRACT_ALL('abc 123 def 456', '\\d+'), ',') AS result",
+			"SELECT ARRAY_TO_STRING(REGEXP_EXTRACT_ALL('abc 123 def 456', r'\\d+'), ',') AS result",
 			parameters: null);
 		var rows = results.ToList();
 		Assert.Equal("123,456", (string)rows[0]["result"]);
@@ -187,7 +187,7 @@ public class MissingStringFunctionIntegrationTests : IAsyncLifetime
 	{
 		var client = await _fixture.GetClientAsync();
 		var results = await client.ExecuteQueryAsync(
-			"SELECT ARRAY_TO_STRING(TO_CODE_POINTS('ABC'), ',') AS result",
+			"SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(TO_CODE_POINTS('ABC')) AS x), ',') AS result",
 			parameters: null);
 		var rows = results.ToList();
 		Assert.Equal("65,66,67", (string)rows[0]["result"]);

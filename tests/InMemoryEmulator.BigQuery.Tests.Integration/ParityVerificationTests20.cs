@@ -237,7 +237,7 @@ public class ParityVerificationTests20 : IAsyncLifetime
 	[Fact] public async Task ArrayAgg_OrderByDesc()
 	{
 		var result = await S(@"
-			SELECT ARRAY_TO_STRING(ARRAY_AGG(x ORDER BY x DESC), ',')
+			SELECT ARRAY_TO_STRING(ARRAY_AGG(CAST(x AS STRING) ORDER BY x DESC), ',')
 			FROM UNNEST([3, 1, 4, 1, 5]) AS x");
 		Assert.Equal("5,4,3,1,1", result);
 	}

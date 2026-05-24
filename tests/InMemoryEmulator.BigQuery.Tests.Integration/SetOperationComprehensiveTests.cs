@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -149,18 +150,28 @@ public class SetOperationComprehensiveTests : IAsyncLifetime
 		Assert.Equal(3, rows.Count);
 	}
 
-	// ---- INTERSECT ALL ----
-	[Fact] public async Task IntersectAll_Basic()
+	// ---- INTERSECT ALL - not supported in BigQuery ----
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
+	//   "INTERSECT ALL is not supported. Only INTERSECT DISTINCT is supported."
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task IntersectAll_Basic()
 	{
-		var rows = await Q("SELECT id, name FROM `{ds}.a` INTERSECT ALL SELECT id, name FROM `{ds}.b` ORDER BY id");
-		Assert.Equal(2, rows.Count);
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(async () =>
+			await client.ExecuteQueryAsync($"SELECT id, name FROM `{_ds}.a` INTERSECT ALL SELECT id, name FROM `{_ds}.b` ORDER BY id", parameters: null));
 	}
 
-	// ---- EXCEPT ALL ----
-	[Fact] public async Task ExceptAll_Basic()
+	// ---- EXCEPT ALL - not supported in BigQuery ----
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
+	//   "EXCEPT ALL is not supported. Only EXCEPT DISTINCT is supported."
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task ExceptAll_Basic()
 	{
-		var rows = await Q("SELECT id, name FROM `{ds}.a` EXCEPT ALL SELECT id, name FROM `{ds}.b` ORDER BY id");
-		Assert.Equal(2, rows.Count);
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(async () =>
+			await client.ExecuteQueryAsync($"SELECT id, name FROM `{_ds}.a` EXCEPT ALL SELECT id, name FROM `{_ds}.b` ORDER BY id", parameters: null));
 	}
 
 	// ---- Complex set operations ----

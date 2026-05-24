@@ -93,14 +93,15 @@ public class Round17InvestigationTests : IAsyncLifetime
 	// ===== CAST FLOAT64 to STRING with NaN =====
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_string
 	//   "Returns an approximate string representation. A returned NaN or 0 will not be signed."
-	//   BigQuery returns "NaN" for CAST(NaN AS STRING), "inf" for positive infinity.
+	//   BigQuery returns "nan" for CAST(NaN AS STRING), "inf" for positive infinity.
 
 	[Fact]
 	public async Task Cast_NaN_ToString_Casing()
 	{
 		var v = await S("SELECT CAST(IEEE_DIVIDE(0, 0) AS STRING)");
-		// BigQuery returns "NaN" (mixed case per IEEE standard)
-		Assert.Equal("NaN", v);
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_string
+		//   BigQuery returns "nan" (lowercase) for CAST(NaN AS STRING).
+		Assert.Equal("nan", v);
 	}
 
 	[Fact]
@@ -195,17 +196,17 @@ public class Round17InvestigationTests : IAsyncLifetime
 	[Fact]
 	public async Task Cast_Float_OnePointZero_As_String()
 	{
-		// CAST(1.0 AS STRING) → '1.0'
+		// CAST(1.0 AS STRING) → '1' (BigQuery omits ".0" for whole-number floats)
 		var v = await S("SELECT CAST(1.0 AS STRING)");
-		Assert.Equal("1.0", v);
+		Assert.Equal("1", v);
 	}
 
 	[Fact]
 	public async Task Cast_Float_LargeScientific_As_String()
 	{
-		// In BigQuery: CAST(1e10 AS STRING) → '10000000000.0'
+		// In BigQuery: CAST(1e10 AS STRING) → '10000000000' (whole-number floats omit ".0")
 		var v = await S("SELECT CAST(1e10 AS STRING)");
-		Assert.Equal("10000000000.0", v);
+		Assert.Equal("10000000000", v);
 	}
 
 	// ===== NaN in BETWEEN =====
@@ -265,7 +266,7 @@ public class Round17InvestigationTests : IAsyncLifetime
 	public async Task Cast_NegativeZero_As_String()
 	{
 		var v = await S("SELECT CAST(-0.0 AS STRING)");
-		Assert.Equal("0.0", v);
+		Assert.Equal("0", v);
 	}
 
 	// ===== CAST large float =====

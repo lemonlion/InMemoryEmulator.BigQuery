@@ -125,7 +125,7 @@ public class ParityVerificationTests35 : IAsyncLifetime
 	[Fact] public async Task RegexpReplace_Global()
 	{
 		// REGEXP_REPLACE replaces ALL occurrences (global)
-		var result = await S(@"SELECT REGEXP_REPLACE('aabbcc', r'(.)\1', 'X')");
+		var result = await S(@"SELECT REGEXP_REPLACE('aabbcc', r'[a-z]{2}', 'X')");
 		Assert.Equal("XXX", result);
 	}
 

@@ -122,8 +122,9 @@ public class SqlExpressionAdvancedTests : IAsyncLifetime
 	[Fact]
 	public async Task Intersect_Distinct()
 	{
-		var rows = await Query("SELECT 1 AS v UNION ALL SELECT 2 INTERSECT DISTINCT (SELECT 1 UNION ALL SELECT 1)");
-		Assert.True(rows.Count >= 1);
+		var rows = await Query("(SELECT 1 AS v UNION ALL SELECT 2) INTERSECT DISTINCT (SELECT 1 AS v UNION ALL SELECT 1)");
+		Assert.Single(rows);
+		Assert.Equal("1", rows[0]["v"]?.ToString());
 	}
 
 	[Fact]

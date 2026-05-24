@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -240,15 +241,17 @@ public class ParityVerificationTests5 : IAsyncLifetime
 	[Fact]
 	public async Task Null_InArithmetic()
 	{
-		var r = await S("SELECT 1 + NULL");
-		Assert.Null(r);
+		var c = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => c.ExecuteQueryAsync("SELECT 1 + NULL", parameters: null));
 	}
 
 	[Fact]
 	public async Task Null_InComparison()
 	{
-		var r = await S("SELECT NULL = NULL");
-		Assert.Null(r);
+		var c = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => c.ExecuteQueryAsync("SELECT NULL = NULL", parameters: null));
 	}
 
 	[Fact]

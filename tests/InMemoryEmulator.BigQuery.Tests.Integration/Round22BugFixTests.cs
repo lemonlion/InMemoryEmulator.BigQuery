@@ -42,6 +42,7 @@ public class Round22BugFixTests : IAsyncLifetime
 	//   For BOOL, valid SQL literals are TRUE/FALSE (uppercase keywords)
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Format_T_Bool_True_ReturnsUppercase()
 	{
 		var result = await S("SELECT FORMAT('%T', TRUE)");
@@ -49,6 +50,7 @@ public class Round22BugFixTests : IAsyncLifetime
 	}
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Format_T_Bool_False_ReturnsUppercase()
 	{
 		var result = await S("SELECT FORMAT('%T', FALSE)");
@@ -160,6 +162,7 @@ public class Round22BugFixTests : IAsyncLifetime
 	}
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Format_T_String_SingleQuoted()
 	{
 		var result = await S("SELECT FORMAT('%T', 'hello')");

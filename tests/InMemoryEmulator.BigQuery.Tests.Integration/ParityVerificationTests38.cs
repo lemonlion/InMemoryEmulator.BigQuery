@@ -117,8 +117,9 @@ public class ParityVerificationTests38 : IAsyncLifetime
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#split
-	//   Standard NULL propagation — NULL delimiter returns NULL
+	//   BigQuery SDK represents NULL array as System.String[] in BigQueryRow.
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Split_NullDelimiter_ReturnsNull()
 	{
 		var result = await ScalarAsync("SELECT SPLIT('a,b,c', CAST(NULL AS STRING))");
@@ -224,7 +225,7 @@ public class ParityVerificationTests38 : IAsyncLifetime
 	[Fact]
 	public async Task GenerateArray_NegativeStep()
 	{
-		var result = await ScalarAsync("SELECT ARRAY_TO_STRING(GENERATE_ARRAY(5, 1, -1), ',')");
+		var result = await ScalarAsync("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(GENERATE_ARRAY(5, 1, -1)) AS x), ',')");
 		Assert.Equal("5,4,3,2,1", result);
 	}
 

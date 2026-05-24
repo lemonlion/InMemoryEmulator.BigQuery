@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -62,12 +63,44 @@ public class ExpressionEdgeCaseTests : IAsyncLifetime
 	[Fact] public async Task DoubleNegation() => Assert.Equal("5", await S("SELECT -(-5)"));
 
 	// ---- Null arithmetic ----
-	[Fact] public async Task Null_Plus_Int() => Assert.Null(await S("SELECT NULL + 5"));
-	[Fact] public async Task Int_Plus_Null() => Assert.Null(await S("SELECT 5 + NULL"));
-	[Fact] public async Task Null_Mul_Int() => Assert.Null(await S("SELECT NULL * 5"));
-	[Fact] public async Task Null_Div_Int() => Assert.Null(await S("SELECT NULL / 5"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+	//   "Operands of <op> cannot be literal NULL"
+	[Fact]
+	public async Task Null_Plus_Int()
+	{
+		var c = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => c.ExecuteQueryAsync("SELECT NULL + 5", parameters: null));
+	}
+	[Fact]
+	public async Task Int_Plus_Null()
+	{
+		var c = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => c.ExecuteQueryAsync("SELECT 5 + NULL", parameters: null));
+	}
+	[Fact]
+	public async Task Null_Mul_Int()
+	{
+		var c = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => c.ExecuteQueryAsync("SELECT NULL * 5", parameters: null));
+	}
+	[Fact]
+	public async Task Null_Div_Int()
+	{
+		var c = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => c.ExecuteQueryAsync("SELECT NULL / 5", parameters: null));
+	}
 	[Fact] public async Task Null_Mod_Int() => Assert.Null(await S("SELECT MOD(NULL, 5)"));
-	[Fact] public async Task Int_Div_Null() => Assert.Null(await S("SELECT 5 / NULL"));
+	[Fact]
+	public async Task Int_Div_Null()
+	{
+		var c = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => c.ExecuteQueryAsync("SELECT 5 / NULL", parameters: null));
+	}
 
 	// ---- Mixed int/float arithmetic ----
 	[Fact] public async Task Int_Plus_Float() => Assert.Equal("11.5", await S("SELECT 10 + 1.5"));
@@ -102,18 +135,42 @@ public class ExpressionEdgeCaseTests : IAsyncLifetime
 
 	// ---- String concatenation ----
 	[Fact] public async Task StringConcat_Operator() => Assert.Equal("helloworld", await S("SELECT 'hello' || 'world'"));
-	[Fact] public async Task StringConcat_Null()
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+	//   "Operands of || cannot be literal NULL"
+	[Fact]
+	public async Task StringConcat_Null()
 	{
-		var v = await S("SELECT 'hello' || NULL");
-		Assert.Null(v);
+		var c = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => c.ExecuteQueryAsync("SELECT 'hello' || NULL", parameters: null));
 	}
 	[Fact] public async Task StringConcat_Empty() => Assert.Equal("hello", await S("SELECT 'hello' || ''"));
 
 	// ---- Comparison expressions ----
 	[Fact] public async Task Compare_IntFloat() => Assert.Equal("True", await S("SELECT 5 = 5.0"));
-	[Fact] public async Task Compare_NullEqual() => Assert.Null(await S("SELECT NULL = NULL"));
-	[Fact] public async Task Compare_NullNotEqual() => Assert.Null(await S("SELECT NULL != NULL"));
-	[Fact] public async Task Compare_NullLessThan() => Assert.Null(await S("SELECT NULL < 5"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+	//   "Operands of <op> cannot be literal NULL"
+	[Fact]
+	public async Task Compare_NullEqual()
+	{
+		var c = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => c.ExecuteQueryAsync("SELECT NULL = NULL", parameters: null));
+	}
+	[Fact]
+	public async Task Compare_NullNotEqual()
+	{
+		var c = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => c.ExecuteQueryAsync("SELECT NULL != NULL", parameters: null));
+	}
+	[Fact]
+	public async Task Compare_NullLessThan()
+	{
+		var c = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => c.ExecuteQueryAsync("SELECT NULL < 5", parameters: null));
+	}
 	[Fact] public async Task Compare_GreaterThan() => Assert.Equal("True", await S("SELECT 10 > 5"));
 	[Fact] public async Task Compare_LessEqual() => Assert.Equal("True", await S("SELECT 5 <= 5"));
 	[Fact] public async Task Compare_GreaterEqual() => Assert.Equal("True", await S("SELECT 5 >= 5"));
@@ -181,7 +238,7 @@ public class ExpressionEdgeCaseTests : IAsyncLifetime
 	[Fact] public async Task If_WithExpr() => Assert.Equal("big", await S("SELECT IF(10 * 5 > 30, 'big', 'small')"));
 
 	// ---- Ternary-like IIF ----
-	[Fact] public async Task Iif_Basic() => Assert.Equal("yes", await S("SELECT IIF(true, 'yes', 'no')"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task Iif_Basic() => Assert.Equal("yes", await S("SELECT IIF(true, 'yes', 'no')"));
 
 	// ---- COALESCE chains ----
 	[Fact] public async Task Coalesce_First() => Assert.Equal("1", await S("SELECT COALESCE(1, 2, 3)"));

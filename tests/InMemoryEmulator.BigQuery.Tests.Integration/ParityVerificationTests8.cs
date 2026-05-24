@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -81,7 +82,7 @@ public class ParityVerificationTests8 : IAsyncLifetime
 	{
 		// price has NULL for id=6, SUM should ignore it
 		var result = await S("SELECT CAST(SUM(price) AS STRING) FROM `{ds}.items`");
-		Assert.Equal("106.0", result);
+		Assert.Equal("106", result);
 	}
 
 	[Fact] public async Task Avg_IgnoresNulls()
@@ -260,7 +261,7 @@ public class ParityVerificationTests8 : IAsyncLifetime
 		var result = await S(@"
 			WITH data AS (SELECT price FROM `{ds}.items` WHERE price IS NOT NULL)
 			SELECT CAST((SELECT MAX(price) FROM data) - (SELECT MIN(price) FROM data) AS STRING)");
-		Assert.Equal("25.0", result);
+		Assert.Equal("25", result);
 	}
 
 	// ───────────────────────────────────────────────────────────────────────────
@@ -319,8 +320,8 @@ public class ParityVerificationTests8 : IAsyncLifetime
 	{
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#generate_array
 		//   "GENERATE_ARRAY supports FLOAT64 step values"
-		var result = await S("SELECT ARRAY_TO_STRING(GENERATE_ARRAY(0, 1.0, 0.5), ',')");
-		Assert.Equal("0.0,0.5,1.0", result);
+		var result = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(GENERATE_ARRAY(0, 1.0, 0.5)) AS x), ',')");
+		Assert.Equal("0,0.5,1", result);
 	}
 
 	// ───────────────────────────────────────────────────────────────────────────
@@ -469,10 +470,12 @@ public class ParityVerificationTests8 : IAsyncLifetime
 	//   "Any operation with NULL produces NULL"
 	// ───────────────────────────────────────────────────────────────────────────
 
-	[Fact] public async Task Null_Plus_Int_IsNull()
+	[Fact]
+	public async Task Null_Plus_Int_IsNull()
 	{
-		var result = await S("SELECT NULL + 5");
-		Assert.Null(result);
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL + 5", parameters: null));
 	}
 
 	[Fact] public async Task Null_Multiply_IsNull()
@@ -529,8 +532,8 @@ public class ParityVerificationTests8 : IAsyncLifetime
 
 	[Fact] public async Task CastTimestamp_TrailingZerosTrimmed()
 	{
-		// .100000 should be trimmed to .1
+		// .100000 trimmed to .100 (BigQuery trims trailing zeros in groups of 3)
 		var result = await S("SELECT CAST(TIMESTAMP '2024-01-01 12:30:45.100000 UTC' AS STRING)");
-		Assert.Equal("2024-01-01 12:30:45.1+00", result);
+		Assert.Equal("2024-01-01 12:30:45.100+00", result);
 	}
 }

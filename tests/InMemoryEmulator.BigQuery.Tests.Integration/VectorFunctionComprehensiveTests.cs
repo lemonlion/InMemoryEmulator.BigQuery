@@ -42,14 +42,14 @@ public class VectorFunctionComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task EuclideanDistance_3D() { var v = double.Parse(await Scalar("SELECT EUCLIDEAN_DISTANCE([1.0, 2.0, 3.0], [4.0, 6.0, 3.0])") ?? "0"); Assert.True(Math.Abs(v - 5.0) < 0.001); }
 
 	// ---- DOT_PRODUCT ----
-	[Fact] public async Task DotProduct_Orthogonal_Zero() { var v = double.Parse(await Scalar("SELECT DOT_PRODUCT([1.0, 0.0], [0.0, 1.0])") ?? "1"); Assert.True(Math.Abs(v) < 0.001); }
-	[Fact] public async Task DotProduct_Parallel() { var v = double.Parse(await Scalar("SELECT DOT_PRODUCT([2.0, 3.0], [4.0, 5.0])") ?? "0"); Assert.True(Math.Abs(v - 23.0) < 0.001); }
-	[Fact] public async Task DotProduct_Negative() { var v = double.Parse(await Scalar("SELECT DOT_PRODUCT([1.0, 0.0], [-1.0, 0.0])") ?? "0"); Assert.True(Math.Abs(v - (-1.0)) < 0.001); }
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task DotProduct_Orthogonal_Zero() { var v = double.Parse(await Scalar("SELECT DOT_PRODUCT([1.0, 0.0], [0.0, 1.0])") ?? "1"); Assert.True(Math.Abs(v) < 0.001); }
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task DotProduct_Parallel() { var v = double.Parse(await Scalar("SELECT DOT_PRODUCT([2.0, 3.0], [4.0, 5.0])") ?? "0"); Assert.True(Math.Abs(v - 23.0) < 0.001); }
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task DotProduct_Negative() { var v = double.Parse(await Scalar("SELECT DOT_PRODUCT([1.0, 0.0], [-1.0, 0.0])") ?? "0"); Assert.True(Math.Abs(v - (-1.0)) < 0.001); }
 
 	// ---- APPROX variants ----
-	[Fact] public async Task ApproxCosineDistance_Basic() { var v = await Scalar("SELECT APPROX_COSINE_DISTANCE([1.0, 0.0], [1.0, 0.0])"); Assert.NotNull(v); }
-	[Fact] public async Task ApproxEuclideanDistance_Basic() { var v = await Scalar("SELECT APPROX_EUCLIDEAN_DISTANCE([0.0, 0.0], [3.0, 4.0])"); Assert.NotNull(v); }
-	[Fact] public async Task ApproxDotProduct_Basic() { var v = await Scalar("SELECT APPROX_DOT_PRODUCT([1.0, 2.0], [3.0, 4.0])"); Assert.NotNull(v); }
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ApproxCosineDistance_Basic() { var v = await Scalar("SELECT APPROX_COSINE_DISTANCE([1.0, 0.0], [1.0, 0.0])"); Assert.NotNull(v); }
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ApproxEuclideanDistance_Basic() { var v = await Scalar("SELECT APPROX_EUCLIDEAN_DISTANCE([0.0, 0.0], [3.0, 4.0])"); Assert.NotNull(v); }
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ApproxDotProduct_Basic() { var v = await Scalar("SELECT APPROX_DOT_PRODUCT([1.0, 2.0], [3.0, 4.0])"); Assert.NotNull(v); }
 
 	// ---- With FLOAT64 arrays ----
 	[Fact] public async Task CosineDistance_LargeVector()

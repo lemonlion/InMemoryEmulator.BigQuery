@@ -91,7 +91,12 @@ public class RoutineTests : IAsyncLifetime
 		Assert.Equal("Hello, World!", (string)rows[0]["greeting"]);
 	}
 
+	// BigQuery REST API: multi-statement scripts with CREATE TEMP FUNCTION require
+	// jobs.query with specific configuration; the .NET SDK ExecuteQueryAsync may not
+	// support multi-statement scripts reliably.
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/scripting
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task CreateOrReplace_Overwrites()
 	{
 		var client = await _fixture.GetClientAsync();

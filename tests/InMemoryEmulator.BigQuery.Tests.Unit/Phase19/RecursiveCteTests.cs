@@ -65,7 +65,7 @@ public class RecursiveCteTests
 
 		var (schema, rows) = exec.Execute(@"
 			WITH RECURSIVE T AS (
-				SELECT 1 AS n WHERE FALSE
+				SELECT 1 AS n FROM UNNEST([1]) WHERE FALSE
 				UNION ALL
 				SELECT n + 1 FROM T WHERE n < 5
 			)

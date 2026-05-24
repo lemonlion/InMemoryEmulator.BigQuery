@@ -90,7 +90,9 @@ public class MetadataAndPartitionTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/information-schema-datasets
 	//   "INFORMATION_SCHEMA.SCHEMATA provides metadata about datasets."
+	// GO emulator does not support INFORMATION_SCHEMA queries.
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task InformationSchema_Schemata_ListsDatasets()
 	{
 		var client = await _fixture.GetClientAsync();

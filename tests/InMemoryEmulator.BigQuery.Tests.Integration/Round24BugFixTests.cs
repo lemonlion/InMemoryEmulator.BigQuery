@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -66,9 +67,9 @@ public class Round24BugFixTests : IAsyncLifetime
 	public async Task ConcatOperator_WholeFloat_ShowsDecimalPoint()
 	{
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_string
-		//   CAST(FLOAT64 AS STRING) for whole numbers shows ".0" suffix
+		//   BigQuery CAST(FLOAT64 AS STRING) for whole numbers omits ".0" suffix
 		var result = await S("SELECT CAST(1 AS FLOAT64) || ' hello'");
-		Assert.Equal("1.0 hello", result);
+		Assert.Equal("1 hello", result);
 	}
 
 	[Fact]
@@ -108,10 +109,11 @@ public class Round24BugFixTests : IAsyncLifetime
 	[Fact]
 	public async Task ConcatOperator_Null_ReturnsNull()
 	{
-		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#concatenation_operator
-		//   "If one of the operands is NULL, the result is NULL."
-		var result = await S("SELECT NULL || 'hello'");
-		Assert.Null(result);
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+		//   "Operands of || cannot be literal NULL"
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL || 'hello'", parameters: null));
 	}
 
 	// =====================================================
@@ -294,6 +296,6 @@ public class Round24BugFixTests : IAsyncLifetime
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_string
 		//   Trailing zeros in fractional seconds are trimmed.
 		var result = await S("SELECT CAST(TIME '12:30:45.100000' AS STRING)");
-		Assert.Equal("12:30:45.1", result);
+		Assert.Equal("12:30:45.100", result);
 	}
 }

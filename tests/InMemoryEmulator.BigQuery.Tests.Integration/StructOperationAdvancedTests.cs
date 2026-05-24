@@ -97,11 +97,13 @@ public class StructOperationAdvancedTests : IAsyncLifetime
 
 	[Fact] public async Task Struct_InSubquery()
 	{
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
+		//   Access struct fields from a subquery with struct column
 		var result = await Scalar(@"
-			SELECT total FROM (
+			SELECT item.price * item.qty AS total FROM (
 				SELECT STRUCT(10 AS price, 5 AS qty) AS item
 			) WHERE item.price * item.qty = 50");
-		Assert.Null(result); // 'total' doesn't exist, but query shouldn't error if struct access works
+		Assert.Equal("50", result);
 	}
 
 	[Fact] public async Task Struct_ArrayOfStructs_Unnest()

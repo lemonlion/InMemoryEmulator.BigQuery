@@ -158,17 +158,23 @@ public class HashNetEncryptionAdvancedTests : IAsyncLifetime
 	}
 
 	// ---- HLL_COUNT functions ----
-	[Fact] public async Task HllCountInit_NotNull()
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/hll_count_functions
+	//   HLL_COUNT functions produce BYTES sketches that require specific handling.
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task HllCountInit_NotNull()
 	{
-		var v = await S("SELECT HLL_COUNT.INIT(1)");
+		var v = await S("SELECT HLL_COUNT.INIT(x) FROM UNNEST([1]) AS x");
 		Assert.NotNull(v);
 	}
 
-	[Fact] public async Task HllCountExtract_Basic()
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task HllCountExtract_Basic()
 	{
 		// HLL_COUNT.EXTRACT on a sketch returns the approximate distinct count
 		// In-memory emulator returns the value directly for single-value sketches
-		var v = await S("SELECT HLL_COUNT.EXTRACT(HLL_COUNT.INIT(42))");
+		var v = await S("SELECT HLL_COUNT.EXTRACT(sketch) FROM (SELECT HLL_COUNT.INIT(x) AS sketch FROM UNNEST([42]) AS x)");
 		Assert.NotNull(v);
 	}
 }

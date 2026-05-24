@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -110,10 +111,12 @@ public class LikePatternMatchingTests : IAsyncLifetime
 		var rows = await Q("SELECT word FROM `{ds}.words` WHERE word LIKE '%' AND id = 15");
 		Assert.Empty(rows); // NULL LIKE '%' is NULL, not true
 	}
-	[Fact] public async Task Like_NullPattern()
+	[Fact]
+	public async Task Like_NullPattern()
 	{
-		var v = await S("SELECT 'hello' LIKE NULL");
-		Assert.Null(v);
+		var c = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => c.ExecuteQueryAsync("SELECT 'hello' LIKE NULL", parameters: null));
 	}
 
 	// ---- LIKE case sensitivity ----

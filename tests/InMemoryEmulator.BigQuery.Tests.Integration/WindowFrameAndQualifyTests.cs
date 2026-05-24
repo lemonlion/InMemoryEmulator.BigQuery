@@ -304,7 +304,10 @@ public class WindowFrameAndQualifyTests : IAsyncLifetime
 	// QUALIFY clause
 	// ============================================================
 
+	// GO emulator does not correctly support QUALIFY clause.
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#qualify_clause
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Qualify_RowNumber1_PerDept()
 	{
 		var rows = await Query($@"SELECT name, dept, salary
@@ -314,7 +317,10 @@ public class WindowFrameAndQualifyTests : IAsyncLifetime
 		Assert.Equal(3, rows.Count);
 	}
 
+	// GO emulator does not correctly support QUALIFY clause.
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#qualify_clause
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Qualify_RankLe2()
 	{
 		var rows = await Query($@"SELECT name, dept, salary
@@ -324,7 +330,10 @@ public class WindowFrameAndQualifyTests : IAsyncLifetime
 		Assert.Equal(6, rows.Count);
 	}
 
+	// GO emulator does not correctly support QUALIFY clause.
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#qualify_clause
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Qualify_WithWhere()
 	{
 		var rows = await Query($@"SELECT name, dept, salary

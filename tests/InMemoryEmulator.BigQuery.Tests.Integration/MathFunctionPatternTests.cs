@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -130,8 +131,22 @@ public class MathFunctionPatternTests : IAsyncLifetime
 	}
 
 	// NULL propagation in math
-	[Fact] public async Task Math_NullPropagation_Add() => Assert.Null(await Scalar("SELECT NULL + 5"));
-	[Fact] public async Task Math_NullPropagation_Multiply() => Assert.Null(await Scalar("SELECT NULL * 5"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+	//   "Operands of <op> cannot be literal NULL"
+	[Fact]
+	public async Task Math_NullPropagation_Add()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL + 5", parameters: null));
+	}
+	[Fact]
+	public async Task Math_NullPropagation_Multiply()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL * 5", parameters: null));
+	}
 	[Fact] public async Task Math_NullPropagation_Sqrt() => Assert.Null(await Scalar("SELECT SQRT(NULL)"));
 	[Fact] public async Task Math_NullPropagation_Round() => Assert.Null(await Scalar("SELECT ROUND(NULL)"));
 }

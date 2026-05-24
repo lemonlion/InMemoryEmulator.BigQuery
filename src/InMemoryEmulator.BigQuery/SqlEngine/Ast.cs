@@ -91,6 +91,9 @@ internal record ColumnRef(string? TableAlias, string ColumnName) : SqlExpression
 /// <summary>A literal value.</summary>
 internal record LiteralExpr(object? Value) : SqlExpression;
 
+/// <summary>A pre-evaluated value (not a source literal — used during aggregate/window evaluation).</summary>
+internal record EvaluatedValueExpr(object? Value) : SqlExpression;
+
 /// <summary>A parameter reference: @name.</summary>
 internal record ParameterRef(string Name) : SqlExpression;
 

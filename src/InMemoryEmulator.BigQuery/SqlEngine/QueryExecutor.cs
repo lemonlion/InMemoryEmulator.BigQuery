@@ -141,6 +141,20 @@ rows = ResolveFrom(sel.From, cteResults ?? _activeCteResults);
 else
 rows = [new RowContext(new Dictionary<string, object?>(), null)];
 
+// Validate: query without FROM clause cannot have WHERE or aggregates
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax
+//   Real BigQuery rejects SELECT ... WHERE ... when there is no FROM clause,
+//   and SELECT AGG(...) when there is no FROM clause.
+if (sel.From is null)
+{
+if (sel.Where is not null)
+throw new InvalidOperationException("Query without FROM clause cannot have a WHERE clause");
+
+var firstAgg = FindFirstAggregateName(sel.Columns);
+if (firstAgg is not null)
+throw new InvalidOperationException($"Aggregate function {firstAgg} not allowed in SELECT without FROM clause");
+}
+
 // Partition filter check
 if (sel.From is TableRef tRefCheck)
 {
@@ -1273,8 +1287,8 @@ private object? EvaluateWithWindows(SqlExpression expr, RowContext evalRow, RowC
 
 private object? EvaluateBinaryWithWindows(BinaryExpr bin, RowContext evalRow, RowContext windowRow, List<RowContext> allRows)
 {
-    var left = bin.Left is WindowFunction lwf ? new LiteralExpr(EvaluateWindow(lwf, windowRow, allRows)) : bin.Left;
-    var right = bin.Right is WindowFunction rwf ? new LiteralExpr(EvaluateWindow(rwf, windowRow, allRows)) : bin.Right;
+    var left = bin.Left is WindowFunction lwf ? new EvaluatedValueExpr(EvaluateWindow(lwf, windowRow, allRows)) : bin.Left;
+    var right = bin.Right is WindowFunction rwf ? new EvaluatedValueExpr(EvaluateWindow(rwf, windowRow, allRows)) : bin.Right;
     return EvaluateBinary(new BinaryExpr(left, bin.Op, right), evalRow);
 }
 
@@ -1422,62 +1436,36 @@ return Evaluate(navArgs[0], framedPartition[^1]);
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#lag
 //   "Returns the value of the value_expression on a preceding row."
-//   "If ignore_nulls is true, excludes NULL values from the calculation."
+//   BigQuery does NOT support IGNORE NULLS or RESPECT NULLS for LAG.
 if (funcName == "LAG")
 {
-bool ignoreNulls = HasIgnoreNullsMarker(navArgs);
-var effectiveArgs = FilterIgnoreNullsMarker(navArgs);
+if (HasIgnoreNullsMarker(navArgs) || HasRespectNullsMarker(navArgs))
+    throw new InvalidOperationException("IGNORE NULLS and RESPECT NULLS are not allowed for analytic function LAG");
+var effectiveArgs = FilterNullsMarkers(navArgs);
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#lag
-//   Returns NULL if offset is NULL.
+//   "Argument 2 to LAG must be non-NULL"
 int offset = 1;
-if (effectiveArgs.Count > 1) { var ov = Evaluate(effectiveArgs[1], currentRow); if (ov is null) return null; offset = (int)ToLong(ov); }
+if (effectiveArgs.Count > 1) { var ov = Evaluate(effectiveArgs[1], currentRow); if (ov is null) throw new InvalidOperationException("Argument 2 to LAG must be non-NULL"); offset = (int)ToLong(ov); }
 object? defaultVal = effectiveArgs.Count > 2 ? Evaluate(effectiveArgs[2], currentRow) : null;
 var idx = partition.IndexOf(currentRow);
-if (ignoreNulls)
-{
-    int found = 0;
-    for (int i = idx - 1; i >= 0; i--)
-    {
-        var val = Evaluate(navArgs[0], partition[i]);
-        if (val is not null)
-        {
-            found++;
-            if (found == offset) return val;
-        }
-    }
-    return defaultVal;
-}
 int targetIdx = idx - offset;
 return targetIdx >= 0 ? Evaluate(navArgs[0], partition[targetIdx]) : defaultVal;
 }
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#lead
 //   "Returns the value of the value_expression on a subsequent row."
-//   "If ignore_nulls is true, excludes NULL values from the calculation."
+//   BigQuery does NOT support IGNORE NULLS or RESPECT NULLS for LEAD.
 if (funcName == "LEAD")
 {
-bool ignoreNulls = HasIgnoreNullsMarker(navArgs);
-var effectiveArgs = FilterIgnoreNullsMarker(navArgs);
+if (HasIgnoreNullsMarker(navArgs) || HasRespectNullsMarker(navArgs))
+    throw new InvalidOperationException("IGNORE NULLS and RESPECT NULLS are not allowed for analytic function LEAD");
+var effectiveArgs = FilterNullsMarkers(navArgs);
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/navigation_functions#lead
-//   Returns NULL if offset is NULL.
+//   "Argument 2 to LEAD must be non-NULL"
 int offset = 1;
-if (effectiveArgs.Count > 1) { var ov = Evaluate(effectiveArgs[1], currentRow); if (ov is null) return null; offset = (int)ToLong(ov); }
+if (effectiveArgs.Count > 1) { var ov = Evaluate(effectiveArgs[1], currentRow); if (ov is null) throw new InvalidOperationException("Argument 2 to LEAD must be non-NULL"); offset = (int)ToLong(ov); }
 object? defaultVal = effectiveArgs.Count > 2 ? Evaluate(effectiveArgs[2], currentRow) : null;
 var idx = partition.IndexOf(currentRow);
-if (ignoreNulls)
-{
-    int found = 0;
-    for (int i = idx + 1; i < partition.Count; i++)
-    {
-        var val = Evaluate(navArgs[0], partition[i]);
-        if (val is not null)
-        {
-            found++;
-            if (found == offset) return val;
-        }
-    }
-    return defaultVal;
-}
 int targetIdx = idx + offset;
 return targetIdx < partition.Count ? Evaluate(navArgs[0], partition[targetIdx]) : defaultVal;
 }
@@ -1688,6 +1676,7 @@ Dictionary<string, (TableSchema, List<Dictionary<string, object?>>)>? cteResults
 return expr switch
 {
 LiteralExpr lit => lit.Value,
+EvaluatedValueExpr ev => ev.Value,
 ColumnRef col => EvaluateColumnRef(col, row),
 ParameterRef p => ResolveParameter(p.Name),
 BinaryExpr bin => EvaluateBinary(bin, row),
@@ -1794,6 +1783,25 @@ if (l is null || r is null) return null;
 return false;
 }
 
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+//   BigQuery rejects untyped literal NULL as operands of binary operators (arithmetic, comparison, concat, bitwise).
+//   Error: "Operands of <op> cannot be literal NULL"
+//   Use CAST(NULL AS <type>) to create a typed NULL instead.
+if (bin.Left is LiteralExpr { Value: null } || bin.Right is LiteralExpr { Value: null })
+{
+    var opSymbol = bin.Op switch
+    {
+        BinaryOp.Add => "+", BinaryOp.Sub => "-", BinaryOp.Mul => "*", BinaryOp.Div => "/", BinaryOp.Mod => "%",
+        BinaryOp.Eq => "=", BinaryOp.Neq => "!=", BinaryOp.Lt => "<", BinaryOp.Gt => ">",
+        BinaryOp.Lte => "<=", BinaryOp.Gte => ">=",
+        BinaryOp.Concat => "||",
+        BinaryOp.BitAnd => "&", BinaryOp.BitOr => "|", BinaryOp.BitXor => "^",
+        BinaryOp.ShiftLeft => "<<", BinaryOp.ShiftRight => ">>",
+        _ => bin.Op.ToString()
+    };
+    throw new InvalidOperationException($"Operands of {opSymbol} cannot be literal NULL");
+}
+
 var left = Evaluate(bin.Left, row);
 var right = Evaluate(bin.Right, row);
 
@@ -1801,6 +1809,13 @@ var right = Evaluate(bin.Right, row);
 //   "All comparisons with NaN return FALSE, except for != which returns TRUE."
 bool leftNaN = left is double dl && double.IsNaN(dl);
 bool rightNaN = right is double dr && double.IsNaN(dr);
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#array_type
+//   "Equality is not defined for arguments of type ARRAY"
+if ((bin.Op == BinaryOp.Eq || bin.Op == BinaryOp.Neq)
+    && left is not null && right is not null
+    && (left is IList<object?> || right is IList<object?>))
+    throw new InvalidOperationException("Equality is not defined for arguments of type ARRAY");
 
 return bin.Op switch
 {
@@ -1849,6 +1864,11 @@ _ => throw new NotSupportedException("Unsupported binary operator: " + bin.Op)
 
 private object? EvaluateUnary(UnaryExpr un, RowContext row)
 {
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+//   "Operands of NOT cannot be literal NULL"
+if (un.Op == UnaryOp.Not && un.Operand is LiteralExpr { Value: null })
+    throw new InvalidOperationException("Operands of NOT cannot be literal NULL");
+
 var val = Evaluate(un.Operand, row);
 return un.Op switch
 {
@@ -2037,6 +2057,11 @@ return false;
 
 private object? EvaluateLike(LikeExpr like, RowContext row)
 {
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#like_operator
+//   BigQuery rejects untyped literal NULL as operands of LIKE.
+if (like.Expr is LiteralExpr { Value: null } || like.Pattern is LiteralExpr { Value: null })
+    throw new InvalidOperationException("Operands of LIKE cannot be literal NULL");
+
 var val = Evaluate(like.Expr, row)?.ToString();
 var pattern = Evaluate(like.Pattern, row)?.ToString();
 if (val is null || pattern is null) return null;
@@ -2121,6 +2146,9 @@ _ => Convert.ToInt64(val, CultureInfo.InvariantCulture)
 },
 "FLOAT64" or "FLOAT" or "NUMERIC" or "BIGNUMERIC" or "DECIMAL" => val switch
 {
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_float64
+//   "Invalid cast from BOOL to FLOAT64"
+bool => throw new InvalidOperationException("Invalid cast from BOOL to FLOAT64"),
 double d => d,
 long l => (double)l,
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#floating_point_literals
@@ -2893,11 +2921,11 @@ return str[startIdx..];
 
 private object? EvaluateContainsSubstr(IReadOnlyList<SqlExpression> args, RowContext row)
 {
-// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#contains_substr
-//   "Returns NULL if any input is NULL."
 var expr = Evaluate(args[0], row)?.ToString();
 var search = Evaluate(args[1], row)?.ToString();
-if (expr is null || search is null) return null;
+if (search is null)
+    throw new InvalidOperationException("The second argument of CONTAINS_SUBSTR() must not be null.");
+if (expr is null) return null;
 return expr.Contains(search, StringComparison.OrdinalIgnoreCase);
 }
 
@@ -3330,16 +3358,51 @@ var val = Evaluate(args[0], row);
 if (val is null) return null;
 var d = ToDouble(val);
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#round
-//   Returns NULL if any argument is NULL.
+//   "Rounds the value to the nearest number. Midpoint values are rounded away from zero."
+//   BigQuery operates on the true binary IEEE 754 value. .NET's Math.Round has special
+//   decimal-precision handling that can produce different results (e.g., Math.Round(4.55,1)
+//   returns 4.6 in .NET but 4.5 in BigQuery because the true stored value is 4.549999...).
 int digits = 0;
 if (args.Count > 1) { var dv = Evaluate(args[1], row); if (dv is null) return null; digits = (int)ToLong(dv); }
-//   Supports negative digits to round to powers of 10.
-if (digits < 0)
-{
-	var factor = Math.Pow(10, -digits);
-	return Math.Round(d / factor, MidpointRounding.AwayFromZero) * factor;
+return RoundBigQuery(d, digits);
 }
-return Math.Round(d, digits, MidpointRounding.AwayFromZero);
+
+// Matches BigQuery ROUND behavior: uses the true IEEE 754 binary representation to determine
+// rounding direction. At exact midpoint (0.5), rounds away from zero. Unlike .NET's
+// Math.Round(d, digits, AwayFromZero), this doesn't have decimal-correction that treats
+// e.g. 4.55 as exactly 4.55 when the stored value is 4.5499999...
+private static double RoundBigQuery(double d, int digits)
+{
+    if (double.IsNaN(d) || double.IsInfinity(d)) return d;
+    if (digits == 0)
+        return d >= 0 ? Math.Floor(d + 0.5) : Math.Ceiling(d - 0.5);
+    if (digits < 0)
+    {
+        var factor = Math.Pow(10, -digits);
+        return RoundBigQuery(d / factor, 0) * factor;
+    }
+    // For positive digits: examine the G17 representation to determine rounding direction,
+    // then use Math.Round with ToEven to get the correctly truncated/rounded value.
+    // G17 gives the shortest round-trip representation with full precision.
+    var repr = Math.Abs(d).ToString("G17", System.Globalization.CultureInfo.InvariantCulture);
+    var dotIdx = repr.IndexOf('.');
+    if (dotIdx < 0)
+        return d;
+    var decimals = repr[(dotIdx + 1)..];
+    // Strip any exponent (e.g., "1.23e-05")
+    var eIdx = repr.IndexOf('e', StringComparison.OrdinalIgnoreCase);
+    if (eIdx >= 0)
+    {
+        // For very small/large numbers, fallback to .NET rounding (no midpoint ambiguity)
+        return Math.Round(d, digits, MidpointRounding.AwayFromZero);
+    }
+    if (decimals.Length <= digits)
+        return d;
+    var decisionDigit = decimals[digits] - '0';
+    if (decisionDigit < 5)
+        return Math.Round(d, digits, MidpointRounding.ToZero);
+    // decisionDigit >= 5: round away from zero (use .NET AwayFromZero which handles this correctly)
+    return Math.Round(d, digits, MidpointRounding.AwayFromZero);
 }
 
 private object? EvaluateTrunc(IReadOnlyList<SqlExpression> args, RowContext row)
@@ -3752,10 +3815,10 @@ return part switch
 "HOUR" => (long)((TruncTimestamp(ts1, "HOUR") - TruncTimestamp(ts2, "HOUR")).TotalHours),
 "DAY" => (long)((TruncTimestamp(ts1, "DAY") - TruncTimestamp(ts2, "DAY")).TotalDays),
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#timestamp_diff
-//   WEEK counts Sunday boundaries by default.
-"WEEK" => CountWeekBoundaries(ts1.UtcDateTime, ts2.UtcDateTime, DayOfWeek.Sunday),
+//   "TIMESTAMP_DIFF does not support the WEEK date part when the argument is TIMESTAMP type"
+"WEEK" => throw new InvalidOperationException("TIMESTAMP_DIFF does not support the WEEK date part when the argument is TIMESTAMP type"),
 "ISOWEEK" => CountWeekBoundaries(ts1.UtcDateTime, ts2.UtcDateTime, DayOfWeek.Monday),
-_ when part.StartsWith("WEEK_") => CountWeekBoundaries(ts1.UtcDateTime, ts2.UtcDateTime, Enum.Parse<DayOfWeek>(part.Substring(5), ignoreCase: true)),
+_ when part.StartsWith("WEEK_") => throw new InvalidOperationException($"TIMESTAMP_DIFF does not support the WEEK({part[5..]}) date part when the argument is TIMESTAMP type"),
 _ => (long)diff.TotalSeconds
 };
 }
@@ -4579,19 +4642,37 @@ private object? EvaluateArrayToString(IReadOnlyList<SqlExpression> args, RowCont
 var val = Evaluate(args[0], row);
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/functions-reference
 //   General rule: "If an operand is NULL, the function result is NULL."
+if (val is null) return null;
 var delimiterVal = Evaluate(args[1], row);
 if (delimiterVal is null) return null;
 var delimiter = delimiterVal.ToString() ?? ",";
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_to_string
-//   "If null_text is specified, the function replaces any NULL values in the array with null_text."
-//   "If null_text is not specified, NULL values are omitted."
+//   Signature: ARRAY_TO_STRING(ARRAY<STRING>, STRING, [STRING])
+//   Only accepts ARRAY<STRING>. Non-string arrays must be cast first.
 var nullText = args.Count > 2 ? Evaluate(args[2], row)?.ToString() : null;
 if (val is IEnumerable<object?> en)
 {
+	var items = en as IList<object?> ?? en.ToList();
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_to_string
+	//   "No matching signature for function ARRAY_TO_STRING. Argument 1: Unable to coerce type ARRAY<X> to expected type ARRAY<STRING>"
+	var firstNonNull = items.FirstOrDefault(x => x is not null);
+	if (firstNonNull is not null && firstNonNull is not string)
+	{
+		var elementType = firstNonNull switch
+		{
+			long => "INT64", double => "FLOAT64", bool => "BOOL",
+			_ => firstNonNull.GetType().Name.ToUpperInvariant()
+		};
+		throw new InvalidOperationException(
+			$"No matching signature for function ARRAY_TO_STRING. " +
+			$"Argument types: ARRAY<{elementType}>, STRING. " +
+			$"Signature: ARRAY_TO_STRING(ARRAY<STRING>, STRING, [STRING]). " +
+			$"Argument 1: Unable to coerce type ARRAY<{elementType}> to expected type ARRAY<STRING>");
+	}
 	if (nullText is not null)
-		return string.Join(delimiter, en.Select(v => ConvertToString(v) ?? nullText));
+		return string.Join(delimiter, items.Select(v => ConvertToString(v) ?? nullText));
 	else
-		return string.Join(delimiter, en.Where(v => v is not null).Select(v => ConvertToString(v) ?? ""));
+		return string.Join(delimiter, items.Where(v => v is not null).Select(v => ConvertToString(v) ?? ""));
 }
 return null;
 }
@@ -4645,7 +4726,10 @@ var result = new List<object?>();
 foreach (var arg in args)
 {
     var val = Evaluate(arg, row);
-    if (val is null) return null;
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_concat
+    //   "The argument to ARRAY_CONCAT (or ARRAY_CONCAT_AGG) must be an array type but was NULL"
+    if (val is null)
+        throw new InvalidOperationException("The argument to ARRAY_CONCAT (or ARRAY_CONCAT_AGG) must be an array type but was NULL");
     if (val is IList<object?> list) result.AddRange(list);
     else if (val is IEnumerable<object?> en) result.AddRange(en);
     else result.Add(val);
@@ -5148,7 +5232,10 @@ try
 {
 	using var doc = System.Text.Json.JsonDocument.Parse(json);
 	var element = NavigateJsonPath(doc.RootElement, path ?? "$");
-	if (element is null || element.Value.ValueKind != System.Text.Json.JsonValueKind.Array) return null;
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_extract_array
+	//   Returns empty array for non-array values or when path not found (observed on real BigQuery)
+	if (element is null) return null;
+	if (element.Value.ValueKind != System.Text.Json.JsonValueKind.Array) return new List<object?>();
 	return element.Value.EnumerateArray().Select(e => (object?)e.GetRawText()).ToList();
 }
 catch { return null; }
@@ -7049,6 +7136,22 @@ private static IReadOnlyList<SqlExpression> FilterIgnoreNullsMarker(IReadOnlyLis
     return args.Where(a => a is not LiteralExpr { Value: "__IGNORE_NULLS__" }).ToList();
 }
 
+/// <summary>
+/// Checks if a navigation function argument list contains the '__RESPECT_NULLS__' marker.
+/// </summary>
+private static bool HasRespectNullsMarker(IReadOnlyList<SqlExpression> args)
+{
+    return args.Any(a => a is LiteralExpr { Value: "__RESPECT_NULLS__" });
+}
+
+/// <summary>
+/// Returns the argument list with both '__IGNORE_NULLS__' and '__RESPECT_NULLS__' markers removed.
+/// </summary>
+private static IReadOnlyList<SqlExpression> FilterNullsMarkers(IReadOnlyList<SqlExpression> args)
+{
+    return args.Where(a => a is not LiteralExpr { Value: "__IGNORE_NULLS__" or "__RESPECT_NULLS__" }).ToList();
+}
+
 private object? EvaluateStringAgg(AggregateCall agg, List<RowContext> rows)
 {
     // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#string_agg
@@ -7058,7 +7161,10 @@ private object? EvaluateStringAgg(AggregateCall agg, List<RowContext> rows)
     if (agg.ExtraArgs is { Count: > 0 })
     {
         var sepVal = Evaluate(agg.ExtraArgs[0], rows[0])?.ToString();
-        if (sepVal is null) return null;
+        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#string_agg
+        //   "Argument 2 to STRING_AGG must be non-NULL"
+        if (sepVal is null)
+            throw new InvalidOperationException("Argument 2 to STRING_AGG must be non-NULL");
         separator = sepVal;
     }
     else
@@ -7297,6 +7403,12 @@ return stmt switch
 private static InMemoryBigQueryResult CombineSetOperation(
     SetOperationStatement setOp, InMemoryBigQueryResult left, InMemoryBigQueryResult right)
 {
+// BigQuery does not support INTERSECT ALL or EXCEPT ALL - only DISTINCT variants are supported.
+if (setOp is { OpType: SetOperationType.Intersect, All: true })
+    throw new InvalidOperationException("INTERSECT ALL is not supported. Only INTERSECT DISTINCT is supported.");
+if (setOp is { OpType: SetOperationType.Except, All: true })
+    throw new InvalidOperationException("EXCEPT ALL is not supported. Only EXCEPT DISTINCT is supported.");
+
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
 //   "Column types must be coercible to a common supertype. INT64 and FLOAT64 coerce to FLOAT64.
 //    Incompatible types (e.g., INT64 and STRING) produce an error."
@@ -8120,37 +8232,37 @@ private object? EvaluateWithAggregates(SqlExpression expr, List<RowContext> grou
         LiteralExpr lit => lit.Value,
         ParameterRef p => ResolveParameter(p.Name),
         BinaryExpr bin => EvaluateBinary(new BinaryExpr(
-            new LiteralExpr(EvaluateWithAggregates(bin.Left, groupRows)), bin.Op,
-            new LiteralExpr(EvaluateWithAggregates(bin.Right, groupRows))), dummyRow),
+            new EvaluatedValueExpr(EvaluateWithAggregates(bin.Left, groupRows)), bin.Op,
+            new EvaluatedValueExpr(EvaluateWithAggregates(bin.Right, groupRows))), dummyRow),
         UnaryExpr un => EvaluateUnary(new UnaryExpr(un.Op,
-            new LiteralExpr(EvaluateWithAggregates(un.Operand, groupRows))), dummyRow),
+            new EvaluatedValueExpr(EvaluateWithAggregates(un.Operand, groupRows))), dummyRow),
         FunctionCall fn => EvaluateFunctionCall(new FunctionCall(fn.FunctionName,
-            fn.Args.Select(a => (SqlExpression)new LiteralExpr(EvaluateWithAggregates(a, groupRows))).ToList()), dummyRow),
+            fn.Args.Select(a => (SqlExpression)new EvaluatedValueExpr(EvaluateWithAggregates(a, groupRows))).ToList()), dummyRow),
         CaseExpr ce => EvaluateCase(new CaseExpr(
-            ce.Operand is not null ? new LiteralExpr(EvaluateWithAggregates(ce.Operand, groupRows)) : null,
-            ce.Branches.Select(b => ((SqlExpression)new LiteralExpr(EvaluateWithAggregates(b.When, groupRows)),
-                                     (SqlExpression)new LiteralExpr(EvaluateWithAggregates(b.Then, groupRows)))).ToList(),
-            ce.Else is not null ? new LiteralExpr(EvaluateWithAggregates(ce.Else, groupRows)) : null), dummyRow),
+            ce.Operand is not null ? new EvaluatedValueExpr(EvaluateWithAggregates(ce.Operand, groupRows)) : null,
+            ce.Branches.Select(b => ((SqlExpression)new EvaluatedValueExpr(EvaluateWithAggregates(b.When, groupRows)),
+                                     (SqlExpression)new EvaluatedValueExpr(EvaluateWithAggregates(b.Then, groupRows)))).ToList(),
+            ce.Else is not null ? new EvaluatedValueExpr(EvaluateWithAggregates(ce.Else, groupRows)) : null), dummyRow),
         CastExpr cast => CastValue(EvaluateWithAggregates(cast.Expr, groupRows), cast.TargetType, cast.Safe),
         IsNullExpr isNull => EvaluateWithAggregates(isNull.Expr, groupRows) is null == !isNull.IsNot,
         IsBoolExpr isBool => EvaluateIsBool(isBool, dummyRow),
         IsDistinctFromExpr isDistinct => EvaluateIsDistinctFrom(isDistinct, dummyRow),
         ArraySubscriptExpr arrSub => EvaluateArraySubscript(
             new ArraySubscriptExpr(
-                new LiteralExpr(EvaluateWithAggregates(arrSub.Array, groupRows)),
+                new EvaluatedValueExpr(EvaluateWithAggregates(arrSub.Array, groupRows)),
                 arrSub.AccessMode,
-                new LiteralExpr(EvaluateWithAggregates(arrSub.Index, groupRows))),
+                new EvaluatedValueExpr(EvaluateWithAggregates(arrSub.Index, groupRows))),
             dummyRow),
         BetweenExpr btw => EvaluateBetween(new BetweenExpr(
-            new LiteralExpr(EvaluateWithAggregates(btw.Expr, groupRows)),
-            new LiteralExpr(EvaluateWithAggregates(btw.Low, groupRows)),
-            new LiteralExpr(EvaluateWithAggregates(btw.High, groupRows))), dummyRow),
+            new EvaluatedValueExpr(EvaluateWithAggregates(btw.Expr, groupRows)),
+            new EvaluatedValueExpr(EvaluateWithAggregates(btw.Low, groupRows)),
+            new EvaluatedValueExpr(EvaluateWithAggregates(btw.High, groupRows))), dummyRow),
         InExpr inE => EvaluateIn(new InExpr(
-            new LiteralExpr(EvaluateWithAggregates(inE.Expr, groupRows)),
-            inE.Values.Select(v => (SqlExpression)new LiteralExpr(EvaluateWithAggregates(v, groupRows))).ToList()), dummyRow),
+            new EvaluatedValueExpr(EvaluateWithAggregates(inE.Expr, groupRows)),
+            inE.Values.Select(v => (SqlExpression)new EvaluatedValueExpr(EvaluateWithAggregates(v, groupRows))).ToList()), dummyRow),
         LikeExpr lk => EvaluateLike(new LikeExpr(
-            new LiteralExpr(EvaluateWithAggregates(lk.Expr, groupRows)),
-            new LiteralExpr(EvaluateWithAggregates(lk.Pattern, groupRows)),
+            new EvaluatedValueExpr(EvaluateWithAggregates(lk.Expr, groupRows)),
+            new EvaluatedValueExpr(EvaluateWithAggregates(lk.Pattern, groupRows)),
             lk.IsNot), dummyRow),
         _ => Evaluate(expr, dummyRow)
     };
@@ -8662,6 +8774,42 @@ _ => false
 };
 }
 
+/// <summary>
+/// Returns the name of the first aggregate function found in the select columns, or null if none.
+/// Used to produce a descriptive error when aggregates appear in SELECT without FROM.
+/// </summary>
+private static string? FindFirstAggregateName(IReadOnlyList<SelectItem> columns)
+{
+foreach (var col in columns)
+{
+var name = FindFirstAggregateInExpr(col.Expr);
+if (name is not null) return name;
+}
+return null;
+}
+
+private static string? FindFirstAggregateInExpr(SqlExpression expr)
+{
+return expr switch
+{
+AggregateCall agg => agg.FunctionName,
+FunctionCall fn => fn.Args.Select(FindFirstAggregateInExpr).FirstOrDefault(n => n is not null),
+BinaryExpr bin => FindFirstAggregateInExpr(bin.Left) ?? FindFirstAggregateInExpr(bin.Right),
+UnaryExpr un => FindFirstAggregateInExpr(un.Operand),
+CaseExpr ce => ce.Branches.Select(w => FindFirstAggregateInExpr(w.When) ?? FindFirstAggregateInExpr(w.Then)).FirstOrDefault(n => n is not null)
+    ?? (ce.Else is not null ? FindFirstAggregateInExpr(ce.Else) : null),
+CastExpr c => FindFirstAggregateInExpr(c.Expr),
+ArraySubscriptExpr sub => FindFirstAggregateInExpr(sub.Array) ?? FindFirstAggregateInExpr(sub.Index),
+FieldAccessExpr fa => FindFirstAggregateInExpr(fa.Object),
+IsNullExpr isNull => FindFirstAggregateInExpr(isNull.Expr),
+IsBoolExpr isBool => FindFirstAggregateInExpr(isBool.Expr),
+BetweenExpr btw => FindFirstAggregateInExpr(btw.Expr) ?? FindFirstAggregateInExpr(btw.Low) ?? FindFirstAggregateInExpr(btw.High),
+InExpr inE => FindFirstAggregateInExpr(inE.Expr) ?? inE.Values.Select(FindFirstAggregateInExpr).FirstOrDefault(n => n is not null),
+IsDistinctFromExpr isD => FindFirstAggregateInExpr(isD.Left) ?? FindFirstAggregateInExpr(isD.Right),
+_ => null
+};
+}
+
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#having_clause
 //   "The HAVING clause can reference aliases defined in the SELECT list."
 private static SqlExpression ResolveAliasesInExpression(SqlExpression expr, IReadOnlyList<SelectItem> columns)
@@ -8763,13 +8911,15 @@ return val switch
 null => null,
 bool b => b ? "true" : "false",
             // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_string
-            //   CAST(FLOAT64 AS STRING) returns "inf", "-inf", "NaN" for special values.
+            //   CAST(FLOAT64 AS STRING) returns "inf", "-inf", "nan" for special values.
             double d when double.IsPositiveInfinity(d) => "inf",
             double d when double.IsNegativeInfinity(d) => "-inf",
-            double d when double.IsNaN(d) => "NaN",
-            // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions
-            //   BigQuery FLOAT64 whole numbers format with ".0" suffix (e.g., ROUND(2.5) → "3.0")
-            double d when d == Math.Floor(d) && d >= long.MinValue && d <= long.MaxValue => $"{(long)d}.0",
+            // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_string
+            //   CAST(FLOAT64 AS STRING) returns "nan" for NaN (verified against real BigQuery).
+            double d when double.IsNaN(d) => "nan",
+            // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_string
+            //   CAST(FLOAT64 AS STRING) for whole numbers returns without ".0" suffix (e.g., CAST(25.0 AS STRING) → "25").
+            double d when d == Math.Floor(d) && d >= long.MinValue && d <= long.MaxValue => ((long)d).ToString(),
             // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_string
             //   BigQuery uses lowercase 'e' for scientific notation in CAST(FLOAT64 AS STRING).
             double d => d.ToString(CultureInfo.InvariantCulture).Replace('E', 'e'),
@@ -8788,8 +8938,8 @@ _ => val.ToString()
 }
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_string
-//   CAST(TIMESTAMP AS STRING) format: "yyyy-MM-dd HH:mm:ss[.SSSSSS]+HH[:MM]"
-//   Fractional seconds are omitted if zero; trailing zeros in fractional part are trimmed.
+//   CAST(TIMESTAMP AS STRING) format: "yyyy-MM-dd HH:mm:ss[.SSS[SSS]]+HH[:MM]"
+//   Fractional seconds are omitted if zero; trailing zeros trimmed in groups of 3.
 //   Timezone offset uses short form "+HH" when minutes are zero.
 private static string FormatTimestampAsString(DateTimeOffset dto)
 {
@@ -8798,9 +8948,7 @@ private static string FormatTimestampAsString(DateTimeOffset dto)
     long ticks = dto.TimeOfDay.Ticks % TimeSpan.TicksPerSecond;
     if (ticks > 0)
     {
-        var microseconds = ticks / (TimeSpan.TicksPerMillisecond / 1000);
-        var frac = microseconds.ToString("D6").TrimEnd('0');
-        sb.Append('.').Append(frac);
+        sb.Append('.').Append(FormatFractionalSeconds(ticks));
     }
     var offset = dto.Offset;
     sb.Append(offset < TimeSpan.Zero ? '-' : '+');
@@ -8816,8 +8964,8 @@ private static string FormatTimestampAsString(DateTimeOffset dto)
 
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_string
-//   CAST(DATETIME AS STRING) format: "YYYY-MM-DD HH:MM:SS[.DDDDDD]"
-//   Trailing zeros in fractional seconds are trimmed.
+//   CAST(DATETIME AS STRING) format: "YYYY-MM-DD HH:MM:SS[.SSS[SSS]]"
+//   Fractional seconds are omitted if zero; trailing zeros trimmed in groups of 3.
 private static string FormatDatetimeAsString(DateTime dt)
 {
     var sb = new System.Text.StringBuilder();
@@ -8825,16 +8973,14 @@ private static string FormatDatetimeAsString(DateTime dt)
     long ticks = dt.TimeOfDay.Ticks % TimeSpan.TicksPerSecond;
     if (ticks > 0)
     {
-        var microseconds = ticks / (TimeSpan.TicksPerMillisecond / 1000);
-        var frac = microseconds.ToString("D6").TrimEnd('0');
-        sb.Append('.').Append(frac);
+        sb.Append('.').Append(FormatFractionalSeconds(ticks));
     }
     return sb.ToString();
 }
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_string
-//   CAST(TIME AS STRING) format: "HH:MM:SS[.DDDDDD]"
-//   Trailing zeros in fractional seconds are trimmed.
+//   CAST(TIME AS STRING) format: "HH:MM:SS[.SSS[SSS]]"
+//   Fractional seconds are omitted if zero; trailing zeros trimmed in groups of 3.
 private static string FormatTimeAsString(TimeSpan ts)
 {
     var sb = new System.Text.StringBuilder();
@@ -8842,11 +8988,19 @@ private static string FormatTimeAsString(TimeSpan ts)
     long ticks = ts.Ticks % TimeSpan.TicksPerSecond;
     if (ticks > 0)
     {
-        var microseconds = ticks / (TimeSpan.TicksPerMillisecond / 1000);
-        var frac = microseconds.ToString("D6").TrimEnd('0');
-        sb.Append('.').Append(frac);
+        sb.Append('.').Append(FormatFractionalSeconds(ticks));
     }
     return sb.ToString();
+}
+
+// Formats sub-second ticks as 3 or 6 fractional digits.
+// BigQuery trims trailing zeros in groups of 3: output is either 3 or 6 digits.
+private static string FormatFractionalSeconds(long ticks)
+{
+    var microseconds = ticks / (TimeSpan.TicksPerMillisecond / 1000);
+    var full = microseconds.ToString("D6");
+    // If last 3 digits are all zeros, use only 3 digits (millisecond precision)
+    return full[3..] == "000" ? full[..3] : full;
 }
 
 private object? EvaluateVectorDistanceFunction(string name, IReadOnlyList<SqlExpression> args, RowContext row)
@@ -8859,7 +9013,15 @@ private object? EvaluateVectorDistanceFunction(string name, IReadOnlyList<SqlExp
     var vec1 = ToDoubleArray(v1);
     var vec2 = ToDoubleArray(v2);
 
-    if (vec1 is null || vec2 is null || vec1.Length != vec2.Length || vec1.Length == 0)
+    if (vec1 is null || vec2 is null)
+        return null;
+
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#cosine_distance
+    //   "Array inputs are not equal in length"
+    if (vec1.Length != vec2.Length)
+        throw new InvalidOperationException($"Array inputs are not equal in length; error in {name} expression");
+
+    if (vec1.Length == 0)
         return null;
 
     var result = name switch
@@ -8895,8 +9057,10 @@ private static object? CosineDistance(double[] a, double[] b)
         magB += b[i] * b[i];
     }
     var denominator = Math.Sqrt(magA) * Math.Sqrt(magB);
-    // Zero vector â†’ return null (real BigQuery produces an error)
-    if (denominator == 0) return null;
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#cosine_distance
+    //   "Cannot compute cosine distance against zero vector."
+    if (denominator == 0)
+        throw new InvalidOperationException("Cannot compute cosine distance against zero vector. Error in COSINE_DISTANCE expression");
     return 1.0 - (dot / denominator);
 }
 
@@ -9071,9 +9235,9 @@ private object? EvaluateRegexpExtractAll(IReadOnlyList<SqlExpression> args, RowC
     foreach (Match m in matches)
     {
         // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#regexp_extract_all
-        //   Non-participating optional capturing group returns NULL element.
+        //   Non-participating optional capturing group returns empty string (observed on real BigQuery).
         if (m.Groups.Count > 1)
-            result.Add(m.Groups[1].Success ? m.Groups[1].Value : null);
+            result.Add(m.Groups[1].Success ? m.Groups[1].Value : "");
         else
             result.Add(m.Value);
     }

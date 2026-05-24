@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -54,17 +55,20 @@ public class ParityVerificationTests14 : IAsyncLifetime
 	// NULL arithmetic and comparison
 	// ───────────────────────────────────────────────────────────────────────────
 
-	[Fact] public async Task Null_Arithmetic()
+	[Fact]
+	public async Task Null_Arithmetic()
 	{
-		var result = await S("SELECT 5 + NULL");
-		Assert.Null(result);
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT 5 + NULL", parameters: null));
 	}
 
-	[Fact] public async Task Null_Comparison_Equals()
+	[Fact]
+	public async Task Null_Comparison_Equals()
 	{
-		// NULL = NULL is NULL (not TRUE)
-		var result = await S("SELECT CASE WHEN NULL = NULL THEN 'equal' ELSE 'not equal' END");
-		Assert.Equal("not equal", result);
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT CASE WHEN NULL = NULL THEN 'equal' ELSE 'not equal' END", parameters: null));
 	}
 
 	[Fact] public async Task Null_In_List()
@@ -232,7 +236,7 @@ public class ParityVerificationTests14 : IAsyncLifetime
 	[Fact] public async Task ArrayAgg_OrderByDesc()
 	{
 		var result = await S(@"
-			SELECT ARRAY_TO_STRING(ARRAY_AGG(x ORDER BY x DESC), ',')
+			SELECT ARRAY_TO_STRING(ARRAY_AGG(CAST(x AS STRING) ORDER BY x DESC), ',')
 			FROM UNNEST([3, 1, 4, 1, 5]) AS x");
 		Assert.Equal("5,4,3,1,1", result);
 	}

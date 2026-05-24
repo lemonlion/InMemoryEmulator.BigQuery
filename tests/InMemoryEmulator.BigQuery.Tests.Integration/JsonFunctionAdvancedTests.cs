@@ -45,13 +45,19 @@ public class JsonFunctionAdvancedTests : IAsyncLifetime
 		var v = await S("SELECT ARRAY_LENGTH(JSON_KEYS(JSON '{\"a\":1,\"b\":2,\"c\":3}'))");
 		Assert.Equal("3", v);
 	}
-	[Fact] public async Task JsonKeys_Nested()
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task JsonKeys_Nested()
 	{
 		// JSON_KEYS returns the top-level keys of the JSON object
 		var v = await S("SELECT ARRAY_LENGTH(JSON_KEYS(JSON '{\"a\":{\"x\":1},\"b\":2}'))");
 		Assert.Equal("2", v);
 	}
-	[Fact] public async Task JsonKeys_Null() => Assert.Null(await S("SELECT JSON_KEYS(NULL)"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_keys
+	//   BigQuery SDK returns System.String[] for NULL JSON_KEYS result.
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task JsonKeys_Null() => Assert.Null(await S("SELECT JSON_KEYS(NULL)"));
 	[Fact] public async Task JsonKeys_EmptyObject()
 	{
 		var v = await S("SELECT ARRAY_LENGTH(JSON_KEYS(JSON '{}'))");
@@ -215,7 +221,10 @@ public class JsonFunctionAdvancedTests : IAsyncLifetime
 
 	// ---- TO_JSON ----
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#to_json
-	[Fact] public async Task ToJson_Integer()
+	//   BigQuery: "Invalid cast from JSON to STRING" - JSON cannot be CAST to STRING directly
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task ToJson_Integer()
 	{
 		// TO_JSON(42) returns JSON value; TO_JSON_STRING wraps it
 		var v = await S("SELECT CAST(TO_JSON(42) AS STRING)");

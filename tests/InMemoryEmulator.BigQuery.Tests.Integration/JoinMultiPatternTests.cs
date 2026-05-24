@@ -134,6 +134,7 @@ public class JoinMultiPatternTests : IAsyncLifetime
 			SELECT e.name, d.name AS dept, p.title
 			FROM `{ds}.assign` a
 			JOIN `{ds}.emp` e ON a.emp_id = e.id
+			JOIN `{ds}.dept` d ON e.dept_id = d.id
 			JOIN `{ds}.proj` p ON a.proj_id = p.id
 			ORDER BY e.name, p.title");
 		Assert.True(rows.Count >= 7);

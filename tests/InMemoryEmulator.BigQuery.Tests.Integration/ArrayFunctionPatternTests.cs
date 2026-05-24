@@ -38,14 +38,14 @@ public class ArrayFunctionPatternTests : IAsyncLifetime
 	[Fact] public async Task ArrayLength_Strings() => Assert.Equal("2", await S("SELECT ARRAY_LENGTH(['a', 'b'])"));
 
 	// ---- ARRAY_TO_STRING ----
-	[Fact] public async Task ArrayToString_Comma() => Assert.Equal("1,2,3", await S("SELECT ARRAY_TO_STRING([1, 2, 3], ',')"));
+	[Fact] public async Task ArrayToString_Comma() => Assert.Equal("1,2,3", await S("SELECT ARRAY_TO_STRING(['1', '2', '3'], ',')"));
 	[Fact] public async Task ArrayToString_Dash() => Assert.Equal("a-b-c", await S("SELECT ARRAY_TO_STRING(['a', 'b', 'c'], '-')"));
 	[Fact] public async Task ArrayToString_Empty() => Assert.Equal("", await S("SELECT ARRAY_TO_STRING(CAST([] AS ARRAY<STRING>), ',')"));
 
 	// ---- ARRAY_REVERSE ----
 	[Fact] public async Task ArrayReverse_Basic()
 	{
-		var v = await S("SELECT ARRAY_TO_STRING(ARRAY_REVERSE([1, 2, 3]), ',')");
+		var v = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(ARRAY_REVERSE([1, 2, 3])) AS x), ',')");
 		Assert.Equal("3,2,1", v);
 	}
 	[Fact] public async Task ArrayReverse_Strings()
@@ -57,7 +57,7 @@ public class ArrayFunctionPatternTests : IAsyncLifetime
 	// ---- ARRAY_CONCAT ----
 	[Fact] public async Task ArrayConcat_Basic()
 	{
-		var v = await S("SELECT ARRAY_TO_STRING(ARRAY_CONCAT([1, 2], [3, 4]), ',')");
+		var v = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(ARRAY_CONCAT([1, 2], [3, 4])) AS x), ',')");
 		Assert.Equal("1,2,3,4", v);
 	}
 	[Fact] public async Task ArrayConcat_Strings()
@@ -71,7 +71,7 @@ public class ArrayFunctionPatternTests : IAsyncLifetime
 	[Fact] public async Task GenerateArray_WithStep() => Assert.Equal("3", await S("SELECT ARRAY_LENGTH(GENERATE_ARRAY(0, 10, 5))")); // 0,5,10
 	[Fact] public async Task GenerateArray_AsString()
 	{
-		var v = await S("SELECT ARRAY_TO_STRING(GENERATE_ARRAY(1, 3), ',')");
+		var v = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(GENERATE_ARRAY(1, 3)) AS x), ',')");
 		Assert.Equal("1,2,3", v);
 	}
 

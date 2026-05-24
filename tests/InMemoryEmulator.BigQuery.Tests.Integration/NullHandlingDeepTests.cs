@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -32,22 +33,92 @@ public class NullHandlingDeepTests : IAsyncLifetime
 	[Fact] public async Task Null_CastToBool() => Assert.Null(await Scalar("SELECT CAST(NULL AS BOOL)"));
 
 	// ---- NULL in arithmetic ----
-	[Fact] public async Task Null_Add() => Assert.Null(await Scalar("SELECT NULL + 1"));
-	[Fact] public async Task Null_Sub() => Assert.Null(await Scalar("SELECT NULL - 1"));
-	[Fact] public async Task Null_Mul() => Assert.Null(await Scalar("SELECT NULL * 1"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+	//   "Operands of <op> cannot be literal NULL"
+	[Fact]
+	public async Task Null_Add()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL + 1", parameters: null));
+	}
+	[Fact]
+	public async Task Null_Sub()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL - 1", parameters: null));
+	}
+	[Fact]
+	public async Task Null_Mul()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL * 1", parameters: null));
+	}
 	[Fact] public async Task Null_Div() => Assert.Null(await Scalar("SELECT SAFE_DIVIDE(NULL, 1)"));
 	[Fact] public async Task Null_Mod() => Assert.Null(await Scalar("SELECT MOD(NULL, 3)"));
 	[Fact] public async Task Null_UnaryMinus() => Assert.Null(await Scalar("SELECT -(CAST(NULL AS INT64))"));
 
 	// ---- NULL comparison ----
-	[Fact] public async Task Null_EqNull() => Assert.Null(await Scalar("SELECT NULL = NULL"));
-	[Fact] public async Task Null_NeqNull() => Assert.Null(await Scalar("SELECT NULL != NULL"));
-	[Fact] public async Task Null_LtNull() => Assert.Null(await Scalar("SELECT NULL < NULL"));
-	[Fact] public async Task Null_GtNull() => Assert.Null(await Scalar("SELECT NULL > NULL"));
-	[Fact] public async Task Null_EqValue() => Assert.Null(await Scalar("SELECT NULL = 1"));
-	[Fact] public async Task Null_NeqValue() => Assert.Null(await Scalar("SELECT NULL != 1"));
-	[Fact] public async Task Null_LtValue() => Assert.Null(await Scalar("SELECT NULL < 1"));
-	[Fact] public async Task Null_GtValue() => Assert.Null(await Scalar("SELECT NULL > 1"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+	//   "Operands of <op> cannot be literal NULL"
+	[Fact]
+	public async Task Null_EqNull()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL = NULL", parameters: null));
+	}
+	[Fact]
+	public async Task Null_NeqNull()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL != NULL", parameters: null));
+	}
+	[Fact]
+	public async Task Null_LtNull()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL < NULL", parameters: null));
+	}
+	[Fact]
+	public async Task Null_GtNull()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL > NULL", parameters: null));
+	}
+	[Fact]
+	public async Task Null_EqValue()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL = 1", parameters: null));
+	}
+	[Fact]
+	public async Task Null_NeqValue()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL != 1", parameters: null));
+	}
+	[Fact]
+	public async Task Null_LtValue()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL < 1", parameters: null));
+	}
+	[Fact]
+	public async Task Null_GtValue()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL > 1", parameters: null));
+	}
 
 	// ---- IS NULL / IS NOT NULL ----
 	[Fact] public async Task IsNull_Null() => Assert.Equal("True", await Scalar("SELECT NULL IS NULL"));
@@ -111,9 +182,9 @@ public class NullHandlingDeepTests : IAsyncLifetime
 	[Fact] public async Task Count_AllNull() => Assert.Equal("0", await Scalar("SELECT COUNT(x) FROM UNNEST([CAST(NULL AS INT64), NULL]) AS x"));
 
 	// ---- NULL in BETWEEN ----
-	[Fact] public async Task Between_NullValue() => Assert.Null(await Scalar("SELECT NULL BETWEEN 1 AND 10"));
-	[Fact] public async Task Between_NullLow() => Assert.Null(await Scalar("SELECT 5 BETWEEN NULL AND 10"));
-	[Fact] public async Task Between_NullHigh() => Assert.Null(await Scalar("SELECT 5 BETWEEN 1 AND NULL"));
+	[Fact] public async Task Between_NullValue() => Assert.Null(await Scalar("SELECT CAST(NULL AS INT64) BETWEEN 1 AND 10"));
+	[Fact] public async Task Between_NullLow() => Assert.Null(await Scalar("SELECT 5 BETWEEN CAST(NULL AS INT64) AND 10"));
+	[Fact] public async Task Between_NullHigh() => Assert.Null(await Scalar("SELECT 5 BETWEEN 1 AND CAST(NULL AS INT64)"));
 
 	// ---- NULL in IN ----
 	[Fact] public async Task In_NullValue() => Assert.Null(await Scalar("SELECT NULL IN (1, 2, 3)"));
@@ -126,7 +197,15 @@ public class NullHandlingDeepTests : IAsyncLifetime
 	[Fact] public async Task If_NullFalse() => Assert.Null(await Scalar("SELECT IF(FALSE, 'a', NULL)"));
 
 	// ---- NULL propagation in nested expressions ----
-	[Fact] public async Task NullProp_Nested() => Assert.Null(await Scalar("SELECT ABS(NULL + 1)"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+	//   "Operands of + cannot be literal NULL"
+	[Fact]
+	public async Task NullProp_Nested()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT ABS(NULL + 1)", parameters: null));
+	}
 	[Fact] public async Task NullProp_Concat() => Assert.Null(await Scalar("SELECT CONCAT(CAST(NULL AS STRING), CAST(NULL AS STRING))"));
 	[Fact] public async Task NullProp_DoubleNegate() => Assert.Null(await Scalar("SELECT -(-(CAST(NULL AS INT64)))"));
 }

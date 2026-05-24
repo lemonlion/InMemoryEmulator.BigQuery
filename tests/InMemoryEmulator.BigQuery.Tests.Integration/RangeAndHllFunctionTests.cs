@@ -40,10 +40,12 @@ public class RangeAndHllFunctionTests : IAsyncLifetime
 	}
 
 	// ---- RANGE constructor ----
-	[Fact] public async Task Range_DateRange() => Assert.NotNull(await Scalar("SELECT RANGE(DATE '2024-01-01', DATE '2024-12-31')"));
-	[Fact] public async Task Range_TimestampRange() => Assert.NotNull(await Scalar("SELECT RANGE(TIMESTAMP '2024-01-01 00:00:00 UTC', TIMESTAMP '2024-12-31 23:59:59 UTC')"));
-	[Fact] public async Task Range_NullStart() => Assert.NotNull(await Scalar("SELECT RANGE(NULL, DATE '2024-12-31')"));
-	[Fact] public async Task Range_NullEnd() => Assert.NotNull(await Scalar("SELECT RANGE(DATE '2024-01-01', NULL)"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions
+	//   BigQuery SDK does not support RANGE type: "Value RANGE is undefined in BigQueryDbType"
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task Range_DateRange() => Assert.NotNull(await Scalar("SELECT RANGE(DATE '2024-01-01', DATE '2024-12-31')"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task Range_TimestampRange() => Assert.NotNull(await Scalar("SELECT RANGE(TIMESTAMP '2024-01-01 00:00:00 UTC', TIMESTAMP '2024-12-31 23:59:59 UTC')"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task Range_NullStart() => Assert.NotNull(await Scalar("SELECT RANGE(NULL, DATE '2024-12-31')"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task Range_NullEnd() => Assert.NotNull(await Scalar("SELECT RANGE(DATE '2024-01-01', NULL)"));
 
 	// ---- RANGE_START / RANGE_END ----
 	[Fact] public async Task RangeStart_Date() { var v = await Scalar("SELECT RANGE_START(RANGE(DATE '2024-01-01', DATE '2024-12-31'))"); Assert.Contains("2024-01-01", v); }
@@ -71,8 +73,10 @@ public class RangeAndHllFunctionTests : IAsyncLifetime
 	[Fact] public async Task RangeBucket_NullPoint() => Assert.Null(await Scalar("SELECT RANGE_BUCKET(NULL, [0, 10, 20])"));
 
 	// ==== HLL FUNCTIONS ====
-	[Fact] public async Task HllCountInit_Basic() => Assert.NotNull(await Scalar("SELECT HLL_COUNT.INIT(1)"));
-	[Fact] public async Task HllCountInit_String() => Assert.NotNull(await Scalar("SELECT HLL_COUNT.INIT('hello')"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/hll_count_functions
+	//   HLL_COUNT functions produce BYTES sketches that require specific handling.
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task HllCountInit_Basic() => Assert.NotNull(await Scalar("SELECT HLL_COUNT.INIT(x) FROM UNNEST([1]) AS x"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task HllCountInit_String() => Assert.NotNull(await Scalar("SELECT HLL_COUNT.INIT(x) FROM UNNEST(['hello']) AS x"));
 	
 	[Fact] public async Task HllCountMerge_Basic()
 	{
@@ -99,11 +103,13 @@ public class RangeAndHllFunctionTests : IAsyncLifetime
 	}
 
 	// ---- MAKE_INTERVAL ----
-	[Fact] public async Task MakeInterval_Days() => Assert.NotNull(await Scalar("SELECT MAKE_INTERVAL(0, 0, 5)"));
-	[Fact] public async Task MakeInterval_Hours() => Assert.NotNull(await Scalar("SELECT MAKE_INTERVAL(0, 0, 0, 3)"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/interval_functions
+	//   BigQuery SDK does not support INTERVAL type: "Value INTERVAL is undefined in BigQueryDbType"
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task MakeInterval_Days() => Assert.NotNull(await Scalar("SELECT MAKE_INTERVAL(0, 0, 5)"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task MakeInterval_Hours() => Assert.NotNull(await Scalar("SELECT MAKE_INTERVAL(0, 0, 0, 3)"));
 
 	// ---- JUSTIFY_DAYS / JUSTIFY_HOURS / JUSTIFY_INTERVAL ----
-	[Fact] public async Task JustifyDays_Basic() => Assert.NotNull(await Scalar("SELECT JUSTIFY_DAYS(MAKE_INTERVAL(0, 0, 35))"));
-	[Fact] public async Task JustifyHours_Basic() => Assert.NotNull(await Scalar("SELECT JUSTIFY_HOURS(MAKE_INTERVAL(0, 0, 0, 30))"));
-	[Fact] public async Task JustifyInterval_Basic() => Assert.NotNull(await Scalar("SELECT JUSTIFY_INTERVAL(MAKE_INTERVAL(0, 0, 35, 30))"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task JustifyDays_Basic() => Assert.NotNull(await Scalar("SELECT JUSTIFY_DAYS(MAKE_INTERVAL(0, 0, 35))"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task JustifyHours_Basic() => Assert.NotNull(await Scalar("SELECT JUSTIFY_HOURS(MAKE_INTERVAL(0, 0, 0, 30))"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task JustifyInterval_Basic() => Assert.NotNull(await Scalar("SELECT JUSTIFY_INTERVAL(MAKE_INTERVAL(0, 0, 35, 30))"));
 }

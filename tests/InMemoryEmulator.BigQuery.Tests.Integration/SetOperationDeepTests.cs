@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -62,11 +63,16 @@ public class SetOperationDeepTests : IAsyncLifetime
         Assert.Equal(5, rows.Count); // A, B, C, D, E
     }
 
-    // INTERSECT ALL
-    [Fact] public async Task IntersectAll_Basic()
+    // INTERSECT ALL - not supported in BigQuery
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
+    //   "INTERSECT ALL is not supported. Only INTERSECT DISTINCT is supported."
+    [Fact]
+    [Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+    public async Task IntersectAll_Basic()
     {
-        var rows = await Query("SELECT id, val FROM `{ds}.t1` INTERSECT ALL SELECT id, val FROM `{ds}.t2`  ");
-        Assert.True(rows.Count >= 2); // overlap rows
+        var client = await _fixture.GetClientAsync();
+        await Assert.ThrowsAsync<GoogleApiException>(async () =>
+            await client.ExecuteQueryAsync($"SELECT id, val FROM `{_datasetId}.t1` INTERSECT ALL SELECT id, val FROM `{_datasetId}.t2`", parameters: null));
     }
 
     // INTERSECT DISTINCT
@@ -76,11 +82,16 @@ public class SetOperationDeepTests : IAsyncLifetime
         Assert.Equal(2, rows.Count); // A, C
     }
 
-    // EXCEPT ALL
-    [Fact] public async Task ExceptAll_Basic()
+    // EXCEPT ALL - not supported in BigQuery
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
+    //   "EXCEPT ALL is not supported. Only EXCEPT DISTINCT is supported."
+    [Fact]
+    [Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+    public async Task ExceptAll_Basic()
     {
-        var rows = await Query("SELECT id, val FROM `{ds}.t1` EXCEPT ALL SELECT id, val FROM `{ds}.t2`  ");
-        Assert.True(rows.Count >= 2); // t1 minus t2
+        var client = await _fixture.GetClientAsync();
+        await Assert.ThrowsAsync<GoogleApiException>(async () =>
+            await client.ExecuteQueryAsync($"SELECT id, val FROM `{_datasetId}.t1` EXCEPT ALL SELECT id, val FROM `{_datasetId}.t2`", parameters: null));
     }
 
     // EXCEPT DISTINCT

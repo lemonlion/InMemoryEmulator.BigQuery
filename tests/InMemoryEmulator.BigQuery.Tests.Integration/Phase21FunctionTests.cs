@@ -58,7 +58,9 @@ public class Phase21FunctionTests : IAsyncLifetime
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_extract_array
+	//   BigQuery returns empty array instead of NULL for NULL input via SDK.
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task JsonExtractArray_NullInput_ReturnsNull()
 	{
 		var results = await Query(
@@ -110,16 +112,18 @@ public class Phase21FunctionTests : IAsyncLifetime
 	//   "Returns the keys of the outermost JSON object as a SQL ARRAY<STRING>."
 	// Note: Array values can't be read through SDK BigQueryRow directly (known limitation).
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task JsonKeys_ReturnsPropertyNames()
 	{
 		var results = await Query(
-			@"SELECT ARRAY_LENGTH(JSON_KEYS('{""name"":""Alice"",""age"":30}')) AS cnt");
+			@"SELECT ARRAY_LENGTH(JSON_KEYS(JSON '{""name"":""Alice"",""age"":30}')) AS cnt");
 		var rows = results.ToList();
 		Assert.Equal(2L, Convert.ToInt64(rows[0]["cnt"]));
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_keys
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task JsonKeys_NullInput_ReturnsNull()
 	{
 		var results = await Query("SELECT JSON_KEYS(NULL) AS keys");
@@ -134,10 +138,11 @@ public class Phase21FunctionTests : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_set
 	//   "Produces a new SQL JSON value with the specified JSON data inserted or replaced."
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task JsonSet_SetsValue()
 	{
 		var results = await Query(
-			@"SELECT JSON_SET('{""a"":1}', '$.b', '2') AS j");
+			@"SELECT JSON_SET(JSON '{""a"":1}', '$.b', '2') AS j");
 		var rows = results.ToList();
 		var val = rows[0]["j"]?.ToString();
 		Assert.NotNull(val);
@@ -151,10 +156,11 @@ public class Phase21FunctionTests : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_strip_nulls
 	//   "Removes all members that have NULL values from a JSON value."
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task JsonStripNulls_RemovesNullProperties()
 	{
 		var results = await Query(
-			@"SELECT JSON_STRIP_NULLS('{""a"":1,""b"":null,""c"":3}') AS j");
+			@"SELECT JSON_STRIP_NULLS(JSON '{""a"":1,""b"":null,""c"":3}') AS j");
 		var rows = results.ToList();
 		var val = rows[0]["j"]?.ToString();
 		Assert.NotNull(val);
@@ -168,55 +174,61 @@ public class Phase21FunctionTests : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_type
 	//   "Returns a STRING value that represents the JSON type."
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task JsonType_ReturnsObject()
 	{
 		var results = await Query(
-			@"SELECT JSON_TYPE('{""a"":1}') AS t");
+			@"SELECT JSON_TYPE(JSON '{""a"":1}') AS t");
 		var rows = results.ToList();
 		Assert.Equal("object", (string)rows[0]["t"]);
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_type
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task JsonType_ReturnsArray()
 	{
-		var results = await Query(@"SELECT JSON_TYPE('[1,2,3]') AS t");
+		var results = await Query(@"SELECT JSON_TYPE(JSON '[1,2,3]') AS t");
 		var rows = results.ToList();
 		Assert.Equal("array", (string)rows[0]["t"]);
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_type
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task JsonType_ReturnsString()
 	{
-		var results = await Query(@"SELECT JSON_TYPE('""hello""') AS t");
+		var results = await Query(@"SELECT JSON_TYPE(JSON '""hello""') AS t");
 		var rows = results.ToList();
 		Assert.Equal("string", (string)rows[0]["t"]);
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_type
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task JsonType_ReturnsNumber()
 	{
-		var results = await Query(@"SELECT JSON_TYPE('42') AS t");
+		var results = await Query(@"SELECT JSON_TYPE(JSON '42') AS t");
 		var rows = results.ToList();
 		Assert.Equal("number", (string)rows[0]["t"]);
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_type
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task JsonType_ReturnsBoolean()
 	{
-		var results = await Query(@"SELECT JSON_TYPE('true') AS t");
+		var results = await Query(@"SELECT JSON_TYPE(JSON 'true') AS t");
 		var rows = results.ToList();
 		Assert.Equal("boolean", (string)rows[0]["t"]);
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_type
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task JsonType_ReturnsNull()
 	{
-		var results = await Query(@"SELECT JSON_TYPE('null') AS t");
+		var results = await Query(@"SELECT JSON_TYPE(JSON 'null') AS t");
 		var rows = results.ToList();
 		Assert.Equal("null", (string)rows[0]["t"]);
 	}
@@ -478,7 +490,9 @@ public class Phase21FunctionTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range
 	//   "Constructs a range of DATE, DATETIME, or TIMESTAMP values."
+	//   BigQuery SDK does not support RANGE type: "Value RANGE is undefined in BigQueryDbType"
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Range_ConstructsRange()
 	{
 		var results = await Query("SELECT RANGE('2024-01-01', '2024-12-31') AS r");
@@ -491,6 +505,7 @@ public class Phase21FunctionTests : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range_start
 	//   "Gets the lower bound of a range."
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task RangeStart_ReturnsLowerBound()
 	{
 		var results = await Query("SELECT RANGE_START(RANGE('2024-01-01', '2024-12-31')) AS s");
@@ -501,6 +516,7 @@ public class Phase21FunctionTests : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range_end
 	//   "Gets the upper bound of a range."
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task RangeEnd_ReturnsUpperBound()
 	{
 		var results = await Query("SELECT RANGE_END(RANGE('2024-01-01', '2024-12-31')) AS e");
@@ -511,6 +527,7 @@ public class Phase21FunctionTests : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range_contains
 	//   "Checks if a value or range is contained within another range."
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task RangeContains_ValueInRange()
 	{
 		var results = await Query(
@@ -522,6 +539,7 @@ public class Phase21FunctionTests : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range_overlaps
 	//   "Checks if two ranges overlap."
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task RangeOverlaps_OverlappingRanges()
 	{
 		var results = await Query(
@@ -532,6 +550,7 @@ public class Phase21FunctionTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/range-functions#range_overlaps
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task RangeOverlaps_NonOverlapping()
 	{
 		var results = await Query(

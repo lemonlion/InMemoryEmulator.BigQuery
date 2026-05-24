@@ -81,7 +81,9 @@ public class AdvancedSqlTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#qualify_clause
 	//   "The QUALIFY clause filters the results of window functions."
+	// GO emulator does not correctly support QUALIFY clause.
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Qualify_TopPerGroup()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -98,7 +100,9 @@ public class AdvancedSqlTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#pivot_operator
 	//   "The PIVOT operator rotates rows into columns."
+	// GO emulator does not support PIVOT operator.
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Pivot_BasicSum()
 	{
 		var client = await _fixture.GetClientAsync();

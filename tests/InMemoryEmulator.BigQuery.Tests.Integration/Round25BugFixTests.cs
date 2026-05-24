@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -31,18 +32,19 @@ public class Round25BugFixTests : IAsyncLifetime
 	}
 
 	/// <summary>
-	/// STRING_AGG with NULL delimiter should return NULL per general NULL propagation.
+	/// STRING_AGG with NULL delimiter should throw an error.
 	/// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#string_agg
+	///   "Argument 2 to STRING_AGG must be non-NULL"
 	/// </summary>
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task StringAgg_NullDelimiter_ReturnsNull()
 	{
 		var client = await _fixture.GetClientAsync();
-		var result = await client.ExecuteQueryAsync(
-			"SELECT STRING_AGG(x, CAST(NULL AS STRING)) AS agg FROM UNNEST(['a', 'b', 'c']) AS x",
-			parameters: null);
-		var row = result.Single();
-		Assert.Null(row["agg"]);
+		await Assert.ThrowsAsync<GoogleApiException>(async () =>
+			await client.ExecuteQueryAsync(
+				"SELECT STRING_AGG(x, CAST(NULL AS STRING)) AS agg FROM UNNEST(['a', 'b', 'c']) AS x",
+				parameters: null));
 	}
 
 	/// <summary>
@@ -182,6 +184,6 @@ public class Round25BugFixTests : IAsyncLifetime
 			"SELECT CAST(TIME '12:34:56.100000' AS STRING) AS t",
 			parameters: null);
 		var row = result.Single();
-		Assert.Equal("12:34:56.1", (string)row["t"]);
+		Assert.Equal("12:34:56.100", (string)row["t"]);
 	}
 }

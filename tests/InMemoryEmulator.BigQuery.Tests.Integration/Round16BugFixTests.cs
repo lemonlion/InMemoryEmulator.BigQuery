@@ -85,6 +85,7 @@ public class Round16BugFixTests : IAsyncLifetime
 	// ================================================================
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Format_T_String_SingleQuotes()
 	{
 		var result = await S("SELECT FORMAT('%T', 'hello')");
@@ -100,6 +101,7 @@ public class Round16BugFixTests : IAsyncLifetime
 	}
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Format_T_Boolean_NoQuotes()
 	{
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#format_string

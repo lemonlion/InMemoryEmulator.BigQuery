@@ -218,9 +218,8 @@ public class SubqueryCteSetOpTests : IAsyncLifetime
 	// ==== EXCEPT DISTINCT ====
 	[Fact] public async Task ExceptDistinct_RemovesMatching()
 	{
-		var rows = await Query("SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3 EXCEPT DISTINCT SELECT 2 UNION ALL SELECT 3");
-		// Note: operator precedence here; just check it runs
-		Assert.True(rows.Count > 0);
+		var rows = await Query("SELECT * FROM (SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3) EXCEPT DISTINCT SELECT 2 AS n");
+		Assert.Equal(2, rows.Count);
 	}
 
 	[Fact] public async Task ExceptDistinct_Simple()
@@ -232,8 +231,8 @@ public class SubqueryCteSetOpTests : IAsyncLifetime
 	// ==== INTERSECT DISTINCT ====
 	[Fact] public async Task IntersectDistinct_ReturnsCommon()
 	{
-		var rows = await Query("SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3 INTERSECT DISTINCT SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4");
-		Assert.True(rows.Count >= 2);
+		var rows = await Query("SELECT * FROM (SELECT 1 AS n UNION ALL SELECT 2 UNION ALL SELECT 3) INTERSECT DISTINCT (SELECT 2 AS n UNION ALL SELECT 3 UNION ALL SELECT 4)");
+		Assert.Equal(2, rows.Count);
 	}
 
 	// ==== Correlated subquery ====
@@ -257,7 +256,11 @@ public class SubqueryCteSetOpTests : IAsyncLifetime
 	}
 
 	// ==== PIVOT ====
-	[Fact] public async Task Pivot_Basic()
+	// GO emulator does not support PIVOT operator.
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#pivot_operator
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task Pivot_Basic()
 	{
 		var rows = await Query($@"
 			SELECT * FROM (
@@ -268,7 +271,11 @@ public class SubqueryCteSetOpTests : IAsyncLifetime
 	}
 
 	// ==== UNPIVOT ====
-	[Fact] public async Task Unpivot_Basic()
+	// GO emulator does not support UNPIVOT operator.
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#unpivot_operator
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task Unpivot_Basic()
 	{
 		var rows = await Query("SELECT * FROM (SELECT 1 AS col_a, 2 AS col_b, 3 AS col_c) UNPIVOT (val FOR col_name IN (col_a, col_b, col_c))");
 		Assert.Equal(3, rows.Count);

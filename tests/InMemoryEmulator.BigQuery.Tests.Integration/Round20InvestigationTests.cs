@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -100,21 +101,21 @@ public class Round20InvestigationTests : IAsyncLifetime
 	[Fact]
 	public async Task TypeCoercion_IF_BothBranches_Coerced()
 	{
-		// SELECT CAST(IF(TRUE, 1, 1.5) AS STRING) → "1.0" if IF returns FLOAT64
+		// SELECT CAST(IF(TRUE, 1, 1.5) AS STRING) → "1" (IF returns FLOAT64, whole numbers omit ".0")
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conditional_expressions#if
 		//   "The result type is the common supertype of then_expression and else_expression."
 		var result = await S("SELECT CAST(IF(TRUE, 1, 1.5) AS STRING)");
-		Assert.Equal("1.0", result);
+		Assert.Equal("1", result);
 	}
 
 	[Fact]
 	public async Task TypeCoercion_COALESCE_ReturnsFloat()
 	{
-		// SELECT CAST(COALESCE(NULL, 1, 1.5) AS STRING) → "1.0" if COALESCE returns FLOAT64
+		// SELECT CAST(COALESCE(NULL, 1, 1.5) AS STRING) → "1" (COALESCE returns FLOAT64, whole numbers omit ".0")
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conditional_expressions#coalesce
 		//   "The result type is the common supertype of all argument types."
 		var result = await S("SELECT CAST(COALESCE(NULL, 1, 1.5) AS STRING)");
-		Assert.Equal("1.0", result);
+		Assert.Equal("1", result);
 	}
 
 	// ================================================================
@@ -159,14 +160,15 @@ public class Round20InvestigationTests : IAsyncLifetime
 	//   "Equality comparisons are not supported for ARRAY types."
 	// ================================================================
 
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#array_type
+	//   "Equality is not defined for arguments of type ARRAY<INT64>"
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ArrayEquality_ShouldErrorOrReturnTrue()
 	{
-		// In older BigQuery: error. In newer BigQuery: TRUE for equal arrays.
-		// The emulator currently returns NULL which is wrong in both cases.
-		var result = await S("SELECT [1,2,3] = [1,2,3]");
-		// Either an error or "True" is acceptable; NULL is not
-		Assert.NotNull(result);
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(async () =>
+			await client.ExecuteQueryAsync("SELECT [1,2,3] = [1,2,3]", parameters: null));
 	}
 
 	// ================================================================
@@ -286,9 +288,14 @@ public class Round20InvestigationTests : IAsyncLifetime
 	//   "INTERSECT ALL preserves min(count_left, count_right)"
 	// ================================================================
 
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
+	//   "EXCEPT ALL is not supported. Only EXCEPT DISTINCT is supported."
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ExceptAll_PreservesDuplicates()
 	{
+		// EXCEPT ALL is not supported in BigQuery
+		var client = await _fixture.GetClientAsync();
 		var sql = @"
 			WITH left_t AS (SELECT 1 AS x UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 2 UNION ALL SELECT 3),
 			     right_t AS (SELECT 1 AS x UNION ALL SELECT 2)
@@ -296,17 +303,18 @@ public class Round20InvestigationTests : IAsyncLifetime
 			EXCEPT ALL
 			SELECT * FROM right_t
 			ORDER BY 1";
-		var rows = await Rows(sql);
-		// Left: [1,1,2,2,3], Right: [1,2] → removes one 1 and one 2 → [1,2,3]
-		Assert.Equal(3, rows.Count);
-		Assert.Equal("1", rows[0][0]);
-		Assert.Equal("2", rows[1][0]);
-		Assert.Equal("3", rows[2][0]);
+		await Assert.ThrowsAsync<GoogleApiException>(async () =>
+			await client.ExecuteQueryAsync(sql, parameters: null));
 	}
 
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
+	//   "INTERSECT ALL is not supported. Only INTERSECT DISTINCT is supported."
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task IntersectAll_PreservesDuplicates()
 	{
+		// INTERSECT ALL is not supported in BigQuery
+		var client = await _fixture.GetClientAsync();
 		var sql = @"
 			WITH left_t AS (SELECT 1 AS x UNION ALL SELECT 1 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3),
 			     right_t AS (SELECT 1 AS x UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 2)
@@ -314,12 +322,8 @@ public class Round20InvestigationTests : IAsyncLifetime
 			INTERSECT ALL
 			SELECT * FROM right_t
 			ORDER BY 1";
-		var rows = await Rows(sql);
-		// Left: [1,1,1,2,3], Right: [1,1,2,2] → min(3,2)=2 ones, min(1,2)=1 twos → [1,1,2]
-		Assert.Equal(3, rows.Count);
-		Assert.Equal("1", rows[0][0]);
-		Assert.Equal("1", rows[1][0]);
-		Assert.Equal("2", rows[2][0]);
+		await Assert.ThrowsAsync<GoogleApiException>(async () =>
+			await client.ExecuteQueryAsync(sql, parameters: null));
 	}
 
 	// ================================================================
@@ -423,7 +427,7 @@ public class Round20InvestigationTests : IAsyncLifetime
 	public async Task TypeCoercion_IFNULL_ReturnsFloat()
 	{
 		var result = await S("SELECT CAST(IFNULL(1, 1.5) AS STRING)");
-		Assert.Equal("1.0", result);
+		Assert.Equal("1", result);
 	}
 
 	// ================================================================
@@ -494,17 +498,22 @@ public class Round20InvestigationTests : IAsyncLifetime
 	// 19. EXISTS subquery
 	// ================================================================
 
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax
+	//   BigQuery does not support WHERE clause in SELECT without FROM, and EXISTS
+	//   subquery in a FROM-less SELECT may trigger similar restrictions.
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ExistsSubquery()
 	{
-		var result = await S("SELECT EXISTS(SELECT 1 WHERE TRUE)");
+		var result = await S("SELECT EXISTS(SELECT 1 FROM UNNEST([1]) WHERE TRUE)");
 		Assert.Equal("True", result);
 	}
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ExistsSubquery_Empty()
 	{
-		var result = await S("SELECT EXISTS(SELECT 1 WHERE FALSE)");
+		var result = await S("SELECT EXISTS(SELECT 1 FROM UNNEST([1]) WHERE FALSE)");
 		Assert.Equal("False", result);
 	}
 
@@ -589,7 +598,7 @@ public class Round20InvestigationTests : IAsyncLifetime
 	public async Task TypeCoercion_CaseWhen_IntAndFloat()
 	{
 		var result = await S("SELECT CAST(CASE WHEN TRUE THEN 1 ELSE 1.5 END AS STRING)");
-		Assert.Equal("1.0", result);
+		Assert.Equal("1", result);
 	}
 
 	// ================================================================

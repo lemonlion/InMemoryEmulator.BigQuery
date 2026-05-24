@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -54,9 +55,29 @@ public class NullHandlingTests : IAsyncLifetime
     [Fact] public async Task Null_Concat() => Assert.Null(await Scalar("SELECT CONCAT(name, ' Smith') FROM `{ds}.data` WHERE id = 3"));
 
     // NULL comparison
-    [Fact] public async Task Null_Equals() => Assert.Equal("0", await Scalar("SELECT COUNT(*) FROM `{ds}.data` WHERE val = NULL"));
-    [Fact] public async Task Null_NotEquals() => Assert.Equal("0", await Scalar("SELECT COUNT(*) FROM `{ds}.data` WHERE val != NULL"));
-    [Fact] public async Task Null_GreaterThan() => Assert.Equal("0", await Scalar("SELECT COUNT(*) FROM `{ds}.data` WHERE val > NULL"));
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+    //   "Operands of <op> cannot be literal NULL"
+    [Fact]
+    public async Task Null_Equals()
+    {
+        var client = await _fixture.GetClientAsync();
+        await Assert.ThrowsAsync<GoogleApiException>(
+            () => client.ExecuteQueryAsync($"SELECT COUNT(*) FROM `{_datasetId}.data` WHERE val = NULL", parameters: null));
+    }
+    [Fact]
+    public async Task Null_NotEquals()
+    {
+        var client = await _fixture.GetClientAsync();
+        await Assert.ThrowsAsync<GoogleApiException>(
+            () => client.ExecuteQueryAsync($"SELECT COUNT(*) FROM `{_datasetId}.data` WHERE val != NULL", parameters: null));
+    }
+    [Fact]
+    public async Task Null_GreaterThan()
+    {
+        var client = await _fixture.GetClientAsync();
+        await Assert.ThrowsAsync<GoogleApiException>(
+            () => client.ExecuteQueryAsync($"SELECT COUNT(*) FROM `{_datasetId}.data` WHERE val > NULL", parameters: null));
+    }
 
     // COALESCE
     [Fact] public async Task Coalesce_FirstNonNull() => Assert.Equal("Bob", await Scalar("SELECT COALESCE(name, 'Unknown') FROM `{ds}.data` WHERE id = 2"));

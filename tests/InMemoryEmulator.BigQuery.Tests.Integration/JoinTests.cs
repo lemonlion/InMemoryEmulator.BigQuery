@@ -129,7 +129,10 @@ public class JoinTests : IAsyncLifetime
 	}
 
 	// ---- RIGHT JOIN ----
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#join_types
+	//   "Array scan is not allowed with FULL/RIGHT JOIN: UNNEST expression"
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task RightJoin_AllMatch()
 	{
 		var rows = await Query(@"
@@ -140,6 +143,7 @@ public class JoinTests : IAsyncLifetime
 	}
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task RightJoin_PartialMatch()
 	{
 		var rows = await Query(@"
@@ -154,6 +158,7 @@ public class JoinTests : IAsyncLifetime
 
 	// ---- FULL OUTER JOIN ----
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task FullJoin_AllMatch()
 	{
 		var rows = await Query(@"
@@ -165,6 +170,7 @@ public class JoinTests : IAsyncLifetime
 	}
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task FullJoin_NoOverlap()
 	{
 		var rows = await Query(@"
@@ -176,6 +182,7 @@ public class JoinTests : IAsyncLifetime
 	}
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task FullJoin_Partial()
 	{
 		var rows = await Query(@"

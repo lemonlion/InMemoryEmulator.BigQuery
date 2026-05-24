@@ -123,6 +123,11 @@ public class StringFunctionAdvancedTests : IAsyncLifetime
 		var v = await S("SELECT ARRAY_LENGTH(TO_CODE_POINTS(''))");
 		Assert.Equal("0", v);
 	}
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#to_code_points
+	//   "If value is NULL, the function returns NULL."
+	//   Note: BigQuery SDK represents NULL REPEATED fields as non-null array objects,
+	//   making it impossible to assert NULL via the SDK on cloud. Emulator correctly returns null.
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	[Fact] public async Task ToCodePoints_Null() => Assert.Null(await S("SELECT TO_CODE_POINTS(NULL)"));
 
 	// ---- CODE_POINTS_TO_STRING ----
@@ -167,19 +172,19 @@ public class StringFunctionAdvancedTests : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#regexp_extract_all
 	[Fact] public async Task RegexpExtractAll_Basic()
 	{
-		var v = await S("SELECT ARRAY_LENGTH(REGEXP_EXTRACT_ALL('hello world 123', '\\d+'))");
+		var v = await S("SELECT ARRAY_LENGTH(REGEXP_EXTRACT_ALL('hello world 123', r'\\d+'))");
 		Assert.Equal("1", v);
 	}
 	[Fact] public async Task RegexpExtractAll_NoMatch()
 	{
-		var v = await S("SELECT ARRAY_LENGTH(REGEXP_EXTRACT_ALL('hello', '\\d+'))");
+		var v = await S("SELECT ARRAY_LENGTH(REGEXP_EXTRACT_ALL('hello', r'\\d+'))");
 		Assert.Equal("0", v);
 	}
 
 	// ---- REGEXP_INSTR ----
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#regexp_instr
-	[Fact] public async Task RegexpInstr_Found() => Assert.Equal("4", await S("SELECT REGEXP_INSTR('abc123def', '\\d+')"));
-	[Fact] public async Task RegexpInstr_NotFound() => Assert.Equal("0", await S("SELECT REGEXP_INSTR('hello', '\\d+')"));
+	[Fact] public async Task RegexpInstr_Found() => Assert.Equal("4", await S("SELECT REGEXP_INSTR('abc123def', r'\\d+')"));
+	[Fact] public async Task RegexpInstr_NotFound() => Assert.Equal("0", await S("SELECT REGEXP_INSTR('hello', r'\\d+')"));
 
 	// ---- INSTR extra cases ----
 	[Fact] public async Task Instr_NotFound() => Assert.Equal("0", await S("SELECT INSTR('hello', 'xyz')"));

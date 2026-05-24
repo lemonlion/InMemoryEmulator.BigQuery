@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -71,7 +72,15 @@ public class ConditionalFunctionTests : IAsyncLifetime
     [Fact] public async Task Case_Nested() => Assert.Equal("B", await Scalar("SELECT CASE WHEN 5 > 3 THEN CASE WHEN 5 > 4 THEN 'B' ELSE 'C' END ELSE 'D' END"));
 
     // CASE with NULL
-    [Fact] public async Task Case_NullComparison() => Assert.Equal("null", await Scalar("SELECT CASE WHEN NULL = NULL THEN 'equal' ELSE 'null' END"));
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+    //   "Operands of = cannot be literal NULL"
+    [Fact]
+    public async Task Case_NullComparison()
+    {
+        var client = await _fixture.GetClientAsync();
+        await Assert.ThrowsAsync<GoogleApiException>(
+            () => client.ExecuteQueryAsync("SELECT CASE WHEN NULL = NULL THEN 'equal' ELSE 'null' END", parameters: null));
+    }
 
     // Null coalesce operator (??) not supported by parser
     // Use COALESCE instead

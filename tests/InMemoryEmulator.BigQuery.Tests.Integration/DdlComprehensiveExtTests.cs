@@ -56,7 +56,7 @@ public class DdlComprehensiveExtTests : IAsyncLifetime
 	[Fact] public async Task Create_OrReplace()
 	{
 		await Exec("CREATE TABLE `{ds}.t4` (id INT64, old_col STRING)");
-		await Exec("INSERT INTO `{ds}.t4` (id, new_col) VALUES (1, 'test')");
+		await Exec("INSERT INTO `{ds}.t4` (id, old_col) VALUES (1, 'test')");
 		await Exec("CREATE OR REPLACE TABLE `{ds}.t4` (id INT64, new_col STRING)");
 		await Exec("INSERT INTO `{ds}.t4` (id, new_col) VALUES (1, 'replaced')");
 		Assert.Equal("replaced", await S("SELECT new_col FROM `{ds}.t4`"));
@@ -99,7 +99,7 @@ public class DdlComprehensiveExtTests : IAsyncLifetime
 	[Fact] public async Task Drop_AndRecreate()
 	{
 		await Exec("CREATE TABLE `{ds}.drp2` (id INT64)");
-		await Exec("INSERT INTO `{ds}.drp2` (id, name) VALUES (1)");
+		await Exec("INSERT INTO `{ds}.drp2` (id) VALUES (1)");
 		await Exec("DROP TABLE `{ds}.drp2`");
 		await Exec("CREATE TABLE `{ds}.drp2` (id INT64, name STRING)");
 		await Exec("INSERT INTO `{ds}.drp2` (id, name) VALUES (1, 'new')");

@@ -136,7 +136,7 @@ public class JsonFunctionIntegrationTests : IAsyncLifetime
 	{
 		var client = await _fixture.GetClientAsync();
 		var results = await client.ExecuteQueryAsync(
-			"SELECT JSON_REMOVE('{\"a\": 1, \"b\": 2}', '$.a') AS result", parameters: null);
+			"SELECT JSON_REMOVE(JSON '{\"a\": 1, \"b\": 2}', '$.a') AS result", parameters: null);
 		var result = results.ToList()[0]["result"]?.ToString();
 		Assert.DoesNotContain("\"a\"", result);
 		Assert.Contains("\"b\"", result);

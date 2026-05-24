@@ -168,7 +168,7 @@ public class ParityVerificationTests : IAsyncLifetime
 	public async Task IeeeDivide_ZeroByZero()
 	{
 		var v = await S("SELECT CAST(IEEE_DIVIDE(0.0, 0.0) AS STRING)");
-		Assert.Equal("NaN", v);
+		Assert.Equal("nan", v);
 	}
 
 	// ===== String functions edge cases =====
@@ -361,8 +361,10 @@ public class ParityVerificationTests : IAsyncLifetime
 	// ===== QUALIFY clause =====
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#qualify_clause
 	// "The QUALIFY clause filters the results of window functions"
+	// GO emulator does not correctly support QUALIFY clause.
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Qualify_RowNumber()
 	{
 		await Exec("CREATE TABLE `{ds}.qf1` (grp STRING, val INT64)");
@@ -384,13 +386,13 @@ public class ParityVerificationTests : IAsyncLifetime
 	[Fact]
 	public async Task ExceptDistinct_Basic()
 	{
-		var rows = await Q("SELECT 1 AS val UNION ALL SELECT 2 UNION ALL SELECT 3 EXCEPT DISTINCT SELECT 2 UNION ALL SELECT 3");
-		// (1 UNION ALL 2 UNION ALL 3) EXCEPT DISTINCT (2 UNION ALL 3) = 1
-		// but set op precedence: 1 UNION ALL 2 UNION ALL (3 EXCEPT DISTINCT 2) UNION ALL 3
-		// In BigQuery, EXCEPT has same precedence as UNION, left-to-right
-		// Actually: (1 UNION ALL 2 UNION ALL 3) EXCEPT DISTINCT (SELECT 2 UNION ALL SELECT 3)
-		// ... this tests that EXCEPT works at all
-		Assert.True(rows.Count >= 1);
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
+		//   "Different set operations cannot be used in the same query without using parentheses for grouping"
+		// Use parentheses to separate UNION ALL from EXCEPT DISTINCT
+		var rows = await Q("(SELECT 1 AS val UNION ALL SELECT 2 UNION ALL SELECT 3) EXCEPT DISTINCT (SELECT 2 AS val UNION ALL SELECT 3)");
+		// (1, 2, 3) EXCEPT DISTINCT (2, 3) = 1
+		Assert.Single(rows);
+		Assert.Equal("1", rows[0][0]?.ToString());
 	}
 
 	// ===== TRIM / LTRIM / RTRIM with characters =====

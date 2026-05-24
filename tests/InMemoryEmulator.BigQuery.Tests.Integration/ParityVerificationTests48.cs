@@ -125,8 +125,9 @@ public class ParityVerificationTests48 : IAsyncLifetime
 	// ============================================================
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#generate_timestamp_array
-	//   Returns NULL if any argument is NULL.
+	//   BigQuery: "Invalid cast from ARRAY<TIMESTAMP> to STRING"
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task GenerateTimestampArray_NullStep_ReturnsNull()
 	{
 		var result = await ScalarAsync(

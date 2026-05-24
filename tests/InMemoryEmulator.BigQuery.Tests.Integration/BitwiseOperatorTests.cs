@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -67,9 +68,29 @@ public class BitwiseOperatorTests : IAsyncLifetime
     [Fact] public async Task BitCount_One() => Assert.Equal("1", await Scalar("SELECT BIT_COUNT(1)"));
 
     // NULL propagation
-    [Fact] public async Task BitAnd_Null() => Assert.Null(await Scalar("SELECT NULL & 5"));
-    [Fact] public async Task BitOr_Null() => Assert.Null(await Scalar("SELECT 5 | NULL"));
-    [Fact] public async Task BitXor_Null() => Assert.Null(await Scalar("SELECT NULL ^ 3"));
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+    //   "Operands of <op> cannot be literal NULL"
+    [Fact]
+    public async Task BitAnd_Null()
+    {
+        var client = await _fixture.GetClientAsync();
+        await Assert.ThrowsAsync<GoogleApiException>(
+            () => client.ExecuteQueryAsync("SELECT NULL & 5", parameters: null));
+    }
+    [Fact]
+    public async Task BitOr_Null()
+    {
+        var client = await _fixture.GetClientAsync();
+        await Assert.ThrowsAsync<GoogleApiException>(
+            () => client.ExecuteQueryAsync("SELECT 5 | NULL", parameters: null));
+    }
+    [Fact]
+    public async Task BitXor_Null()
+    {
+        var client = await _fixture.GetClientAsync();
+        await Assert.ThrowsAsync<GoogleApiException>(
+            () => client.ExecuteQueryAsync("SELECT NULL ^ 3", parameters: null));
+    }
     [Fact] public async Task BitNot_Null() => Assert.Null(await Scalar("SELECT ~CAST(NULL AS INT64)"));
     [Fact] public async Task BitCount_Null() => Assert.Null(await Scalar("SELECT BIT_COUNT(CAST(NULL AS INT64))"));
 

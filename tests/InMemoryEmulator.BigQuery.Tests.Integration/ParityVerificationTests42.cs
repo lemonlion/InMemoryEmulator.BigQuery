@@ -133,8 +133,9 @@ public class ParityVerificationTests42 : IAsyncLifetime
 	// ============================================================
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#timestamp_diff
-	//   Supports NANOSECOND granularity
+	//   BigQuery: "TIMESTAMP_DIFF does not support the NANOSECOND date part"
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task TimestampDiff_Nanosecond()
 	{
 		// 1 second = 1,000,000,000 nanoseconds

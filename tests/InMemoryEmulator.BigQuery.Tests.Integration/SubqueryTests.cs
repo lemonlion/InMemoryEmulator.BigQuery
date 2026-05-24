@@ -141,7 +141,7 @@ public class SubqueryTests : IAsyncLifetime
 	[Fact]
 	public async Task ArraySub_ToString()
 	{
-		var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY(SELECT x FROM UNNEST([3,1,2]) AS x ORDER BY x), ',')");
+		var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST([3,1,2]) AS x ORDER BY x), ',')");
 		Assert.Equal("1,2,3", v);
 	}
 

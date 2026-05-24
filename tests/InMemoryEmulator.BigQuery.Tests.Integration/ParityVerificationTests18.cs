@@ -316,37 +316,37 @@ public class ParityVerificationTests18 : IAsyncLifetime
 
 	[Fact] public async Task GenerateArray_NullStart()
 	{
-		var result = await S("SELECT ARRAY_TO_STRING(GENERATE_ARRAY(CAST(NULL AS INT64), 5), ',')");
+		var result = await S("SELECT ARRAY_LENGTH(GENERATE_ARRAY(CAST(NULL AS INT64), 5))");
 		Assert.Null(result);
 	}
 
 	[Fact] public async Task GenerateArray_NullEnd()
 	{
-		var result = await S("SELECT ARRAY_TO_STRING(GENERATE_ARRAY(1, CAST(NULL AS INT64)), ',')");
+		var result = await S("SELECT ARRAY_LENGTH(GENERATE_ARRAY(1, CAST(NULL AS INT64)))");
 		Assert.Null(result);
 	}
 
 	[Fact] public async Task GenerateArray_NullStep()
 	{
-		var result = await S("SELECT ARRAY_TO_STRING(GENERATE_ARRAY(1, 5, CAST(NULL AS INT64)), ',')");
+		var result = await S("SELECT ARRAY_LENGTH(GENERATE_ARRAY(1, 5, CAST(NULL AS INT64)))");
 		Assert.Null(result);
 	}
 
 	[Fact] public async Task GenerateArray_Normal()
 	{
-		var result = await S("SELECT ARRAY_TO_STRING(GENERATE_ARRAY(1, 5), ',')");
+		var result = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(GENERATE_ARRAY(1, 5)) AS x), ',')");
 		Assert.Equal("1,2,3,4,5", result);
 	}
 
 	[Fact] public async Task GenerateArray_WithStep()
 	{
-		var result = await S("SELECT ARRAY_TO_STRING(GENERATE_ARRAY(0, 10, 3), ',')");
+		var result = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(GENERATE_ARRAY(0, 10, 3)) AS x), ',')");
 		Assert.Equal("0,3,6,9", result);
 	}
 
 	[Fact] public async Task GenerateArray_Descending()
 	{
-		var result = await S("SELECT ARRAY_TO_STRING(GENERATE_ARRAY(5, 1, -1), ',')");
+		var result = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(GENERATE_ARRAY(5, 1, -1)) AS x), ',')");
 		Assert.Equal("5,4,3,2,1", result);
 	}
 

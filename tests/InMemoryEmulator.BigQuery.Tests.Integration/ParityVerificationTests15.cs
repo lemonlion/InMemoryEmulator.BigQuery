@@ -142,13 +142,13 @@ public class ParityVerificationTests15 : IAsyncLifetime
 	{
 		var rows = await Q(@"
 			SELECT id, category, amount,
-				CAST(SUM(amount) OVER (PARTITION BY category ORDER BY id) AS STRING) AS cumulative
+				CAST(CAST(SUM(amount) OVER (PARTITION BY category ORDER BY id) AS INT64) AS STRING) AS cumulative
 			FROM `{ds}.sales`
 			WHERE category = 'Software'
 			ORDER BY id");
-		Assert.Equal("100.0", rows[0]["cumulative"]?.ToString()); // id=4: 100
-		Assert.Equal("150.0", rows[1]["cumulative"]?.ToString()); // id=5: 100+50=150
-		Assert.Equal("250.0", rows[2]["cumulative"]?.ToString()); // id=8: 100+50+100=250
+		Assert.Equal("100", rows[0]["cumulative"]?.ToString()); // id=4: 100
+		Assert.Equal("150", rows[1]["cumulative"]?.ToString()); // id=5: 100+50=150
+		Assert.Equal("250", rows[2]["cumulative"]?.ToString()); // id=8: 100+50+100=250
 	}
 
 	// ───────────────────────────────────────────────────────────────────────────
@@ -195,13 +195,13 @@ public class ParityVerificationTests15 : IAsyncLifetime
 	[Fact] public async Task NestedAggregation()
 	{
 		var result = await S(@"
-			SELECT CAST(AVG(cat_total) AS STRING) FROM (
+			SELECT CAST(CAST(AVG(cat_total) AS INT64) AS STRING) FROM (
 				SELECT category, SUM(amount) AS cat_total
 				FROM `{ds}.sales`
 				GROUP BY category
 			)");
 		// Hardware: 10+25+10+10+25=80; Software: 100+50+100=250; AVG=(80+250)/2=165
-		Assert.Equal("165.0", result);
+		Assert.Equal("165", result);
 	}
 
 	// ───────────────────────────────────────────────────────────────────────────
@@ -238,13 +238,13 @@ public class ParityVerificationTests15 : IAsyncLifetime
 	[Fact] public async Task OrderBy_MixedAscDesc()
 	{
 		var rows = await Q(@"
-			SELECT product, CAST(amount AS STRING) AS amt
+			SELECT product, CAST(CAST(amount AS INT64) AS STRING) AS amt
 			FROM `{ds}.sales`
 			ORDER BY amount DESC, product ASC
 			LIMIT 3");
 		// 100 (Service), 100 (Service), 50 (License)
 		Assert.Equal("Service", rows[0]["product"]?.ToString());
-		Assert.Equal("100.0", rows[0]["amt"]?.ToString());
+		Assert.Equal("100", rows[0]["amt"]?.ToString());
 		Assert.Equal("License", rows[2]["product"]?.ToString());
 	}
 

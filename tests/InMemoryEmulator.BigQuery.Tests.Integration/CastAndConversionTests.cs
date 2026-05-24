@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -43,7 +44,7 @@ public class CastAndConversionTests : IAsyncLifetime
 	// ---- FLOAT64 casts ----
 	[Fact] public async Task Cast_StringToFloat() { var v = double.Parse(await Scalar("SELECT CAST('3.14' AS FLOAT64)") ?? "0"); Assert.Equal(3.14, v, 2); }
 	[Fact] public async Task Cast_IntToFloat() { var v = double.Parse(await Scalar("SELECT CAST(42 AS FLOAT64)") ?? "0"); Assert.Equal(42.0, v); }
-	[Fact] public async Task Cast_BoolToFloat() { var v = double.Parse(await Scalar("SELECT CAST(TRUE AS FLOAT64)") ?? "0"); Assert.Equal(1.0, v); }
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task Cast_BoolToFloat() { var client = await _fixture.GetClientAsync(); await Assert.ThrowsAsync<GoogleApiException>(async () => await client.ExecuteQueryAsync("SELECT CAST(TRUE AS FLOAT64)", parameters: null)); }
 	[Fact] public async Task Cast_NullToFloat() => Assert.Null(await Scalar("SELECT CAST(NULL AS FLOAT64)"));
 	[Fact] public async Task Cast_NegFloatStr() { var v = double.Parse(await Scalar("SELECT CAST('-1.5' AS FLOAT64)") ?? "0"); Assert.Equal(-1.5, v, 1); }
 

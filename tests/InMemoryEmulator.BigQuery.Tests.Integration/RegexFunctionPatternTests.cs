@@ -114,6 +114,11 @@ public class RegexFunctionPatternTests : IAsyncLifetime
 		var v = await S("SELECT ARRAY_LENGTH(REGEXP_EXTRACT_ALL('hello', r'[0-9]+'))");
 		Assert.Equal("0", v);
 	}
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#regexp_extract_all
+	//   "Returns NULL if value is NULL."
+	//   Note: BigQuery SDK represents NULL REPEATED fields as non-null array objects,
+	//   making it impossible to assert NULL via the SDK on cloud. Emulator correctly returns null.
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	[Fact] public async Task RegexpExtractAll_NullInput() => Assert.Null(await S("SELECT REGEXP_EXTRACT_ALL(NULL, r'test')"));
 	[Fact] public async Task RegexpExtractAll_Phones()
 	{

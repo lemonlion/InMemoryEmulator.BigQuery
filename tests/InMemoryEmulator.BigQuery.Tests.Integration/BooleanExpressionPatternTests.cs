@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -74,8 +75,22 @@ public class BooleanExpressionPatternTests : IAsyncLifetime
 	[Fact] public async Task Gt_String() => Assert.Equal("True", await S("SELECT 'def' > 'abc'"));
 
 	// ---- NULL comparison ----
-	[Fact] public async Task Eq_Null() => Assert.Null(await S("SELECT NULL = NULL"));
-	[Fact] public async Task Neq_Null() => Assert.Null(await S("SELECT NULL != 1"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+	//   "Operands of <op> cannot be literal NULL"
+	[Fact]
+	public async Task Eq_Null()
+	{
+		var c = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => c.ExecuteQueryAsync("SELECT NULL = NULL", parameters: null));
+	}
+	[Fact]
+	public async Task Neq_Null()
+	{
+		var c = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => c.ExecuteQueryAsync("SELECT NULL != 1", parameters: null));
+	}
 	[Fact] public async Task IsNull() => Assert.Equal("True", await S("SELECT NULL IS NULL"));
 	[Fact] public async Task IsNotNull() => Assert.Equal("True", await S("SELECT 1 IS NOT NULL"));
 	[Fact] public async Task IsNull_False() => Assert.Equal("False", await S("SELECT 1 IS NULL"));

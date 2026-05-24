@@ -93,7 +93,7 @@ public class NaNComparisonTests
 	public void Cast_NaN_AsString_ReturnsNaN()
 	{
 		var (_, rows) = CreateExecutor().Execute("SELECT CAST(IEEE_DIVIDE(0, 0) AS STRING)");
-		Assert.Equal("NaN", rows[0].F[0].V?.ToString());
+		Assert.Equal("nan", rows[0].F[0].V?.ToString());
 	}
 
 	[Fact]

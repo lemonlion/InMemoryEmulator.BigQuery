@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -150,5 +151,13 @@ SELECT COALESCE(NULLIF(1, 1), NULLIF(2, 2), NULLIF(3, 3), 99)"));
 
 	// ---- CASE with NULL handling ----
 	[Fact] public async Task Case_NullIsNull() => Assert.Equal("null", await Scalar("SELECT CASE WHEN NULL IS NULL THEN 'null' ELSE 'not' END"));
-	[Fact] public async Task Case_NullComparison() => Assert.Equal("other", await Scalar("SELECT CASE WHEN NULL = 1 THEN 'match' ELSE 'other' END"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+	//   "Operands of = cannot be literal NULL"
+	[Fact]
+	public async Task Case_NullComparison()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT CASE WHEN NULL = 1 THEN 'match' ELSE 'other' END", parameters: null));
+	}
 }

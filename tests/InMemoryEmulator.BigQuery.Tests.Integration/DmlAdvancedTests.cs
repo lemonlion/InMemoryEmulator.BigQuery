@@ -62,8 +62,10 @@ public class DmlAdvancedTests : IAsyncLifetime
 		});
 		if (data.Length > 0)
 		{
-			await client.InsertRowsAsync(_datasetId, name, data.Select((d, i) =>
-				new BigQueryInsertRow($"r{i}") { ["id"] = d.id, ["name"] = d.name, ["value"] = d.value }).ToArray());
+			var values = string.Join(", ", data.Select(d => $"({d.id}, '{d.name}', {d.value})"));
+			await client.ExecuteQueryAsync(
+				$"INSERT INTO `{_datasetId}.{name}` (id, name, value) VALUES {values}",
+				parameters: null);
 		}
 	}
 

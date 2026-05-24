@@ -138,7 +138,7 @@ public class ParityVerificationTests31 : IAsyncLifetime
 	{
 		var result = await S(@"
 			SELECT ARRAY_TO_STRING(
-				ARRAY(SELECT x FROM UNNEST(ARRAY_REVERSE(GENERATE_ARRAY(1, 5))) AS x WHERE x > 2),
+				ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(ARRAY_REVERSE(GENERATE_ARRAY(1, 5))) AS x WHERE x > 2),
 				','
 			)");
 		// GENERATE_ARRAY(1,5) = [1,2,3,4,5]

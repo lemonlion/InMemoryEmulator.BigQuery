@@ -164,7 +164,7 @@ public class CaseExpressionAdvancedTests : IAsyncLifetime
 		var result = await Scalar(@"
 			SELECT CASE WHEN amount > 200 THEN CONCAT('HIGH:', CAST(amount AS STRING)) ELSE 'low' END
 			FROM `{ds}.orders` WHERE id = 4");
-		Assert.Equal("HIGH:300.0", result);
+		Assert.Equal("HIGH:300", result);
 	}
 
 	// CASE with comparison operators

@@ -129,20 +129,20 @@ public class StringFunctionEdgeCaseTests : IAsyncLifetime
 	[Fact] public async Task ContainsSubstr_EmptySubstr() => Assert.Equal("True", await Scalar("SELECT CONTAINS_SUBSTR('Hello', '')"));
 
 	// ---- REGEXP_CONTAINS ----
-	[Fact] public async Task RegexpContains_Match() => Assert.Equal("True", await Scalar("SELECT REGEXP_CONTAINS('hello123', '\\d+')"));
-	[Fact] public async Task RegexpContains_NoMatch() => Assert.Equal("False", await Scalar("SELECT REGEXP_CONTAINS('hello', '\\d+')"));
-	[Fact] public async Task RegexpContains_EmptyString() => Assert.Equal("False", await Scalar("SELECT REGEXP_CONTAINS('', '\\d+')"));
+	[Fact] public async Task RegexpContains_Match() => Assert.Equal("True", await Scalar("SELECT REGEXP_CONTAINS('hello123', r'\\d+')"));
+	[Fact] public async Task RegexpContains_NoMatch() => Assert.Equal("False", await Scalar("SELECT REGEXP_CONTAINS('hello', r'\\d+')"));
+	[Fact] public async Task RegexpContains_EmptyString() => Assert.Equal("False", await Scalar("SELECT REGEXP_CONTAINS('', r'\\d+')"));
 
 	// ---- REGEXP_EXTRACT ----
-	[Fact] public async Task RegexpExtract_Match() => Assert.Equal("123", await Scalar("SELECT REGEXP_EXTRACT('hello123world', '(\\d+)')"));
-	[Fact] public async Task RegexpExtract_NoMatch() => Assert.Null(await Scalar("SELECT REGEXP_EXTRACT('hello', '(\\d+)')"));
+	[Fact] public async Task RegexpExtract_Match() => Assert.Equal("123", await Scalar("SELECT REGEXP_EXTRACT('hello123world', r'(\\d+)')"));
+	[Fact] public async Task RegexpExtract_NoMatch() => Assert.Null(await Scalar("SELECT REGEXP_EXTRACT('hello', r'(\\d+)')"));
 
 	// ---- REGEXP_REPLACE ----
-	[Fact] public async Task RegexpReplace_Basic() => Assert.Equal("hello_world", await Scalar("SELECT REGEXP_REPLACE('hello world', '\\s', '_')"));
-	[Fact] public async Task RegexpReplace_NoMatch() => Assert.Equal("hello", await Scalar("SELECT REGEXP_REPLACE('hello', '\\d', 'x')"));
+	[Fact] public async Task RegexpReplace_Basic() => Assert.Equal("hello_world", await Scalar("SELECT REGEXP_REPLACE('hello world', r'\\s', '_')"));
+	[Fact] public async Task RegexpReplace_NoMatch() => Assert.Equal("hello", await Scalar("SELECT REGEXP_REPLACE('hello', r'\\d', 'x')"));
 
 	// ---- REGEXP_EXTRACT_ALL ----
-	[Fact] public async Task RegexpExtractAll_Multiple() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(REGEXP_EXTRACT_ALL('a1b2c3', '\\d'))"));
+	[Fact] public async Task RegexpExtractAll_Multiple() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(REGEXP_EXTRACT_ALL('a1b2c3', r'\\d'))"));
 
 	// ---- FORMAT ----
 	[Fact] public async Task Format_Basic() { var v = await Scalar("SELECT FORMAT('%d items', 5)"); Assert.Contains("5", v); }

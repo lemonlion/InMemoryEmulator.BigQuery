@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -29,46 +30,48 @@ public class Round26BugFixTests : IAsyncLifetime
 	}
 
 	/// <summary>
-	/// CONTAINS_SUBSTR with NULL second arg (search string) should return NULL, not True.
+	/// CONTAINS_SUBSTR with NULL second arg (search string) should error.
 	/// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#contains_substr
-	///   "Returns NULL if any input is NULL."
+	///   "The second argument of CONTAINS_SUBSTR() must not be null."
 	/// </summary>
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ContainsSubstr_NullSearchString_ReturnsNull()
 	{
 		var client = await _fixture.GetClientAsync();
-		var result = await client.ExecuteQueryAsync(
-			"SELECT CONTAINS_SUBSTR('hello world', CAST(NULL AS STRING)) AS result",
-			parameters: null);
-		var row = result.Single();
-		Assert.Null(row["result"]);
+		await Assert.ThrowsAsync<GoogleApiException>(async () =>
+			await client.ExecuteQueryAsync(
+				"SELECT CONTAINS_SUBSTR('hello world', CAST(NULL AS STRING)) AS result",
+				parameters: null));
 	}
 
 	/// <summary>
-	/// CONTAINS_SUBSTR with both args NULL should return NULL.
+	/// CONTAINS_SUBSTR with both args NULL should error (second arg is NULL).
 	/// </summary>
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ContainsSubstr_BothNull_ReturnsNull()
 	{
 		var client = await _fixture.GetClientAsync();
-		var result = await client.ExecuteQueryAsync(
-			"SELECT CONTAINS_SUBSTR(CAST(NULL AS STRING), CAST(NULL AS STRING)) AS result",
-			parameters: null);
-		var row = result.Single();
-		Assert.Null(row["result"]);
+		await Assert.ThrowsAsync<GoogleApiException>(async () =>
+			await client.ExecuteQueryAsync(
+				"SELECT CONTAINS_SUBSTR(CAST(NULL AS STRING), CAST(NULL AS STRING)) AS result",
+				parameters: null));
 	}
 
 	/// <summary>
 	/// JSON_SET with NULL path should ignore the path operation and return original JSON.
 	/// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_set
 	///   "If json_path is SQL NULL, the json_path_value_pair operation is ignored."
+	/// BigQuery rejects NULL path: "Argument 1: Unable to coerce type STRING to expected type JSON"
 	/// </summary>
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task JsonSet_NullPath_ReturnsOriginalJson()
 	{
 		var client = await _fixture.GetClientAsync();
 		var result = await client.ExecuteQueryAsync(
-			"SELECT JSON_SET('{\"a\": 1}', CAST(NULL AS STRING), 99) AS result",
+			"SELECT JSON_SET(JSON '{\"a\": 1}', CAST(NULL AS STRING), 99) AS result",
 			parameters: null);
 		var row = result.Single();
 		// The operation is ignored, so original JSON is returned

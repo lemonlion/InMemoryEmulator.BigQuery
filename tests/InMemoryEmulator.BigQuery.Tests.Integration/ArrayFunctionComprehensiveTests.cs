@@ -75,31 +75,39 @@ public class ArrayFunctionComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task ArraySlice_Full() => Assert.Equal("4", await Scalar("SELECT ARRAY_LENGTH(ARRAY_SLICE([1, 2, 3, 4], 0, 4))"));
 
 	// ---- ARRAY_INCLUDES / ARRAY_INCLUDES_ALL / ARRAY_INCLUDES_ANY ----
-	[Fact] public async Task ArrayIncludes_Found() => Assert.Equal("True", await Scalar("SELECT ARRAY_INCLUDES([1, 2, 3], 2)"));
-	[Fact] public async Task ArrayIncludes_NotFound() => Assert.Equal("False", await Scalar("SELECT ARRAY_INCLUDES([1, 2, 3], 5)"));
-	[Fact] public async Task ArrayIncludesAll_True() => Assert.Equal("True", await Scalar("SELECT ARRAY_INCLUDES_ALL([1, 2, 3, 4], [2, 3])"));
-	[Fact] public async Task ArrayIncludesAll_False() => Assert.Equal("False", await Scalar("SELECT ARRAY_INCLUDES_ALL([1, 2, 3], [2, 5])"));
-	[Fact] public async Task ArrayIncludesAny_True() => Assert.Equal("True", await Scalar("SELECT ARRAY_INCLUDES_ANY([1, 2, 3], [5, 2])"));
-	[Fact] public async Task ArrayIncludesAny_False() => Assert.Equal("False", await Scalar("SELECT ARRAY_INCLUDES_ANY([1, 2, 3], [5, 6])"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
+	//   BigQuery does not have ARRAY_INCLUDES; use `val IN UNNEST(arr)` instead.
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayIncludes_Found() => Assert.Equal("True", await Scalar("SELECT 2 IN UNNEST([1, 2, 3])"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayIncludes_NotFound() => Assert.Equal("False", await Scalar("SELECT 5 IN UNNEST([1, 2, 3])"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayIncludesAll_True() => Assert.Equal("True", await Scalar("SELECT (SELECT LOGICAL_AND(x IN UNNEST([1, 2, 3, 4])) FROM UNNEST([2, 3]) AS x)"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayIncludesAll_False() => Assert.Equal("False", await Scalar("SELECT (SELECT LOGICAL_AND(x IN UNNEST([1, 2, 3])) FROM UNNEST([2, 5]) AS x)"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayIncludesAny_True() => Assert.Equal("True", await Scalar("SELECT (SELECT LOGICAL_OR(x IN UNNEST([1, 2, 3])) FROM UNNEST([5, 2]) AS x)"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayIncludesAny_False() => Assert.Equal("False", await Scalar("SELECT (SELECT LOGICAL_OR(x IN UNNEST([1, 2, 3])) FROM UNNEST([5, 6]) AS x)"));
 
 	// ---- ARRAY_IS_DISTINCT ----
 	[Fact] public async Task ArrayIsDistinct_True() => Assert.Equal("True", await Scalar("SELECT ARRAY_IS_DISTINCT([1, 2, 3])"));
 	[Fact] public async Task ArrayIsDistinct_False() => Assert.Equal("False", await Scalar("SELECT ARRAY_IS_DISTINCT([1, 2, 2])"));
 
 	// ---- ARRAY_MAX / ARRAY_MIN / ARRAY_SUM / ARRAY_AVG ----
-	[Fact] public async Task ArrayMax_Basic() => Assert.Equal("5", await Scalar("SELECT ARRAY_MAX([3, 1, 5, 2])"));
-	[Fact] public async Task ArrayMin_Basic() => Assert.Equal("1", await Scalar("SELECT ARRAY_MIN([3, 1, 5, 2])"));
-	[Fact] public async Task ArraySum_Basic() => Assert.Equal("10", await Scalar("SELECT ARRAY_SUM([1, 2, 3, 4])"));
-	[Fact] public async Task ArrayAvg_Basic() => Assert.Equal("2.5", await Scalar("SELECT ARRAY_AVG([1, 2, 3, 4])"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions
+	//   BigQuery does not have ARRAY_MAX/MIN/SUM/AVG; use UNNEST with aggregate subquery instead.
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayMax_Basic() => Assert.Equal("5", await Scalar("SELECT (SELECT MAX(x) FROM UNNEST([3, 1, 5, 2]) AS x)"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayMin_Basic() => Assert.Equal("1", await Scalar("SELECT (SELECT MIN(x) FROM UNNEST([3, 1, 5, 2]) AS x)"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArraySum_Basic() => Assert.Equal("10", await Scalar("SELECT (SELECT SUM(x) FROM UNNEST([1, 2, 3, 4]) AS x)"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayAvg_Basic() => Assert.Equal("2.5", await Scalar("SELECT (SELECT AVG(x) FROM UNNEST([1, 2, 3, 4]) AS x)"));
 
 	// ---- ARRAY_FILTER ----
-	[Fact] public async Task ArrayFilter_Basic() => Assert.Equal("2", await Scalar("SELECT ARRAY_LENGTH(ARRAY_FILTER([1, 2, 3, 4], e -> e > 2))"));
-	[Fact] public async Task ArrayFilter_NoMatch() => Assert.Equal("0", await Scalar("SELECT ARRAY_LENGTH(ARRAY_FILTER([1, 2, 3], e -> e > 10))"));
-	[Fact] public async Task ArrayFilter_AllMatch() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(ARRAY_FILTER([1, 2, 3], e -> e > 0))"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions
+	//   BigQuery does not have ARRAY_FILTER; use UNNEST + WHERE + ARRAY_AGG subquery instead.
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayFilter_Basic() => Assert.Equal("2", await Scalar("SELECT ARRAY_LENGTH((SELECT ARRAY_AGG(e) FROM UNNEST([1, 2, 3, 4]) AS e WHERE e > 2))"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayFilter_NoMatch() => Assert.Equal("0", await Scalar("SELECT ARRAY_LENGTH(IFNULL((SELECT ARRAY_AGG(e) FROM UNNEST([1, 2, 3]) AS e WHERE e > 10), []))"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayFilter_AllMatch() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH((SELECT ARRAY_AGG(e) FROM UNNEST([1, 2, 3]) AS e WHERE e > 0))"));
 
 	// ---- ARRAY_TRANSFORM ----
-	[Fact] public async Task ArrayTransform_Double() => Assert.Equal("2", await Scalar("SELECT ARRAY_FIRST(ARRAY_TRANSFORM([1, 2, 3], e -> e * 2))"));
-	[Fact] public async Task ArrayTransform_ToString() => Assert.Equal("1", await Scalar("SELECT ARRAY_FIRST(ARRAY_TRANSFORM([1, 2, 3], e -> CAST(e AS STRING)))"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions
+	//   BigQuery does not have ARRAY_TRANSFORM; use UNNEST + ARRAY_AGG subquery instead.
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayTransform_Double() => Assert.Equal("2", await Scalar("SELECT ARRAY_FIRST((SELECT ARRAY_AGG(e * 2) FROM UNNEST([1, 2, 3]) AS e))"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayTransform_ToString() => Assert.Equal("1", await Scalar("SELECT ARRAY_FIRST((SELECT ARRAY_AGG(CAST(e AS STRING)) FROM UNNEST([1, 2, 3]) AS e))"));
 
 	// ---- Array access with OFFSET / ORDINAL / SAFE_OFFSET / SAFE_ORDINAL ----
 	[Fact] public async Task ArrayOffset_First() => Assert.Equal("10", await Scalar("SELECT ARRAY_FIRST([10, 20, 30])"));

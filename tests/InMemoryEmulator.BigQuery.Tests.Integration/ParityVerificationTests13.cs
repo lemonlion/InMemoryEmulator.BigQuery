@@ -108,7 +108,11 @@ public class ParityVerificationTests13 : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#qualify_clause
 	// ───────────────────────────────────────────────────────────────────────────
 
-	[Fact] public async Task Qualify_RowNumber()
+	// GO emulator does not correctly support QUALIFY clause.
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#qualify_clause
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task Qualify_RowNumber()
 	{
 		var rows = await Q(@"
 			SELECT customer, CAST(amount AS STRING) AS amount
@@ -122,7 +126,11 @@ public class ParityVerificationTests13 : IAsyncLifetime
 		Assert.Equal("200.75", rows[1]["amount"]?.ToString()); // Bob's highest
 	}
 
-	[Fact] public async Task Qualify_Rank()
+	// GO emulator does not correctly support QUALIFY clause.
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#qualify_clause
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task Qualify_Rank()
 	{
 		var rows = await Q(@"
 			SELECT customer, id
@@ -220,7 +228,7 @@ public class ParityVerificationTests13 : IAsyncLifetime
 	[Fact] public async Task ArraySubquery()
 	{
 		var result = await S(@"
-			SELECT ARRAY_TO_STRING(ARRAY(SELECT x * 2 FROM UNNEST([1, 2, 3]) AS x), ',')");
+			SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x * 2 AS STRING) FROM UNNEST([1, 2, 3]) AS x), ',')");
 		Assert.Equal("2,4,6", result);
 	}
 

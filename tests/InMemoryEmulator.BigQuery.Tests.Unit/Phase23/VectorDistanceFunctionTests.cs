@@ -88,24 +88,22 @@ public class VectorDistanceFunctionTests
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#cosine_distance
 	//   "A vector can't be a zero vector... If a zero vector is encountered, an error is produced."
-	//   In the emulator we return NULL instead of throwing to be lenient.
 	[Fact]
-	public void CosineDistance_ZeroVector_ReturnsNull()
+	public void CosineDistance_ZeroVector_ThrowsError()
 	{
-		var (_, rows) = CreateExecutor().Execute(
-			"SELECT COSINE_DISTANCE([0.0, 0.0], [1.0, 2.0]) AS d");
-		Assert.Null(rows[0].F[0].V);
+		var ex = Assert.Throws<InvalidOperationException>(() => CreateExecutor().Execute(
+			"SELECT COSINE_DISTANCE([0.0, 0.0], [1.0, 2.0]) AS d"));
+		Assert.Contains("Cannot compute cosine distance against zero vector", ex.Message);
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#cosine_distance
 	//   "Both non-sparse vectors in this function must share the same dimensions, and if they don't, an error is produced."
-	//   In the emulator we return NULL instead of throwing to be lenient.
 	[Fact]
-	public void CosineDistance_MismatchedDimensions_ReturnsNull()
+	public void CosineDistance_MismatchedDimensions_ThrowsError()
 	{
-		var (_, rows) = CreateExecutor().Execute(
-			"SELECT COSINE_DISTANCE([1.0, 2.0], [3.0, 4.0, 5.0]) AS d");
-		Assert.Null(rows[0].F[0].V);
+		var ex = Assert.Throws<InvalidOperationException>(() => CreateExecutor().Execute(
+			"SELECT COSINE_DISTANCE([1.0, 2.0], [3.0, 4.0, 5.0]) AS d"));
+		Assert.Contains("Array inputs are not equal in length", ex.Message);
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#cosine_distance
@@ -180,13 +178,13 @@ public class VectorDistanceFunctionTests
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#euclidean_distance
-	//   Mismatched dimensions → error. In emulator we return NULL.
+	//   "Both non-sparse vectors in this function must share the same dimensions, and if they don't, an error is produced."
 	[Fact]
-	public void EuclideanDistance_MismatchedDimensions_ReturnsNull()
+	public void EuclideanDistance_MismatchedDimensions_ThrowsError()
 	{
-		var (_, rows) = CreateExecutor().Execute(
-			"SELECT EUCLIDEAN_DISTANCE([1.0, 2.0], [3.0, 4.0, 5.0]) AS d");
-		Assert.Null(rows[0].F[0].V);
+		var ex = Assert.Throws<InvalidOperationException>(() => CreateExecutor().Execute(
+			"SELECT EUCLIDEAN_DISTANCE([1.0, 2.0], [3.0, 4.0, 5.0]) AS d"));
+		Assert.Contains("Array inputs are not equal in length", ex.Message);
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#euclidean_distance

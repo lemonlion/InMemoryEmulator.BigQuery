@@ -152,7 +152,7 @@ public class UnnestWithOffsetTests : IAsyncLifetime
 	[Fact]
 	public async Task ArraySubquery_Basic()
 	{
-		var v = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT x FROM UNNEST([3,1,2]) AS x ORDER BY x), ',')");
+		var v = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST([3,1,2]) AS x ORDER BY x), ',')");
 		Assert.Equal("1,2,3", v);
 	}
 
@@ -161,7 +161,7 @@ public class UnnestWithOffsetTests : IAsyncLifetime
 	{
 		await Exec("CREATE TABLE `{ds}.asq1` (val INT64)");
 		await Exec("INSERT INTO `{ds}.asq1` (val) VALUES (5),(3),(1),(4),(2)");
-		var v = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT val FROM `{ds}.asq1` WHERE val > 2 ORDER BY val), ',')");
+		var v = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(val AS STRING) FROM `{ds}.asq1` WHERE val > 2 ORDER BY val), ',')");
 		Assert.Equal("3,4,5", v);
 	}
 

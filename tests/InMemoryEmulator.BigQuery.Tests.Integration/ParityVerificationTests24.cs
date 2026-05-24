@@ -184,7 +184,11 @@ public class ParityVerificationTests24 : IAsyncLifetime
 	//   "When prefixed with SAFE, functions return NULL on error instead of raising."
 	// ───────────────────────────────────────────────────────────────────────────
 
-	[Fact] public async Task SafeCast_FloatOverflow()
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#safe_cast
+	//   BigQuery returns Infinity for overflow float cast, not NULL.
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task SafeCast_FloatOverflow()
 	{
 		var result = await S("SELECT SAFE_CAST('1e400' AS FLOAT64)");
 		Assert.Null(result);

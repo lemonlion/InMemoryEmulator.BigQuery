@@ -112,7 +112,9 @@ public class Phase27Tests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_copy
 	//   "Creates a new table by copying the schema and data from the source table."
+	// GO emulator does not support CREATE TABLE ... COPY syntax.
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task CreateTableCopy_CopiesSchemaAndData()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -128,7 +130,9 @@ public class Phase27Tests : IAsyncLifetime
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#create_table_clone
+	// GO emulator does not support CREATE TABLE ... CLONE syntax.
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task CreateTableClone_CopiesSchemaAndData()
 	{
 		var client = await _fixture.GetClientAsync();
@@ -145,7 +149,9 @@ public class Phase27Tests : IAsyncLifetime
 	#region ALTER COLUMN
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_column_set_data_type
+	// GO emulator does not support ALTER COLUMN SET DATA TYPE syntax.
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task AlterColumn_SetDataType()
 	{
 		var client = await _fixture.GetClientAsync();

@@ -112,8 +112,10 @@ public class ParityVerificationTests3 : IAsyncLifetime
 
 	// ===== QUALIFY clause =====
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#qualify_clause
+	// GO emulator does not correctly support QUALIFY clause.
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Qualify_RowNumber()
 	{
 		await Exec("CREATE TABLE `{ds}.q1` (grp STRING, val INT64)");

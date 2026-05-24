@@ -98,7 +98,12 @@ public class StructOperationTests : IAsyncLifetime
 	}
 
 	// ---- Struct without named fields ----
-	[Fact] public async Task Struct_Unnamed()
+	// BigQuery unnamed struct fields use auto-generated _field_N names, but accessing them
+	// via dot notation may not work consistently through the SDK.
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#struct_type
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task Struct_Unnamed()
 	{
 		// Test unnamed struct fields accessed via generated _field_N names
 		var v = await Scalar("SELECT s._field_1 FROM (SELECT STRUCT(1, 'hello', true) AS s)");

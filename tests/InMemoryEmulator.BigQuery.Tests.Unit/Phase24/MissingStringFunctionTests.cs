@@ -196,6 +196,8 @@ public class MissingStringFunctionTests
 	[Fact]
 	public void RegexpExtractAll_Null_ReturnsNull()
 	{
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#regexp_extract_all
+		//   "Returns NULL if value is NULL."
 		var (_, rows) = CreateExecutor().Execute("SELECT REGEXP_EXTRACT_ALL(NULL, '[0-9]+')");
 		Assert.Null(rows[0].F[0].V);
 	}
@@ -272,6 +274,8 @@ public class MissingStringFunctionTests
 	[Fact]
 	public void ToCodePoints_Null_ReturnsNull()
 	{
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#to_code_points
+		//   "If value is NULL, the function returns NULL."
 		var (_, rows) = CreateExecutor().Execute("SELECT TO_CODE_POINTS(NULL)");
 		Assert.Null(rows[0].F[0].V);
 	}

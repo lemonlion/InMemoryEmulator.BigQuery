@@ -465,11 +465,14 @@ public class MissingFunctionTests
 		Assert.Equal("b, c, d", rows[0].F[0].V?.ToString());
 	}
 
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_concat
+	//   "The argument to ARRAY_CONCAT (or ARRAY_CONCAT_AGG) must be an array type but was NULL"
 	[Fact]
-	public void ArrayConcat_NullInput_ReturnsNull()
+	public void ArrayConcat_NullInput_ThrowsError()
 	{
-		var (_, rows) = CreateExecutor().Execute("SELECT ARRAY_CONCAT(NULL, [1, 2]) AS result");
-		Assert.Null(rows[0].F[0].V);
+		var ex = Assert.Throws<InvalidOperationException>(() =>
+			CreateExecutor().Execute("SELECT ARRAY_CONCAT(NULL, [1, 2]) AS result"));
+		Assert.Contains("The argument to ARRAY_CONCAT (or ARRAY_CONCAT_AGG) must be an array type but was NULL", ex.Message);
 	}
 
 	#endregion

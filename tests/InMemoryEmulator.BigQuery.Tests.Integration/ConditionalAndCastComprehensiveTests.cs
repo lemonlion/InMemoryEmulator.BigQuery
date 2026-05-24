@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -46,8 +47,8 @@ public class ConditionalAndCastComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task If_Nested() => Assert.Equal("medium", await Scalar("SELECT IF(5 > 10, 'big', IF(5 > 3, 'medium', 'small'))"));
 
 	// ---- IIF ----
-	[Fact] public async Task Iif_TrueCondition() => Assert.Equal("yes", await Scalar("SELECT IIF(TRUE, 'yes', 'no')"));
-	[Fact] public async Task Iif_FalseCondition() => Assert.Equal("no", await Scalar("SELECT IIF(FALSE, 'yes', 'no')"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task Iif_TrueCondition() => Assert.Equal("yes", await Scalar("SELECT IF(TRUE, 'yes', 'no')"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task Iif_FalseCondition() => Assert.Equal("no", await Scalar("SELECT IF(FALSE, 'yes', 'no')"));
 
 	// ---- IFNULL ----
 	[Fact] public async Task Ifnull_NotNull() => Assert.Equal("5", await Scalar("SELECT IFNULL(5, 10)"));
@@ -171,7 +172,7 @@ public class ConditionalAndCastComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task Subtract_Integers() => Assert.Equal("7", await Scalar("SELECT 10 - 3"));
 	[Fact] public async Task Multiply_Integers() => Assert.Equal("12", await Scalar("SELECT 3 * 4"));
 	[Fact] public async Task Divide_Integers() => Assert.Equal("2.5", await Scalar("SELECT 5 / 2"));  // BigQuery / returns FLOAT64
-	[Fact] public async Task Modulo_Integers() => Assert.Equal("1", await Scalar("SELECT 7 % 3"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task Modulo_Integers() => Assert.Equal("1", await Scalar("SELECT MOD(7, 3)"));
 	[Fact] public async Task Negate_Integer() => Assert.Equal("-5", await Scalar("SELECT -5"));
 	[Fact] public async Task Add_Floats() { var v = double.Parse(await Scalar("SELECT 1.5 + 2.5") ?? "0"); Assert.Equal(4.0, v); }
 
@@ -196,7 +197,15 @@ public class ConditionalAndCastComprehensiveTests : IAsyncLifetime
 
 	// ---- String concat operator || ----
 	[Fact] public async Task ConcatOperator_Strings() => Assert.Equal("hello world", await Scalar("SELECT 'hello' || ' ' || 'world'"));
-	[Fact] public async Task ConcatOperator_WithNull() => Assert.Null(await Scalar("SELECT 'hello' || NULL"));
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
+	//   "Operands of || cannot be literal NULL"
+	[Fact]
+	public async Task ConcatOperator_WithNull()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT 'hello' || NULL", parameters: null));
+	}
 
 	// ---- Null-coalescing -- (might not exist in BQ, actually BQ uses IFNULL/COALESCE) ----
 

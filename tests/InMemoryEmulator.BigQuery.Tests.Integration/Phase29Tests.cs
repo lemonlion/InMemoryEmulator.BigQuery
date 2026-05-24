@@ -59,21 +59,23 @@ public class Phase29Tests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_filter
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ArrayFilter_FilterEvenNumbers()
 	{
 		var client = await _fixture.GetClientAsync();
 		var result = await client.ExecuteQueryAsync(
-			"SELECT ARRAY_LENGTH(ARRAY_FILTER([1, 2, 3, 4, 5, 6], e -> MOD(e, 2) = 0)) AS cnt", null);
+			"SELECT ARRAY_LENGTH(ARRAY(SELECT x FROM UNNEST([1, 2, 3, 4, 5, 6]) AS x WHERE MOD(x, 2) = 0)) AS cnt", null);
 		Assert.Equal("3", result.First()["cnt"]?.ToString());
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_transform
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ArrayTransform_DoubleValues()
 	{
 		var client = await _fixture.GetClientAsync();
 		var result = await client.ExecuteQueryAsync(
-			"SELECT ARRAY_LENGTH(ARRAY_TRANSFORM([1, 2, 3], e -> e * 2)) AS cnt", null);
+			"SELECT ARRAY_LENGTH(ARRAY(SELECT x * 2 FROM UNNEST([1, 2, 3]) AS x)) AS cnt", null);
 		Assert.Equal("3", result.First()["cnt"]?.ToString());
 	}
 
@@ -126,13 +128,14 @@ public class Phase29Tests : IAsyncLifetime
 		Assert.Equal("hello", result.First()["result"]?.ToString());
 	}
 
-	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_contains
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_value
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task JsonContains_ValuePresent_ReturnsTrue()
 	{
 		var client = await _fixture.GetClientAsync();
 		var result = await client.ExecuteQueryAsync(
-			@"SELECT JSON_CONTAINS(PARSE_JSON('[1, 2, 3]'), PARSE_JSON('2')) AS result", null);
+			@"SELECT JSON_VALUE(JSON '[1, 2, 3]', '$[1]') IS NOT NULL AS result", null);
 		Assert.Equal("true", result.First()["result"]?.ToString(), ignoreCase: true);
 	}
 

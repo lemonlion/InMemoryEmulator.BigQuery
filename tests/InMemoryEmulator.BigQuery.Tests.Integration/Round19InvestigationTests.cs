@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -114,19 +115,23 @@ public class Round19InvestigationTests : IAsyncLifetime
 
 	// ============ AREA 8: ARRAY_CONCAT with NULL arrays ============
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_concat
-	//   "Returns NULL if any input argument is NULL."
+	//   "The argument to ARRAY_CONCAT (or ARRAY_CONCAT_AGG) must be an array type but was NULL"
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ArrayConcat_WithNullArray_ReturnsNull()
 	{
-		var result = await Scalar("SELECT ARRAY_CONCAT([1, 2], NULL)");
-		Assert.Null(result);
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(async () =>
+			await client.ExecuteQueryAsync("SELECT ARRAY_CONCAT([1, 2], NULL)", parameters: null));
 	}
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ArrayConcat_NullFirst_ReturnsNull()
 	{
-		var result = await Scalar("SELECT ARRAY_CONCAT(NULL, [3, 4])");
-		Assert.Null(result);
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(async () =>
+			await client.ExecuteQueryAsync("SELECT ARRAY_CONCAT(NULL, [3, 4])", parameters: null));
 	}
 
 	// ============ AREA 9: FORMAT_DATE format elements ============

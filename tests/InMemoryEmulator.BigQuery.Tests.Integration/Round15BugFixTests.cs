@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -109,21 +110,25 @@ public class Round15BugFixTests : IAsyncLifetime
 	// ================================================================
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task TimestampDiff_Week()
 	{
-		// Jan 14 (Sun) - Jan 1 (Mon): Sunday boundaries at Jan 7, Jan 14 = 2
-		var v = await S("SELECT TIMESTAMP_DIFF(TIMESTAMP '2024-01-14 00:00:00 UTC', TIMESTAMP '2024-01-01 00:00:00 UTC', WEEK)");
-		Assert.Equal("2", v);
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#timestamp_diff
+		//   "TIMESTAMP_DIFF does not support the WEEK date part when the argument is TIMESTAMP type"
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(async () =>
+			await client.ExecuteQueryAsync("SELECT TIMESTAMP_DIFF(TIMESTAMP '2024-01-14 00:00:00 UTC', TIMESTAMP '2024-01-01 00:00:00 UTC', WEEK)", parameters: null));
 	}
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task TimestampDiff_WeekMonday()
 	{
-		// Monday boundaries between Jan 1 (Mon) and Jan 14: Jan 8 = 1
-		// Trunc Jan14 to Mon = Jan8, trunc Jan1 to Mon = Jan1
-		// (Jan8 - Jan1) / 7 = 1
-		var v = await S("SELECT TIMESTAMP_DIFF(TIMESTAMP '2024-01-14 00:00:00 UTC', TIMESTAMP '2024-01-01 00:00:00 UTC', WEEK(MONDAY))");
-		Assert.Equal("1", v);
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#timestamp_diff
+		//   "TIMESTAMP_DIFF does not support the WEEK(MONDAY) date part when the argument is TIMESTAMP type"
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(async () =>
+			await client.ExecuteQueryAsync("SELECT TIMESTAMP_DIFF(TIMESTAMP '2024-01-14 00:00:00 UTC', TIMESTAMP '2024-01-01 00:00:00 UTC', WEEK(MONDAY))", parameters: null));
 	}
 
 	// ================================================================

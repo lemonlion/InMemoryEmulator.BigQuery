@@ -100,16 +100,17 @@ public class BugVerificationRound15Tests
 	}
 
 	// =====================================================
-	// BUG 5: TIMESTAMP_DIFF with WEEK returns TotalSeconds default
+	// BUG 5: TIMESTAMP_DIFF with WEEK is not supported for TIMESTAMP type
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#timestamp_diff
+	//   "TIMESTAMP_DIFF does not support the WEEK date part when the argument is TIMESTAMP type"
 	// =====================================================
 	[Fact]
-	public void TimestampDiff_Week_ShouldReturnWeekBoundaries()
+	public void TimestampDiff_Week_ShouldThrowError()
 	{
 		var executor = CreateExecutor();
-		// Jan 14 (Sun) and Jan 1 (Mon): trunc to Sunday = Jan14 → Jan14, Jan1 → Dec31
-		// (Jan14 - Dec31).TotalDays / 7 = 14/7 = 2
-		var (_, rows) = executor.Execute("SELECT TIMESTAMP_DIFF(TIMESTAMP '2024-01-14 00:00:00 UTC', TIMESTAMP '2024-01-01 00:00:00 UTC', WEEK)");
-		Assert.Equal("2", rows[0].F[0].V?.ToString());
+		var ex = Assert.Throws<InvalidOperationException>(() =>
+			executor.Execute("SELECT TIMESTAMP_DIFF(TIMESTAMP '2024-01-14 00:00:00 UTC', TIMESTAMP '2024-01-01 00:00:00 UTC', WEEK)"));
+		Assert.Contains("TIMESTAMP_DIFF does not support the WEEK date part", ex.Message);
 	}
 
 	// =====================================================

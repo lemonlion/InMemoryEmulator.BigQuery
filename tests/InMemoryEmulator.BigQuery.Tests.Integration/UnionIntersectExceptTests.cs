@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -60,11 +61,16 @@ public class UnionIntersectExceptTests : IAsyncLifetime
         Assert.True(count < 8); // Should remove duplicates
     }
 
-    // INTERSECT ALL
-    [Fact] public async Task IntersectAll_Basic()
+    // INTERSECT ALL - not supported in BigQuery
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
+    //   "INTERSECT ALL is not supported. Only INTERSECT DISTINCT is supported."
+    [Fact]
+    [Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+    public async Task IntersectAll_Basic()
     {
-        var rows = await Query("SELECT id, val FROM `{ds}.a` INTERSECT ALL SELECT id, val FROM `{ds}.b`");
-        Assert.True(rows.Count >= 1);
+        var client = await _fixture.GetClientAsync();
+        await Assert.ThrowsAsync<GoogleApiException>(async () =>
+            await client.ExecuteQueryAsync($"SELECT id, val FROM `{_datasetId}.a` INTERSECT ALL SELECT id, val FROM `{_datasetId}.b`", parameters: null));
     }
 
     // INTERSECT DISTINCT
@@ -74,11 +80,16 @@ public class UnionIntersectExceptTests : IAsyncLifetime
         Assert.True(count >= 1);
     }
 
-    // EXCEPT ALL
-    [Fact] public async Task ExceptAll_Basic()
+    // EXCEPT ALL - not supported in BigQuery
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#set_operators
+    //   "EXCEPT ALL is not supported. Only EXCEPT DISTINCT is supported."
+    [Fact]
+    [Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+    public async Task ExceptAll_Basic()
     {
-        var rows = await Query("SELECT id, val FROM `{ds}.a` EXCEPT ALL SELECT id, val FROM `{ds}.b`");
-        Assert.True(rows.Count >= 1);
+        var client = await _fixture.GetClientAsync();
+        await Assert.ThrowsAsync<GoogleApiException>(async () =>
+            await client.ExecuteQueryAsync($"SELECT id, val FROM `{_datasetId}.a` EXCEPT ALL SELECT id, val FROM `{_datasetId}.b`", parameters: null));
     }
 
     // EXCEPT DISTINCT

@@ -65,9 +65,9 @@ public class Round23BugFixTests : IAsyncLifetime
 	public async Task Concat_WholeFloat_ShowsDecimalPoint()
 	{
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_string
-		//   CAST(FLOAT64 AS STRING) for whole numbers shows ".0" suffix
+		//   BigQuery CAST(FLOAT64 AS STRING) for whole numbers omits ".0" suffix
 		var result = await S("SELECT CONCAT(CAST(1 AS FLOAT64))");
-		Assert.Equal("1.0", result);
+		Assert.Equal("1", result);
 	}
 
 	[Fact]

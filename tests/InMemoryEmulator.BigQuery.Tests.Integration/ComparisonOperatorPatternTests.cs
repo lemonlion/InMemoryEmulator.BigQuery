@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -59,12 +60,15 @@ public class ComparisonOperatorPatternTests : IAsyncLifetime
 	// Equality
 	[Fact] public async Task Eq_Int() => Assert.Equal("True", await Scalar("SELECT 5 = 5"));
 	[Fact] public async Task Eq_String() => Assert.Equal("True", await Scalar("SELECT 'abc' = 'abc'"));
-	// Go emulator errors: "Operands of = cannot be literal NULL"
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#comparison_operators
-	//   "NULL: Any operation with a NULL input returns NULL."
+	//   "Operands of = cannot be literal NULL"
 	[Fact]
-	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
-	public async Task Eq_Null() => Assert.Null(await Scalar("SELECT NULL = NULL")); // NULL = NULL → NULL
+	public async Task Eq_Null()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL = NULL", parameters: null));
+	}
 	[Fact] public async Task Neq_Int() => Assert.Equal("True", await Scalar("SELECT 5 != 3"));
 	[Fact] public async Task Neq_IntFalse() => Assert.Equal("False", await Scalar("SELECT 5 != 5"));
 
@@ -77,18 +81,29 @@ public class ComparisonOperatorPatternTests : IAsyncLifetime
 	[Fact] public async Task Gt_String() => Assert.Equal("True", await Scalar("SELECT 'z' > 'a'"));
 
 	// NULL comparisons
-	// Go emulator errors: "Operands of </>/= cannot be literal NULL"
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#comparison_operators
-	//   "NULL: Any operation with a NULL input returns NULL."
+	//   "Operands of <op> cannot be literal NULL"
 	[Fact]
-	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
-	public async Task Lt_Null() => Assert.Null(await Scalar("SELECT 5 < NULL"));
+	public async Task Lt_Null()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT 5 < NULL", parameters: null));
+	}
 	[Fact]
-	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
-	public async Task Gt_Null() => Assert.Null(await Scalar("SELECT NULL > 3"));
+	public async Task Gt_Null()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT NULL > 3", parameters: null));
+	}
 	[Fact]
-	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
-	public async Task Eq_NullValue() => Assert.Null(await Scalar("SELECT 5 = NULL"));
+	public async Task Eq_NullValue()
+	{
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(
+			() => client.ExecuteQueryAsync("SELECT 5 = NULL", parameters: null));
+	}
 
 	// BETWEEN
 	[Fact] public async Task Between_True() => Assert.Equal("True", await Scalar("SELECT 5 BETWEEN 3 AND 7"));

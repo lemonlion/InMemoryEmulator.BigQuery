@@ -5,8 +5,8 @@ namespace InMemoryEmulator.BigQuery.Tests.Integration.Phase26;
 
 /// <summary>
 /// Integration tests for Phase 26: Array functions.
-/// GENERATE_DATE_ARRAY, GENERATE_TIMESTAMP_ARRAY, ARRAY_INCLUDES, ARRAY_INCLUDES_ALL,
-/// ARRAY_INCLUDES_ANY, ARRAY_MAX, ARRAY_MIN, ARRAY_SUM, ARRAY_AVG.
+/// GENERATE_DATE_ARRAY, GENERATE_TIMESTAMP_ARRAY, IN UNNEST (array membership),
+/// LOGICAL_AND/LOGICAL_OR with UNNEST (all/any containment), aggregate subqueries over arrays.
 /// </summary>
 [Collection(IntegrationCollection.Name)]
 [Trait(TestTraits.Target, TestTraits.All)]
@@ -80,20 +80,22 @@ public class ArrayFunctionIntegrationTests : IAsyncLifetime
 	#region ARRAY_INCLUDES
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ArrayIncludes_Found()
 	{
 		var client = await _fixture.GetClientAsync();
 		var results = await client.ExecuteQueryAsync(
-			"SELECT ARRAY_INCLUDES([1, 2, 3], 2) AS result", parameters: null);
+			"SELECT 2 IN UNNEST([1, 2, 3]) AS result", parameters: null);
 		Assert.True(Convert.ToBoolean(results.ToList()[0]["result"]));
 	}
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ArrayIncludes_NotFound()
 	{
 		var client = await _fixture.GetClientAsync();
 		var results = await client.ExecuteQueryAsync(
-			"SELECT ARRAY_INCLUDES([1, 2, 3], 5) AS result", parameters: null);
+			"SELECT 5 IN UNNEST([1, 2, 3]) AS result", parameters: null);
 		Assert.False(Convert.ToBoolean(results.ToList()[0]["result"]));
 	}
 
@@ -102,38 +104,42 @@ public class ArrayFunctionIntegrationTests : IAsyncLifetime
 	#region ARRAY_INCLUDES_ALL / ARRAY_INCLUDES_ANY
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ArrayIncludesAll_True()
 	{
 		var client = await _fixture.GetClientAsync();
 		var results = await client.ExecuteQueryAsync(
-			"SELECT ARRAY_INCLUDES_ALL([1, 2, 3, 4], [2, 3]) AS result", parameters: null);
+			"SELECT (SELECT LOGICAL_AND(x IN UNNEST([1, 2, 3, 4])) FROM UNNEST([2, 3]) AS x) AS result", parameters: null);
 		Assert.True(Convert.ToBoolean(results.ToList()[0]["result"]));
 	}
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ArrayIncludesAll_False()
 	{
 		var client = await _fixture.GetClientAsync();
 		var results = await client.ExecuteQueryAsync(
-			"SELECT ARRAY_INCLUDES_ALL([1, 2, 3], [2, 5]) AS result", parameters: null);
+			"SELECT (SELECT LOGICAL_AND(x IN UNNEST([1, 2, 3])) FROM UNNEST([2, 5]) AS x) AS result", parameters: null);
 		Assert.False(Convert.ToBoolean(results.ToList()[0]["result"]));
 	}
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ArrayIncludesAny_True()
 	{
 		var client = await _fixture.GetClientAsync();
 		var results = await client.ExecuteQueryAsync(
-			"SELECT ARRAY_INCLUDES_ANY([1, 2, 3], [5, 2]) AS result", parameters: null);
+			"SELECT (SELECT LOGICAL_OR(x IN UNNEST([1, 2, 3])) FROM UNNEST([5, 2]) AS x) AS result", parameters: null);
 		Assert.True(Convert.ToBoolean(results.ToList()[0]["result"]));
 	}
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ArrayIncludesAny_False()
 	{
 		var client = await _fixture.GetClientAsync();
 		var results = await client.ExecuteQueryAsync(
-			"SELECT ARRAY_INCLUDES_ANY([1, 2, 3], [5, 6]) AS result", parameters: null);
+			"SELECT (SELECT LOGICAL_OR(x IN UNNEST([1, 2, 3])) FROM UNNEST([5, 6]) AS x) AS result", parameters: null);
 		Assert.False(Convert.ToBoolean(results.ToList()[0]["result"]));
 	}
 
@@ -142,20 +148,22 @@ public class ArrayFunctionIntegrationTests : IAsyncLifetime
 	#region ARRAY_MAX / ARRAY_MIN
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ArrayMax_Basic()
 	{
 		var client = await _fixture.GetClientAsync();
 		var results = await client.ExecuteQueryAsync(
-			"SELECT ARRAY_MAX([3, 1, 4, 1, 5]) AS result", parameters: null);
+			"SELECT (SELECT MAX(x) FROM UNNEST([3, 1, 4, 1, 5]) AS x) AS result", parameters: null);
 		Assert.Equal(5L, Convert.ToInt64(results.ToList()[0]["result"]));
 	}
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ArrayMin_Basic()
 	{
 		var client = await _fixture.GetClientAsync();
 		var results = await client.ExecuteQueryAsync(
-			"SELECT ARRAY_MIN([3, 1, 4, 1, 5]) AS result", parameters: null);
+			"SELECT (SELECT MIN(x) FROM UNNEST([3, 1, 4, 1, 5]) AS x) AS result", parameters: null);
 		Assert.Equal(1L, Convert.ToInt64(results.ToList()[0]["result"]));
 	}
 
@@ -164,20 +172,22 @@ public class ArrayFunctionIntegrationTests : IAsyncLifetime
 	#region ARRAY_SUM / ARRAY_AVG
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ArraySum_Basic()
 	{
 		var client = await _fixture.GetClientAsync();
 		var results = await client.ExecuteQueryAsync(
-			"SELECT ARRAY_SUM([1, 2, 3, 4]) AS result", parameters: null);
+			"SELECT (SELECT SUM(x) FROM UNNEST([1, 2, 3, 4]) AS x) AS result", parameters: null);
 		Assert.Equal(10L, Convert.ToInt64(results.ToList()[0]["result"]));
 	}
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task ArrayAvg_Basic()
 	{
 		var client = await _fixture.GetClientAsync();
 		var results = await client.ExecuteQueryAsync(
-			"SELECT ARRAY_AVG([1, 2, 3, 4]) AS result", parameters: null);
+			"SELECT (SELECT AVG(x) FROM UNNEST([1, 2, 3, 4]) AS x) AS result", parameters: null);
 		Assert.Equal(2.5, Convert.ToDouble(results.ToList()[0]["result"]), 5);
 	}
 

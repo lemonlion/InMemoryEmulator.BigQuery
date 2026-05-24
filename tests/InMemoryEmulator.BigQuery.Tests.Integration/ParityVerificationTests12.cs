@@ -92,7 +92,7 @@ public class ParityVerificationTests12 : IAsyncLifetime
 		Assert.Equal("70", rows[3]["running"]?.ToString());
 	}
 
-	// Go emulator returns "15" instead of "15.0" for CAST(AVG(...) AS STRING)
+	// BigQuery returns "15" (no ".0") for CAST(AVG(...) AS STRING) when result is a whole number
 	[Fact]
 	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	public async Task WindowAvg_BetweenPrecedingAndFollowing()
@@ -102,11 +102,11 @@ public class ParityVerificationTests12 : IAsyncLifetime
 			FROM UNNEST([10, 20, 30, 40, 50]) AS val
 			ORDER BY val");
 		// row0: (10+20)/2=15; row1: (10+20+30)/3=20; row2: (20+30+40)/3=30; row3: (30+40+50)/3=40; row4: (40+50)/2=45
-		Assert.Equal("15.0", rows[0]["avg_val"]?.ToString());
-		Assert.Equal("20.0", rows[1]["avg_val"]?.ToString());
-		Assert.Equal("30.0", rows[2]["avg_val"]?.ToString());
-		Assert.Equal("40.0", rows[3]["avg_val"]?.ToString());
-		Assert.Equal("45.0", rows[4]["avg_val"]?.ToString());
+		Assert.Equal("15", rows[0]["avg_val"]?.ToString());
+		Assert.Equal("20", rows[1]["avg_val"]?.ToString());
+		Assert.Equal("30", rows[2]["avg_val"]?.ToString());
+		Assert.Equal("40", rows[3]["avg_val"]?.ToString());
+		Assert.Equal("45", rows[4]["avg_val"]?.ToString());
 	}
 
 	// ───────────────────────────────────────────────────────────────────────────

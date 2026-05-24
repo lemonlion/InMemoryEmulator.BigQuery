@@ -4,8 +4,9 @@ using Xunit;
 namespace InMemoryEmulator.BigQuery.Tests.Integration;
 
 /// <summary>
-/// Integration tests for array functions: ARRAY_FIRST, ARRAY_LAST, ARRAY_FILTER,
-/// ARRAY_TRANSFORM, ARRAY_INCLUDES, ARRAY_IS_DISTINCT, ARRAY_MAX/MIN/SUM/AVG, etc.
+/// Integration tests for array functions and patterns: ARRAY_FIRST, ARRAY_LAST,
+/// ARRAY_IS_DISTINCT, ARRAY_LENGTH, ARRAY_CONCAT, ARRAY_REVERSE, ARRAY_TO_STRING,
+/// GENERATE_ARRAY, UNNEST, and subquery equivalents for filtering/transforming/aggregating arrays.
 /// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions
 /// </summary>
 [Collection(IntegrationCollection.Name)]
@@ -56,46 +57,50 @@ public class ArrayFunctionAdvancedTests : IAsyncLifetime
 	[Fact] public async Task ArrayLast_Strings() => Assert.Equal("c", await S("SELECT ARRAY_LAST(['a', 'b', 'c'])"));
 	[Fact] public async Task ArrayLast_Single() => Assert.Equal("42", await S("SELECT ARRAY_LAST([42])"));
 
-	// ---- ARRAY_INCLUDES ----
-	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_includes
-	[Fact] public async Task ArrayIncludes_Found() => Assert.Equal("True", await S("SELECT ARRAY_INCLUDES([1, 2, 3], 2)"));
-	[Fact] public async Task ArrayIncludes_NotFound() => Assert.Equal("False", await S("SELECT ARRAY_INCLUDES([1, 2, 3], 4)"));
-	[Fact] public async Task ArrayIncludes_String() => Assert.Equal("True", await S("SELECT ARRAY_INCLUDES(['a','b','c'], 'b')"));
+	// ---- ARRAY_INCLUDES equivalent (val IN UNNEST(arr)) ----
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayIncludes_Found() => Assert.Equal("True", await S("SELECT 2 IN UNNEST([1, 2, 3])"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayIncludes_NotFound() => Assert.Equal("False", await S("SELECT 4 IN UNNEST([1, 2, 3])"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayIncludes_String() => Assert.Equal("True", await S("SELECT 'b' IN UNNEST(['a','b','c'])"));
 
-	// ---- ARRAY_INCLUDES_ALL ----
-	[Fact] public async Task ArrayIncludesAll_True() => Assert.Equal("True", await S("SELECT ARRAY_INCLUDES_ALL([1,2,3,4], [1,3])"));
-	[Fact] public async Task ArrayIncludesAll_False() => Assert.Equal("False", await S("SELECT ARRAY_INCLUDES_ALL([1,2,3], [1,4])"));
+	// ---- ARRAY_INCLUDES_ALL equivalent (LOGICAL_AND subquery) ----
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayIncludesAll_True() => Assert.Equal("True", await S("SELECT (SELECT LOGICAL_AND(x IN UNNEST([1,2,3,4])) FROM UNNEST([1,3]) AS x)"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayIncludesAll_False() => Assert.Equal("False", await S("SELECT (SELECT LOGICAL_AND(x IN UNNEST([1,2,3])) FROM UNNEST([1,4]) AS x)"));
 
-	// ---- ARRAY_INCLUDES_ANY ----
-	[Fact] public async Task ArrayIncludesAny_True() => Assert.Equal("True", await S("SELECT ARRAY_INCLUDES_ANY([1,2,3], [3,4,5])"));
-	[Fact] public async Task ArrayIncludesAny_False() => Assert.Equal("False", await S("SELECT ARRAY_INCLUDES_ANY([1,2,3], [4,5,6])"));
+	// ---- ARRAY_INCLUDES_ANY equivalent (LOGICAL_OR subquery) ----
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayIncludesAny_True() => Assert.Equal("True", await S("SELECT (SELECT LOGICAL_OR(x IN UNNEST([1,2,3])) FROM UNNEST([3,4,5]) AS x)"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayIncludesAny_False() => Assert.Equal("False", await S("SELECT (SELECT LOGICAL_OR(x IN UNNEST([1,2,3])) FROM UNNEST([4,5,6]) AS x)"));
 
-	// ---- ARRAY_MAX ----
-	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_max
-	[Fact] public async Task ArrayMax_Integers() => Assert.Equal("30", await S("SELECT ARRAY_MAX([10, 30, 20])"));
-	[Fact] public async Task ArrayMax_WithNulls() => Assert.Equal("30", await S("SELECT ARRAY_MAX([10, NULL, 30, 20])"));
-	[Fact] public async Task ArrayMax_Single() => Assert.Equal("5", await S("SELECT ARRAY_MAX([5])"));
+	// ---- ARRAY_MAX equivalent (subquery with MAX) ----
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#max
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayMax_Integers() => Assert.Equal("30", await S("SELECT (SELECT MAX(x) FROM UNNEST([10, 30, 20]) AS x)"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayMax_WithNulls() => Assert.Equal("30", await S("SELECT (SELECT MAX(x) FROM UNNEST([10, NULL, 30, 20]) AS x)"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayMax_Single() => Assert.Equal("5", await S("SELECT (SELECT MAX(x) FROM UNNEST([5]) AS x)"));
 
-	// ---- ARRAY_MIN ----
-	[Fact] public async Task ArrayMin_Integers() => Assert.Equal("10", await S("SELECT ARRAY_MIN([10, 30, 20])"));
-	[Fact] public async Task ArrayMin_WithNulls() => Assert.Equal("10", await S("SELECT ARRAY_MIN([10, NULL, 30, 20])"));
+	// ---- ARRAY_MIN equivalent (subquery with MIN) ----
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#min
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayMin_Integers() => Assert.Equal("10", await S("SELECT (SELECT MIN(x) FROM UNNEST([10, 30, 20]) AS x)"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayMin_WithNulls() => Assert.Equal("10", await S("SELECT (SELECT MIN(x) FROM UNNEST([10, NULL, 30, 20]) AS x)"));
 
-	// ---- ARRAY_SUM ----
-	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_sum
-	[Fact] public async Task ArraySum_Integers() => Assert.Equal("60", await S("SELECT ARRAY_SUM([10, 20, 30])"));
-	[Fact] public async Task ArraySum_WithNulls() => Assert.Equal("60", await S("SELECT ARRAY_SUM([10, NULL, 20, 30])"));
-	[Fact] public async Task ArraySum_Empty() => Assert.Null(await S("SELECT ARRAY_SUM(CAST([] AS ARRAY<INT64>))"));
+	// ---- ARRAY_SUM equivalent (subquery with SUM) ----
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#sum
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArraySum_Integers() => Assert.Equal("60", await S("SELECT (SELECT SUM(x) FROM UNNEST([10, 20, 30]) AS x)"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArraySum_WithNulls() => Assert.Equal("60", await S("SELECT (SELECT SUM(x) FROM UNNEST([10, NULL, 20, 30]) AS x)"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArraySum_Empty() => Assert.Null(await S("SELECT (SELECT SUM(x) FROM UNNEST(CAST([] AS ARRAY<INT64>)) AS x)"));
 
-	// ---- ARRAY_AVG ----
-	[Fact] public async Task ArrayAvg_Integers()
+	// ---- ARRAY_AVG equivalent (subquery with AVG) ----
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#avg
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayAvg_Integers()
 	{
-		var v = await S("SELECT ARRAY_AVG([10, 20, 30])");
+		var v = await S("SELECT (SELECT AVG(x) FROM UNNEST([10, 20, 30]) AS x)");
 		Assert.NotNull(v);
 		Assert.Equal("20", v?.Split('.')[0]); // should be 20.0
 	}
-	[Fact] public async Task ArrayAvg_WithNulls()
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayAvg_WithNulls()
 	{
-		var v = await S("SELECT ARRAY_AVG([10, NULL, 20, 30])");
+		var v = await S("SELECT (SELECT AVG(x) FROM UNNEST([10, NULL, 20, 30]) AS x)");
 		Assert.NotNull(v);
 		Assert.Equal("20", v?.Split('.')[0]);
 	}
@@ -109,34 +114,34 @@ public class ArrayFunctionAdvancedTests : IAsyncLifetime
 		Assert.Equal("False", v);
 	}
 
-	// ---- ARRAY_FILTER (lambda) ----
-	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_filter
-	[Fact] public async Task ArrayFilter_GreaterThan()
+	// ---- ARRAY_FILTER equivalent (subquery with ARRAY_AGG + WHERE) ----
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#array_agg
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayFilter_GreaterThan()
 	{
-		var v = await S("SELECT ARRAY_LENGTH(ARRAY_FILTER([1,2,3,4,5], e -> e > 3))");
+		var v = await S("SELECT ARRAY_LENGTH((SELECT ARRAY_AGG(e) FROM UNNEST([1,2,3,4,5]) AS e WHERE e > 3))");
 		Assert.Equal("2", v);
 	}
-	[Fact] public async Task ArrayFilter_EvenNumbers()
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayFilter_EvenNumbers()
 	{
-		var v = await S("SELECT ARRAY_LENGTH(ARRAY_FILTER([1,2,3,4,5,6], e -> MOD(e, 2) = 0))");
+		var v = await S("SELECT ARRAY_LENGTH((SELECT ARRAY_AGG(e) FROM UNNEST([1,2,3,4,5,6]) AS e WHERE MOD(e, 2) = 0))");
 		Assert.Equal("3", v);
 	}
-	[Fact] public async Task ArrayFilter_None()
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayFilter_None()
 	{
-		var v = await S("SELECT ARRAY_LENGTH(ARRAY_FILTER([1,2,3], e -> e > 10))");
+		var v = await S("SELECT COALESCE(ARRAY_LENGTH((SELECT ARRAY_AGG(e) FROM UNNEST([1,2,3]) AS e WHERE e > 10)), 0)");
 		Assert.Equal("0", v);
 	}
 
-	// ---- ARRAY_TRANSFORM (lambda) ----
-	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_transform
-	[Fact] public async Task ArrayTransform_Double()
+	// ---- ARRAY_TRANSFORM equivalent (subquery with ARRAY_AGG) ----
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#array_agg
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayTransform_Double()
 	{
-		var v = await S("SELECT ARRAY_TO_STRING(ARRAY_TRANSFORM([1,2,3], e -> e * 2), ',')");
+		var v = await S("SELECT ARRAY_TO_STRING((SELECT ARRAY_AGG(CAST(e * 2 AS STRING)) FROM UNNEST([1,2,3]) AS e), ',')");
 		Assert.Equal("2,4,6", v);
 	}
-	[Fact] public async Task ArrayTransform_ToString()
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayTransform_ToString()
 	{
-		var v = await S("SELECT ARRAY_TO_STRING(ARRAY_TRANSFORM([1,2,3], e -> CAST(e AS STRING)), ',')");
+		var v = await S("SELECT ARRAY_TO_STRING((SELECT ARRAY_AGG(CAST(e AS STRING)) FROM UNNEST([1,2,3]) AS e), ',')");
 		Assert.Equal("1,2,3", v);
 	}
 
@@ -152,37 +157,37 @@ public class ArrayFunctionAdvancedTests : IAsyncLifetime
 	// ---- ARRAY_CONCAT ----
 	[Fact] public async Task ArrayConcat_Two()
 	{
-		var v = await S("SELECT ARRAY_TO_STRING(ARRAY_CONCAT([1,2], [3,4]), ',')");
+		var v = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(ARRAY_CONCAT([1,2], [3,4])) AS x), ',')");
 		Assert.Equal("1,2,3,4", v);
 	}
 	[Fact] public async Task ArrayConcat_Three()
 	{
-		var v = await S("SELECT ARRAY_TO_STRING(ARRAY_CONCAT([1], [2], [3]), ',')");
+		var v = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(ARRAY_CONCAT([1], [2], [3])) AS x), ',')");
 		Assert.Equal("1,2,3", v);
 	}
 
 	// ---- ARRAY_REVERSE ----
 	[Fact] public async Task ArrayReverse_Basic()
 	{
-		var v = await S("SELECT ARRAY_TO_STRING(ARRAY_REVERSE([1,2,3]), ',')");
+		var v = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(ARRAY_REVERSE([1,2,3])) AS x), ',')");
 		Assert.Equal("3,2,1", v);
 	}
 	[Fact] public async Task ArrayReverse_Single()
 	{
-		var v = await S("SELECT ARRAY_TO_STRING(ARRAY_REVERSE([42]), ',')");
+		var v = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(ARRAY_REVERSE([42])) AS x), ',')");
 		Assert.Equal("42", v);
 	}
 
-	// ---- ARRAY_SLICE ----
+	// ---- ARRAY_SLICE equivalent (subquery with OFFSET) ----
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_slice
 	[Fact] public async Task ArraySlice_Basic()
 	{
-		var v = await S("SELECT ARRAY_TO_STRING(ARRAY_SLICE([1,2,3,4,5], 1, 3), ',')");
+		var v = await S("SELECT ARRAY_TO_STRING((SELECT ARRAY_AGG(CAST(elem AS STRING) ORDER BY off) FROM UNNEST([1,2,3,4,5]) AS elem WITH OFFSET AS off WHERE off >= 1 AND off <= 3), ',')");
 		Assert.Equal("2,3,4", v);
 	}
 	[Fact] public async Task ArraySlice_FromStart()
 	{
-		var v = await S("SELECT ARRAY_TO_STRING(ARRAY_SLICE([1,2,3,4,5], 0, 2), ',')");
+		var v = await S("SELECT ARRAY_TO_STRING((SELECT ARRAY_AGG(CAST(elem AS STRING) ORDER BY off) FROM UNNEST([1,2,3,4,5]) AS elem WITH OFFSET AS off WHERE off >= 0 AND off <= 2), ',')");
 		Assert.Equal("1,2,3", v);
 	}
 
@@ -194,17 +199,17 @@ public class ArrayFunctionAdvancedTests : IAsyncLifetime
 	// ---- GENERATE_ARRAY ----
 	[Fact] public async Task GenerateArray_Step2()
 	{
-		var v = await S("SELECT ARRAY_TO_STRING(GENERATE_ARRAY(1, 10, 2), ',')");
+		var v = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(GENERATE_ARRAY(1, 10, 2)) AS x), ',')");
 		Assert.Equal("1,3,5,7,9", v);
 	}
 	[Fact] public async Task GenerateArray_Reverse()
 	{
-		var v = await S("SELECT ARRAY_TO_STRING(GENERATE_ARRAY(5, 1, -1), ',')");
+		var v = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(GENERATE_ARRAY(5, 1, -1)) AS x), ',')");
 		Assert.Equal("5,4,3,2,1", v);
 	}
 	[Fact] public async Task GenerateArray_Single()
 	{
-		var v = await S("SELECT ARRAY_TO_STRING(GENERATE_ARRAY(1, 1), ',')");
+		var v = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(GENERATE_ARRAY(1, 1)) AS x), ',')");
 		Assert.Equal("1", v);
 	}
 

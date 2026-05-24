@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -39,7 +40,7 @@ public class TypeCastComprehensiveTests : IAsyncLifetime
 	// ---- FLOAT64 conversions ----
 	[Fact] public async Task Cast_StringToFloat() => Assert.Equal("3.14", await S("SELECT CAST('3.14' AS FLOAT64)"));
 	[Fact] public async Task Cast_IntToFloat() => Assert.Equal("42", await S("SELECT CAST(42 AS FLOAT64)"));
-	[Fact] public async Task Cast_BoolToFloat() => Assert.Equal("1", await S("SELECT CAST(true AS FLOAT64)"));
+	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task Cast_BoolToFloat() { var c = await _fixture.GetClientAsync(); await Assert.ThrowsAsync<GoogleApiException>(async () => await c.ExecuteQueryAsync("SELECT CAST(true AS FLOAT64)", parameters: null)); }
 
 	// ---- STRING conversions ----
 	[Fact] public async Task Cast_IntToString() => Assert.Equal("42", await S("SELECT CAST(42 AS STRING)"));

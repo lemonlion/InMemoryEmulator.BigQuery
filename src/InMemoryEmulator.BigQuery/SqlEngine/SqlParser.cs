@@ -82,8 +82,9 @@ internal static class SqlParser
 		// Must run BEFORE the generic IGNORE NULLS strip below.
 		sql = Regex.Replace(sql, @"\bIGNORE\s+NULLS\b", ", '__IGNORE_NULLS__'", RegexOptions.IgnoreCase);
 
-		// RESPECT NULLS modifier — strip (it's the default for aggregates)
-		sql = Regex.Replace(sql, @"\bRESPECT\s+NULLS\b", "", RegexOptions.IgnoreCase);
+		// RESPECT NULLS modifier — inject marker so the executor can detect it for LAG/LEAD validation.
+		// For other functions (FIRST_VALUE, LAST_VALUE, NTH_VALUE) it's effectively a no-op (default behavior).
+		sql = Regex.Replace(sql, @"\bRESPECT\s+NULLS\b", ", '__RESPECT_NULLS__'", RegexOptions.IgnoreCase);
 
 		// Byte literal: b'...' or B'...' → '...' (emulator treats bytes as strings)
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#byte_literals
@@ -1465,7 +1466,9 @@ Token.EqualTo(SqlToken.LParen)
 				)
 			);
 
-	// INSERT INTO table (cols) SELECT ...
+	// INSERT INTO table (cols) [WITH cte AS (...)] SELECT ...
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#insert_statement
+	//   "INSERT INTO ... WITH ... SELECT" — the INSERT precedes the CTE in BigQuery DML syntax.
 	private static readonly TokenListParser<SqlToken, SqlStatement> InsertSelectStmt =
 		Token.EqualTo(SqlToken.Insert).IgnoreThen(Token.EqualTo(SqlToken.Into))
 			.IgnoreThen(IdentifierOrKeyword)
@@ -1474,7 +1477,8 @@ Token.EqualTo(SqlToken.LParen)
 					.IgnoreThen(IdentifierOrKeyword.ManyDelimitedBy(Token.EqualTo(SqlToken.Comma)))
 					.Then(cols => Token.EqualTo(SqlToken.RParen).Select(_ => (IReadOnlyList<string>?)cols.ToList()))
 					.OptionalOrDefault()
-				.Then(cols => WithSetOps(SelectStmt.Select(s => (SqlStatement)s)).Select(q => (SqlStatement)new InsertSelectStatement(table, cols, q)))
+				.Then(cols => WithSetOps(WithSelectStmt.Select(s => (SqlStatement)s).Try()
+					.Or(SelectStmt.Select(s => (SqlStatement)s))).Select(q => (SqlStatement)new InsertSelectStatement(table, cols, q)))
 			);
 
 	// UPDATE table [AS alias] SET [alias.]col=expr, ... [FROM source] WHERE condition

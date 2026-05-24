@@ -147,7 +147,7 @@ public class ParityVerificationTests19 : IAsyncLifetime
 
 	[Fact] public async Task ArrayReverse_Normal()
 	{
-		var result = await S("SELECT ARRAY_TO_STRING(ARRAY_REVERSE([1, 2, 3]), ',')");
+		var result = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(ARRAY_REVERSE([1, 2, 3])) AS x), ',')");
 		Assert.Equal("3,2,1", result);
 	}
 
@@ -159,7 +159,7 @@ public class ParityVerificationTests19 : IAsyncLifetime
 	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	public async Task ArrayConcat_TwoArrays()
 	{
-		var result = await S("SELECT ARRAY_TO_STRING(ARRAY_CONCAT([1, 2], [3, 4]), ',')");
+		var result = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(ARRAY_CONCAT([1, 2], [3, 4])) AS x), ',')");
 		Assert.Equal("1,2,3,4", result);
 	}
 
@@ -171,7 +171,7 @@ public class ParityVerificationTests19 : IAsyncLifetime
 	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	public async Task ArrayConcat_ThreeArrays()
 	{
-		var result = await S("SELECT ARRAY_TO_STRING(ARRAY_CONCAT([1], [2], [3, 4]), ',')");
+		var result = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(ARRAY_CONCAT([1], [2], [3, 4])) AS x), ',')");
 		Assert.Equal("1,2,3,4", result);
 	}
 
@@ -197,7 +197,11 @@ public class ParityVerificationTests19 : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#qualify_clause
 	// ───────────────────────────────────────────────────────────────────────────
 
-	[Fact] public async Task Qualify_RowNumber()
+	// GO emulator does not correctly support QUALIFY clause.
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#qualify_clause
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task Qualify_RowNumber()
 	{
 		var rows = await Q(@"
 			SELECT x FROM UNNEST([10, 20, 30, 40, 50]) AS x
@@ -209,7 +213,11 @@ public class ParityVerificationTests19 : IAsyncLifetime
 		Assert.Equal("30", rows[2][0]?.ToString());
 	}
 
-	[Fact] public async Task Qualify_DenseRank()
+	// GO emulator does not correctly support QUALIFY clause.
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#qualify_clause
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task Qualify_DenseRank()
 	{
 		var rows = await Q(@"
 			SELECT val FROM UNNEST([1, 1, 2, 3, 3]) AS val

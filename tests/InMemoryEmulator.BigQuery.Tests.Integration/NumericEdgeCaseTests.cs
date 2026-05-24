@@ -95,7 +95,12 @@ public class NumericEdgeCaseTests : IAsyncLifetime
 	[Fact] public async Task Ceil_Neg2() => Assert.Equal("-3", await Scalar("SELECT CEIL(-3.7)"));
 	[Fact] public async Task Ceil_Zero() => Assert.Equal("0", await Scalar("SELECT CEIL(0.0)"));
 	[Fact] public async Task Ceil_SmallPos() => Assert.Equal("1", await Scalar("SELECT CEIL(0.01)"));
-	[Fact] public async Task Ceil_SmallNeg() => Assert.Equal("0", await Scalar("SELECT CEIL(-0.99)"));
+	// GO emulator returns "-0" for CEIL(-0.99) due to IEEE 754 negative zero;
+	// Real BigQuery and the InMemory emulator correctly return "0".
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#ceil
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task Ceil_SmallNeg() => Assert.Equal("0", await Scalar("SELECT CEIL(-0.99)"));
 
 	// ---- ROUND function ----
 	[Fact] public async Task Round_Half() => Assert.Equal("4", await Scalar("SELECT ROUND(3.5)"));

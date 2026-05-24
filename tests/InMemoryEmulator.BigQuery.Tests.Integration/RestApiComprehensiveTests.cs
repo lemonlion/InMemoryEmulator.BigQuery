@@ -339,7 +339,11 @@ public class RestApiComprehensiveTests : IAsyncLifetime
 	}
 
 	// ==== COPY JOB ====
-	[Fact] public async Task CopyJob_DuplicatesTable()
+	// GO emulator does not support copy jobs via the jobs API.
+	// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/insert
+	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
+	public async Task CopyJob_DuplicatesTable()
 	{
 		var client = await GetClient();
 		await client.CreateTableAsync(_datasetId, "cp_src", new TableSchema

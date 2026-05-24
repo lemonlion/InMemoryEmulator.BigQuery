@@ -1,3 +1,4 @@
+using Google;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -97,23 +98,25 @@ public class VectorDistanceFunctionTests : IAsyncLifetime
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#cosine_distance
-	//   Zero vector → error. In emulator we return NULL.
+	//   "Cannot compute cosine distance against zero vector."
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task CosineDistance_ZeroVector_ReturnsNull()
 	{
-		var results = await Query("SELECT COSINE_DISTANCE([0.0, 0.0], [1.0, 2.0]) AS d");
-		var rows = results.ToList();
-		Assert.Null(rows[0]["d"]);
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(async () =>
+			await client.ExecuteQueryAsync("SELECT COSINE_DISTANCE([0.0, 0.0], [1.0, 2.0]) AS d", parameters: null));
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#cosine_distance
-	//   Mismatched dimensions → error. In emulator we return NULL.
+	//   "Array inputs are not equal in length"
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task CosineDistance_MismatchedDimensions_ReturnsNull()
 	{
-		var results = await Query("SELECT COSINE_DISTANCE([1.0, 2.0], [3.0, 4.0, 5.0]) AS d");
-		var rows = results.ToList();
-		Assert.Null(rows[0]["d"]);
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(async () =>
+			await client.ExecuteQueryAsync("SELECT COSINE_DISTANCE([1.0, 2.0], [3.0, 4.0, 5.0]) AS d", parameters: null));
 	}
 
 	// ======================================================================
@@ -164,13 +167,14 @@ public class VectorDistanceFunctionTests : IAsyncLifetime
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#euclidean_distance
-	//   Mismatched dimensions → error. In emulator we return NULL.
+	//   "Array inputs are not equal in length"
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task EuclideanDistance_MismatchedDimensions_ReturnsNull()
 	{
-		var results = await Query("SELECT EUCLIDEAN_DISTANCE([1.0, 2.0], [3.0, 4.0, 5.0]) AS d");
-		var rows = results.ToList();
-		Assert.Null(rows[0]["d"]);
+		var client = await _fixture.GetClientAsync();
+		await Assert.ThrowsAsync<GoogleApiException>(async () =>
+			await client.ExecuteQueryAsync("SELECT EUCLIDEAN_DISTANCE([1.0, 2.0], [3.0, 4.0, 5.0]) AS d", parameters: null));
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#euclidean_distance

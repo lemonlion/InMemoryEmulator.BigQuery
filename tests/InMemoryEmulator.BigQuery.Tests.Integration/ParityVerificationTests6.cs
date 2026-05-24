@@ -57,24 +57,24 @@ public class ParityVerificationTests6 : IAsyncLifetime
 	[Fact]
 	public async Task Float_WholeNumber_Format()
 	{
-		// BigQuery: SELECT CAST(1.0 AS STRING) returns "1.0"
+		// BigQuery: SELECT CAST(1.0 AS STRING) returns "1" (whole-number floats omit ".0")
 		var result = await S("SELECT CAST(1.0 AS STRING)");
-		Assert.Equal("1.0", result);
+		Assert.Equal("1", result);
 	}
 
 	[Fact]
 	public async Task Float_Zero_Format()
 	{
-		// BigQuery: CAST(0.0 AS STRING) returns "0.0"
+		// BigQuery: CAST(0.0 AS STRING) returns "0" (whole-number floats omit ".0")
 		var result = await S("SELECT CAST(CAST(0 AS FLOAT64) AS STRING)");
-		Assert.Equal("0.0", result);
+		Assert.Equal("0", result);
 	}
 
 	[Fact]
 	public async Task Float_NegativeWholeNumber_Format()
 	{
 		var result = await S("SELECT CAST(-5.0 AS STRING)");
-		Assert.Equal("-5.0", result);
+		Assert.Equal("-5", result);
 	}
 
 	// ===== IFNULL / NULLIF / COALESCE =====
@@ -338,7 +338,7 @@ public class ParityVerificationTests6 : IAsyncLifetime
 	public async Task ArrayAgg_WithOrderBy()
 	{
 		var result = await S(@"
-			SELECT ARRAY_TO_STRING(ARRAY_AGG(x ORDER BY x), ',')
+			SELECT ARRAY_TO_STRING(ARRAY_AGG(CAST(x AS STRING) ORDER BY x), ',')
 			FROM UNNEST([3, 1, 2]) AS x");
 		Assert.Equal("1,2,3", result);
 	}
@@ -347,7 +347,7 @@ public class ParityVerificationTests6 : IAsyncLifetime
 	public async Task ArrayAgg_WithOrderByDesc()
 	{
 		var result = await S(@"
-			SELECT ARRAY_TO_STRING(ARRAY_AGG(x ORDER BY x DESC), ',')
+			SELECT ARRAY_TO_STRING(ARRAY_AGG(CAST(x AS STRING) ORDER BY x DESC), ',')
 			FROM UNNEST([3, 1, 2]) AS x");
 		Assert.Equal("3,2,1", result);
 	}
@@ -498,8 +498,10 @@ public class ParityVerificationTests6 : IAsyncLifetime
 
 	// ===== QUALIFY clause =====
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#qualify_clause
+	// GO emulator does not correctly support QUALIFY clause.
 
 	[Fact]
+	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
 	public async Task Qualify_RowNumber()
 	{
 		var result = await Col(@"
@@ -548,7 +550,7 @@ public class ParityVerificationTests6 : IAsyncLifetime
 	public async Task IeeeDivide_ZeroByZero_ReturnsNaN()
 	{
 		var result = await S("SELECT CAST(IEEE_DIVIDE(0, 0) AS STRING)");
-		Assert.Equal("NaN", result);
+		Assert.Equal("nan", result);
 	}
 
 	// ===== ARRAY_LENGTH =====
@@ -574,7 +576,7 @@ public class ParityVerificationTests6 : IAsyncLifetime
 	[Fact]
 	public async Task ArrayReverse_Basic()
 	{
-		var result = await S("SELECT ARRAY_TO_STRING(ARRAY_REVERSE([1, 2, 3]), ',')");
+		var result = await S("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(ARRAY_REVERSE([1, 2, 3])) AS x), ',')");
 		Assert.Equal("3,2,1", result);
 	}
 

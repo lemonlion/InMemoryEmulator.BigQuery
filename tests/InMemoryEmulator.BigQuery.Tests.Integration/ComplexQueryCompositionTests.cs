@@ -74,13 +74,13 @@ public class ComplexQueryCompositionTests : IAsyncLifetime
 	// EXISTS subquery
 	[Fact] public async Task Exists_True()
 	{
-		var rows = await Query("SELECT name FROM `{ds}.emp` WHERE EXISTS(SELECT 1 FROM `{ds}.emp` e2 WHERE e2.mgr_id = emp.id) ORDER BY name");
+		var rows = await Query("SELECT name FROM `{ds}.emp` e1 WHERE EXISTS(SELECT 1 FROM `{ds}.emp` e2 WHERE e2.mgr_id = e1.id) ORDER BY name");
 		Assert.True(rows.Count >= 2); // Alice and Carol are managers
 	}
 
 	[Fact] public async Task NotExists()
 	{
-		var rows = await Query("SELECT name FROM `{ds}.emp` WHERE NOT EXISTS(SELECT 1 FROM `{ds}.emp` e2 WHERE e2.mgr_id = emp.id) ORDER BY name");
+		var rows = await Query("SELECT name FROM `{ds}.emp` e1 WHERE NOT EXISTS(SELECT 1 FROM `{ds}.emp` e2 WHERE e2.mgr_id = e1.id) ORDER BY name");
 		Assert.True(rows.Count >= 5); // Non-managers
 	}
 
