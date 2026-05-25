@@ -16,6 +16,16 @@ The sole purpose of this project is to be an in-process emulator of GCP BigQuery
 - When fixing a bug, identify missing test coverage in and around the affected area and create that coverage — again following the TDD red-green-refactor cycle.
 - Fix any additional bugs discovered during that expanded test coverage work.
 
+## CRITICAL: Never Weaken Tests to Avoid Fixing Bugs
+
+**When a test fails, the test is telling you about a bug. Fix the bug, not the test.**
+
+- If a test uses a feature and that feature doesn't work, that's a bug to fix — not a reason to rewrite the test to avoid the feature.
+- If a user provides exact reproduction SQL/parameters in a bug report, use them VERBATIM. Do not "simplify" the test to avoid constructs the emulator can't handle. Those constructs are the bug.
+- Never replace exact reproduction SQL with "equivalent" queries that happen to work. The original SQL failed for a reason — find and fix that reason.
+- If you catch yourself thinking "let me simplify this to avoid X" — stop. X is the bug. Fix X.
+- The same applies to any situation where you are tempted to change assertions, weaken expected values, add tolerances, or skip edge cases to make tests pass. The purpose of this project is to match real BigQuery behavior exactly. A passing test that doesn't test the right thing is worse than a failing test.
+
 ## Reflection Policy
 
 - **Do not use reflection as a first resort.** Explore all public API options before considering reflection.
@@ -97,3 +107,7 @@ Assume first and foremost that failures represent missing features/bugs in the I
 Note: Every time anything is marked as a GO Emulator limitation, you need to reference in the code the exact official document and quote from it proving that it's a limitation in the GO emulator, and you need to have that written as a comment or input string into the attribute.
 
 Remember the source of truth is the official BigQuery docs, not the tests.
+
+## InMemoryEmulatorOnly trait
+
+The InMemoryEmulatorOnly trait is to only be used for very specific circumstances whereby the InMemoryEmulator specifically has explicit extra functionality (for example an ExportAsJson method for local debugging) to be used for Integration tests.  It is not to be used for any normal CRUD operation or quirk of behaviour, or support for sql commands or features that aren't supported in Cloud BigQuery.  It is not a 'convenience method' to support an operation in your integration tests locally that isn't supported in Cloud BigQuery, quite the opposite, it is inconvenient as your code will pass the integration tests locally but fail in production.  Keep in mind we don't want things passing in the Integration tests but failing in production and vica versa. So divergences in behaviour should be treated as bugs in the InMemoryEmulator and immediately fixed.
