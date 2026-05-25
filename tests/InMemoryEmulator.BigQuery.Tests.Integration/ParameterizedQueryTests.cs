@@ -143,4 +143,72 @@ public class ParameterizedQueryTests : IAsyncLifetime
             new[] { new BigQueryParameter("threshold", BigQueryDbType.Float64, 35.0) });
         Assert.Equal("2", result);
     }
+
+    // Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query
+    //   "parameterType.type: DATE" — value is a date string "YYYY-MM-DD"
+    [Fact] public async Task Param_Date_Comparison()
+    {
+        var client = await _fixture.GetClientAsync();
+        await client.ExecuteQueryAsync(
+            $"CREATE TABLE `{_datasetId}.events` (event_date DATE, description STRING)", parameters: null);
+        await client.ExecuteQueryAsync(
+            $"INSERT INTO `{_datasetId}.events` (event_date, description) VALUES ('2025-01-15', 'A'), ('2025-03-20', 'B'), ('2025-06-01', 'C')",
+            parameters: null);
+        var rows = await Query(
+            "SELECT description FROM `{ds}.events` WHERE event_date >= @start_date ORDER BY event_date",
+            new[] { new BigQueryParameter("start_date", BigQueryDbType.Date, new DateTime(2025, 3, 1)) });
+        Assert.Equal(2, rows.Count);
+        Assert.Equal("B", rows[0]["description"]?.ToString());
+        Assert.Equal("C", rows[1]["description"]?.ToString());
+    }
+
+    // Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query
+    //   "parameterType.type: TIMESTAMP" — value is an ISO 8601 timestamp string
+    [Fact] public async Task Param_Timestamp_Comparison()
+    {
+        var client = await _fixture.GetClientAsync();
+        await client.ExecuteQueryAsync(
+            $"CREATE TABLE `{_datasetId}.logs` (ts TIMESTAMP, msg STRING)", parameters: null);
+        await client.ExecuteQueryAsync(
+            $"INSERT INTO `{_datasetId}.logs` (ts, msg) VALUES (TIMESTAMP '2025-01-15 10:00:00 UTC', 'X'), (TIMESTAMP '2025-06-01 12:00:00 UTC', 'Y')",
+            parameters: null);
+        var result = await Scalar(
+            "SELECT msg FROM `{ds}.logs` WHERE ts > @cutoff ORDER BY ts LIMIT 1",
+            new[] { new BigQueryParameter("cutoff", BigQueryDbType.Timestamp, new DateTime(2025, 3, 1, 0, 0, 0, DateTimeKind.Utc)) });
+        Assert.Equal("Y", result);
+    }
+
+    // Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs/query
+    //   "parameterType.type: DATETIME" — value is a datetime string
+    [Fact] public async Task Param_Datetime_Comparison()
+    {
+        var client = await _fixture.GetClientAsync();
+        await client.ExecuteQueryAsync(
+            $"CREATE TABLE `{_datasetId}.meetings` (dt DATETIME, title STRING)", parameters: null);
+        await client.ExecuteQueryAsync(
+            $"INSERT INTO `{_datasetId}.meetings` (dt, title) VALUES (DATETIME '2025-01-15 09:00:00', 'M1'), (DATETIME '2025-06-01 14:00:00', 'M2')",
+            parameters: null);
+        var result = await Scalar(
+            "SELECT title FROM `{ds}.meetings` WHERE dt > @cutoff ORDER BY dt LIMIT 1",
+            new[] { new BigQueryParameter("cutoff", BigQueryDbType.DateTime, new DateTime(2025, 3, 1)) });
+        Assert.Equal("M2", result);
+    }
+
+    // Ref: https://github.com/lemonlion/InMemoryEmulator.BigQuery/issues/2
+    //   DATE parameter with DATE_ADD — the exact scenario from the bug report
+    [Fact] public async Task Param_Date_WithDateAdd()
+    {
+        var client = await _fixture.GetClientAsync();
+        await client.ExecuteQueryAsync(
+            $"CREATE TABLE `{_datasetId}.txns` (transaction_period DATE, location_id STRING)", parameters: null);
+        await client.ExecuteQueryAsync(
+            $"INSERT INTO `{_datasetId}.txns` (transaction_period, location_id) VALUES ('2025-11-10', 'LOC1'), ('2025-11-20', 'LOC2'), ('2025-12-15', 'LOC3')",
+            parameters: null);
+        var rows = await Query(
+            "SELECT location_id FROM `{ds}.txns` WHERE transaction_period >= @ReportDate AND transaction_period <= DATE_ADD(@ReportDate, INTERVAL 3 WEEK) ORDER BY location_id",
+            new[] { new BigQueryParameter("ReportDate", BigQueryDbType.Date, new DateTime(2025, 11, 10)) });
+        Assert.Equal(2, rows.Count);
+        Assert.Equal("LOC1", rows[0]["location_id"]?.ToString());
+        Assert.Equal("LOC2", rows[1]["location_id"]?.ToString());
+    }
 }
