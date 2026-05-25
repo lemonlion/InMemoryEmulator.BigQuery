@@ -1841,9 +1841,13 @@ BinaryOp.Sub => left is DateOnly dSubLeft && right is long rSubDays ? dSubLeft.A
 BinaryOp.Mul => ArithmeticOp(left, right, (a, b) => checked(a * b), (a, b) => a * b),
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#division
 //   "Division always returns a FLOAT64, even for integer operands."
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_rules#supertypes
+//   NUMERIC / NUMERIC → NUMERIC; NUMERIC / INT64 → NUMERIC; INT64 / INT64 → FLOAT64
 BinaryOp.Div => left is null || right is null ? null
-    : ToDouble(right) == 0.0 ? throw new DivideByZeroException()
-    : (object)(ToDouble(left) / ToDouble(right)),
+    : (left is decimal || right is decimal)
+        ? ToDecimal(right) == 0m ? throw new DivideByZeroException() : (object)RoundNumeric(ToDecimal(left) / ToDecimal(right))
+        : ToDouble(right) == 0.0 ? throw new DivideByZeroException()
+        : (object)(ToDouble(left) / ToDouble(right)),
 BinaryOp.Mod => ArithmeticOp(left, right, (a, b) => a % b, (a, b) => a % b),
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#concatenation_operator
 //   "If one of the operands is NULL, the result is NULL."
@@ -3290,11 +3294,19 @@ replacement = System.Text.RegularExpressions.Regex.Replace(replacement, @"\\(\d)
 return System.Text.RegularExpressions.Regex.Replace(str, pattern, replacement);
 }
 
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#safe_divide
+//   SAFE_DIVIDE(NUMERIC, INT64) → NUMERIC; SAFE_DIVIDE(INT64, INT64) → FLOAT64
 private object? EvaluateSafeDivide(IReadOnlyList<SqlExpression> args, RowContext row)
 {
 var left = Evaluate(args[0], row);
 var right = Evaluate(args[1], row);
 if (left is null || right is null) return null;
+if (left is decimal || right is decimal)
+{
+	var dm = ToDecimal(right);
+	if (dm == 0m) return null;
+	return RoundNumeric(ToDecimal(left) / dm);
+}
 var d = ToDouble(right);
 if (d == 0.0) return null;
 return ToDouble(left) / d;
@@ -7673,8 +7685,12 @@ var fields = new Dictionary<string, object?>();
 var columns = insert.Columns ?? table.Schema.Fields.Select(f => f.Name).ToList();
 for (int i = 0; i < columns.Count && i < rowValues.Count; i++)
 {
-fields[columns[i]] = Evaluate(rowValues[i],
-new RowContext(new Dictionary<string, object?>(), null));
+var val = Evaluate(rowValues[i], new RowContext(new Dictionary<string, object?>(), null));
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#insert_statement
+//   BigQuery coerces inserted values to the declared column type.
+var sf = table.Schema.Fields.FirstOrDefault(f => f.Name.Equals(columns[i], StringComparison.OrdinalIgnoreCase));
+if (sf is not null && val is not null) val = CoerceToSchemaType(val, sf.Type);
+fields[columns[i]] = val;
 }
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#insert_statement
 //   Unspecified columns are assigned NULL.
@@ -8400,6 +8416,7 @@ byte[] bytes => Convert.ToBase64String(bytes),
 IList<object?> list => new FormattedList(list.Select(v => FormatValue(v)).ToList()),
 RangeValue rv => $"[{FormatValue(rv.Start)}, {FormatValue(rv.End)})",
 IDictionary<string, object?> dict => dict,
+decimal m => FormatNumericAsString(m),
 _ => val.ToString()
 };
 }
@@ -8651,6 +8668,10 @@ return pd2.CompareTo(db2);
 if (a is string sa2 && b is string sb2)
 return string.Compare(sa2, sb2, StringComparison.Ordinal);
 
+// decimal (NUMERIC) comparisons — coerce other numeric types to decimal
+if (a is decimal || b is decimal)
+	return ToDecimal(a).CompareTo(ToDecimal(b));
+
 // Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/QueryParameter
 //   Date/time parameters and row values may arrive as strings from the REST API.
 //   Coerce strings to the matching CLR type before comparing.
@@ -8759,6 +8780,13 @@ if (left is null || right is null) return null;
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#arithmetic_operators
 //   "All operators will throw an error if the computation result overflows."
 if (left is long la && right is long lb) return longOp(la, lb);
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_rules#supertypes
+//   NUMERIC + any numeric → NUMERIC (decimal arithmetic, 9 decimal places)
+if (left is decimal || right is decimal)
+{
+	var result = (decimal)doubleOp((double)ToDecimal(left), (double)ToDecimal(right));
+	return RoundNumeric(result);
+}
 return doubleOp(ToDouble(left), ToDouble(right));
 }
 
@@ -8885,6 +8913,23 @@ _ => "f0_"
 };
 }
 
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#insert_statement
+//   BigQuery coerces inserted values to match the declared column type.
+internal static object? CoerceToSchemaType(object val, string? schemaType) => schemaType?.ToUpperInvariant() switch
+{
+	"DATE" => val is DateOnly ? val : CoerceToDateOnly(val) ?? val,
+	"DATETIME" => val is DateTime ? val : CoerceToDateTime(val) ?? val,
+	"TIMESTAMP" => val is DateTimeOffset ? val : CoerceToDateTimeOffset(val) ?? val,
+	"TIME" => val is TimeSpan ts ? val
+		: val is TimeOnly t ? t.ToTimeSpan()
+		: val is string s && TimeSpan.TryParse(s, CultureInfo.InvariantCulture, out var tsp) ? tsp : val,
+	"INTEGER" or "INT64" => val is long ? val : long.TryParse(val.ToString(), out var l) ? l : val,
+	"FLOAT" or "FLOAT64" => val is double ? val : double.TryParse(val.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var d) ? d : val,
+	"NUMERIC" or "BIGNUMERIC" => val is decimal ? val : decimal.TryParse(val.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var m) ? m : val,
+	"BOOLEAN" or "BOOL" => val is bool ? val : bool.TryParse(val.ToString(), out var b) ? b : val,
+	_ => val,
+};
+
 private static string InferType(object? val)
 {
 return val switch
@@ -8892,6 +8937,7 @@ return val switch
 null => "STRING",
 long => "INTEGER",
 double => "FLOAT",
+decimal => "NUMERIC",
 bool => "BOOLEAN",
 DateTimeOffset => "TIMESTAMP",
 DateOnly => "DATE",
@@ -8902,6 +8948,30 @@ IList<object?> => "RECORD",
 IDictionary<string, object?> => "RECORD",
 _ => "STRING"
 };
+}
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#numeric_type
+//   NUMERIC: 38 digits of precision, 9 decimal places.
+private static decimal ToDecimal(object? val) => val switch
+{
+	decimal m => m,
+	long l => l,
+	double d => (decimal)d,
+	string s => decimal.Parse(s, NumberStyles.Any, CultureInfo.InvariantCulture),
+	null => 0m,
+	_ => Convert.ToDecimal(val, CultureInfo.InvariantCulture),
+};
+
+private static decimal RoundNumeric(decimal val) =>
+	Math.Round(val, 9, MidpointRounding.ToEven);
+
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_string
+//   CAST(NUMERIC AS STRING): trailing zeros stripped, up to 9 decimal places.
+private static string FormatNumericAsString(decimal m)
+{
+	var rounded = RoundNumeric(m);
+	var s = rounded.ToString("0.#########", CultureInfo.InvariantCulture);
+	return s == "-0" ? "0" : s;
 }
 
 private static double ToDouble(object? val)
@@ -8972,6 +9042,9 @@ DateTime dt => FormatDatetimeAsString(dt),
 //   "Casting from a time type to a string is of the form HH:MM:SS[.FFFFFF]."
 //   Trailing zeros in fractional seconds are trimmed.
 TimeSpan ts => FormatTimeAsString(ts),
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#numeric_type
+//   NUMERIC CAST AS STRING: up to 9 decimal places, trailing zeros stripped.
+decimal m => FormatNumericAsString(m),
 _ => val.ToString()
 };
 }

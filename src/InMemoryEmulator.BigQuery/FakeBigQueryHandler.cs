@@ -381,7 +381,16 @@ public class FakeBigQueryHandler : HttpMessageHandler
 				if (rowData.Json is IDictionary<string, object> jsonDict)
 				{
 					foreach (var kvp in jsonDict)
-						fields[kvp.Key] = kvp.Value;
+					{
+						var val = kvp.Value;
+						// Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/tabledata/insertAll
+						//   Coerce JSON values to the declared column type (e.g. date strings → DateOnly).
+						var sf = table.Schema?.Fields?.FirstOrDefault(
+							f => f.Name.Equals(kvp.Key, StringComparison.OrdinalIgnoreCase));
+						if (sf is not null && val is not null)
+							val = SqlEngine.QueryExecutor.CoerceToSchemaType(val, sf.Type);
+						fields[kvp.Key] = val;
+					}
 				}
 
 				table.Rows.Add(new InMemoryRow(fields, insertId));
