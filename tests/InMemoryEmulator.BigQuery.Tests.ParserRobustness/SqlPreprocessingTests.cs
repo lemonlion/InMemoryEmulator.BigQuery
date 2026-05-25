@@ -215,9 +215,10 @@ public class SqlPreprocessingTests : IAsyncLifetime
         Assert.Single(rows);
     }
 
-    [Fact] public async Task TrailingSemicolon_MultipleSemicolons()
+    // Real BigQuery rejects double semicolons — only a single trailing semicolon is valid.
+    [Fact] public async Task TrailingSemicolon_WithTrailingWhitespaceAndNewlines()
     {
-        var rows = await Q("SELECT id FROM `{ds}.t`;;");
+        var rows = await Q("SELECT id FROM `{ds}.t`  ;  \n  ");
         Assert.Equal(3, rows.Count);
     }
 
