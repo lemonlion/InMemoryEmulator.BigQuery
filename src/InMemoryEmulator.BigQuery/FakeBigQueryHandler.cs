@@ -802,12 +802,16 @@ public class FakeBigQueryHandler : HttpMessageHandler
 
 		try
 		{
-			// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language
-			//   Multi-statement queries (scripts) contain semicolons
+			// Strip trailing semicolons from single-statement queries so they don't
+			// unnecessarily route to ProceduralExecutor (which doesn't pass parameters).
+			var queryText = body.Query.TrimEnd();
+			var stripped = queryText.EndsWith(';') ? queryText.TrimEnd(';').TrimEnd() : queryText;
+			// Only use ProceduralExecutor if there are INTERNAL semicolons (multi-statement)
+			// or the query is a DML/DDL statement that the parser handles differently.
 			TableSchema schema;
 			List<TableRow> rows;
-			var upperQ = body.Query.TrimStart();
-			if (body.Query.Contains(';') ||
+			var upperQ = stripped.TrimStart();
+			if (stripped.Contains(';') ||
 				upperQ.StartsWith("CREATE ", StringComparison.OrdinalIgnoreCase) ||
 				upperQ.StartsWith("DROP ", StringComparison.OrdinalIgnoreCase) ||
 				upperQ.StartsWith("INSERT ", StringComparison.OrdinalIgnoreCase) ||
@@ -817,13 +821,14 @@ public class FakeBigQueryHandler : HttpMessageHandler
 				upperQ.StartsWith("TRUNCATE ", StringComparison.OrdinalIgnoreCase))
 			{
 				var procExecutor = new SqlEngine.ProceduralExecutor(_store, defaultDatasetId);
-				(schema, rows) = procExecutor.Execute(body.Query);
+				procExecutor.SetParameters(body.QueryParameters);
+				(schema, rows) = procExecutor.Execute(stripped);
 			}
 			else
 			{
 				var executor = new QueryExecutor(_store, defaultDatasetId);
 				executor.SetParameters(body.QueryParameters);
-				(schema, rows) = executor.Execute(body.Query);
+				(schema, rows) = executor.Execute(stripped);
 			}
 
 
@@ -924,11 +929,12 @@ public class FakeBigQueryHandler : HttpMessageHandler
 
 		try
 		{
-			// Support multi-statement scripts
+			var queryText2 = queryConfig.Query.TrimEnd();
+			var stripped2 = queryText2.EndsWith(';') ? queryText2.TrimEnd(';').TrimEnd() : queryText2;
 			TableSchema schema;
 			List<TableRow> rows;
-			var upperQ2 = queryConfig.Query.TrimStart();
-			if (queryConfig.Query.Contains(';') ||
+			var upperQ2 = stripped2.TrimStart();
+			if (stripped2.Contains(';') ||
 				upperQ2.StartsWith("CREATE ", StringComparison.OrdinalIgnoreCase) ||
 				upperQ2.StartsWith("DROP ", StringComparison.OrdinalIgnoreCase) ||
 				upperQ2.StartsWith("INSERT ", StringComparison.OrdinalIgnoreCase) ||
@@ -938,7 +944,8 @@ public class FakeBigQueryHandler : HttpMessageHandler
 				upperQ2.StartsWith("TRUNCATE ", StringComparison.OrdinalIgnoreCase))
 			{
 				var procExecutor = new SqlEngine.ProceduralExecutor(_store, defaultDatasetId);
-				(schema, rows) = procExecutor.Execute(queryConfig.Query);
+				procExecutor.SetParameters(queryConfig.QueryParameters);
+				(schema, rows) = procExecutor.Execute(stripped2);
 			}
 			else
 			{

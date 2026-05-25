@@ -211,4 +211,125 @@ public class ParameterizedQueryTests : IAsyncLifetime
         Assert.Equal("LOC1", rows[0]["location_id"]?.ToString());
         Assert.Equal("LOC2", rows[1]["location_id"]?.ToString());
     }
+
+    // Ref: https://github.com/lemonlion/InMemoryEmulator.BigQuery/issues/3 — Reproduction case 1
+    //   EXACT SQL from the bug report
+    [Fact] public async Task Issue3_Cte_ExactReproduction()
+    {
+        var client = await _fixture.GetClientAsync();
+        await client.ExecuteQueryAsync(
+            $"CREATE TABLE `{_datasetId}.transactions_output` (mcc STRING, weekly_or_monthly STRING, transaction_period DATE, location_id STRING)",
+            parameters: null);
+        await client.ExecuteQueryAsync(
+            $"INSERT INTO `{_datasetId}.transactions_output` (mcc, weekly_or_monthly, transaction_period, location_id) VALUES ('5411', 'weekly', '2025-11-10', 'LOC1'), ('5411', 'monthly', '2025-11-10', 'LOC1')",
+            parameters: null);
+        var sql = $@"WITH bounds AS (
+  SELECT
+    mcc,
+    weekly_or_monthly,
+    transaction_period AS report_date
+  FROM `{_datasetId}.transactions_output`
+  WHERE location_id = @LocationId
+    AND transaction_period = @reportDate
+)
+SELECT * FROM bounds";
+        var rows = await Query(sql.Replace($"`{_datasetId}.", $"`{{ds}}."),
+            new[] {
+                new BigQueryParameter("LocationId", BigQueryDbType.String, "LOC1"),
+                new BigQueryParameter("reportDate", BigQueryDbType.Date, new DateTime(2025, 11, 10))
+            });
+        Assert.Equal(2, rows.Count);
+    }
+
+    // Ref: https://github.com/lemonlion/InMemoryEmulator.BigQuery/issues/3 — Reproduction case 2
+    //   EXACT SQL from the bug report
+    [Fact] public async Task Issue3_DateLiteral_ExactReproduction()
+    {
+        var client = await _fixture.GetClientAsync();
+        await client.ExecuteQueryAsync(
+            $"CREATE TABLE `{_datasetId}.tbl` (id INT64)", parameters: null);
+        await client.ExecuteQueryAsync(
+            $"INSERT INTO `{_datasetId}.tbl` (id) VALUES (1)", parameters: null);
+        var result = await Scalar(
+            $"SELECT CAST(CAST(@comparison_date AS DATE) AS STRING) AS report_date FROM `{{ds}}.tbl` WHERE id = 1",
+            new[] { new BigQueryParameter("comparison_date", BigQueryDbType.Date, new DateTime(2025, 11, 10)) });
+        Assert.Equal("2025-11-10", result);
+    }
+
+    // Ref: https://github.com/lemonlion/InMemoryEmulator.BigQuery/issues/3 — Reproduction case 2b
+    //   DATE literal sentinel value
+    [Fact] public async Task Issue3_DateLiteralSentinel()
+    {
+        var result = await Scalar("SELECT CAST(DATE '1900-01-01' AS STRING)", Array.Empty<BigQueryParameter>());
+        Assert.Equal("1900-01-01", result);
+    }
+
+    // Ref: https://github.com/lemonlion/InMemoryEmulator.BigQuery/issues/3 — Reproduction case 3
+    //   EXACT SQL from the bug report (trailing semicolon)
+    [Fact] public async Task Issue3_TrailingSemicolon_ExactReproduction()
+    {
+        var result = await Scalar(
+            "SELECT name FROM `{ds}.items` WHERE id = @id\n;",
+            new[] { new BigQueryParameter("id", BigQueryDbType.Int64, 1) });
+        Assert.Equal("Widget", result);
+    }
+
+    // Ref: https://github.com/lemonlion/InMemoryEmulator.BigQuery/issues/3
+    //   CTE with parameters — simplified version
+    [Fact] public async Task Param_Cte_WithParameters()
+    {
+        var rows = await Query(
+            "WITH filtered AS (SELECT name, price FROM `{ds}.items` WHERE price > @minPrice) SELECT name FROM filtered ORDER BY name",
+            new[] { new BigQueryParameter("minPrice", BigQueryDbType.Float64, 25.0) });
+        Assert.Equal(3, rows.Count);
+    }
+
+    // Ref: https://github.com/lemonlion/InMemoryEmulator.BigQuery/issues/3
+    //   Trailing semicolons should not cause parse errors
+    [Fact] public async Task Query_TrailingSemicolon()
+    {
+        var result = await Scalar("SELECT name FROM `{ds}.items` WHERE id = @id ;",
+            new[] { new BigQueryParameter("id", BigQueryDbType.Int64, 1) });
+        Assert.Equal("Widget", result);
+    }
+
+    // Ref: https://github.com/lemonlion/InMemoryEmulator.BigQuery/issues/3
+    //   SQL line comments should be stripped before parsing
+    [Fact] public async Task Query_LineComments()
+    {
+        var result = await Scalar(
+            "SELECT name -- get the name\nFROM `{ds}.items` -- from items\nWHERE id = 1",
+            Array.Empty<BigQueryParameter>());
+        Assert.Equal("Widget", result);
+    }
+
+    // Ref: https://github.com/lemonlion/InMemoryEmulator.BigQuery/issues/3
+    //   SQL block comments should be stripped before parsing
+    [Fact] public async Task Query_BlockComments()
+    {
+        var result = await Scalar(
+            "SELECT /* the name */ name FROM `{ds}.items` WHERE id = 1",
+            Array.Empty<BigQueryParameter>());
+        Assert.Equal("Widget", result);
+    }
+
+    // Ref: https://github.com/lemonlion/InMemoryEmulator.BigQuery/issues/3
+    //   CTE with trailing semicolon and parameters
+    [Fact] public async Task Param_Cte_TrailingSemicolon()
+    {
+        var rows = await Query(
+            "WITH top_items AS (SELECT name FROM `{ds}.items` WHERE price > @min) SELECT name FROM top_items ORDER BY name;",
+            new[] { new BigQueryParameter("min", BigQueryDbType.Float64, 35.0) });
+        Assert.Equal(2, rows.Count);
+    }
+
+    // Ref: https://github.com/lemonlion/InMemoryEmulator.BigQuery/issues/3
+    //   DATE literal with comment on same line
+    [Fact] public async Task Query_DateLiteralWithComment()
+    {
+        var result = await Scalar(
+            "SELECT CAST(DATE '1900-01-01' AS STRING) -- sentinel date",
+            Array.Empty<BigQueryParameter>());
+        Assert.Equal("1900-01-01", result);
+    }
 }

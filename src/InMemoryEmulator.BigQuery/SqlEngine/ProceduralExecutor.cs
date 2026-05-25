@@ -12,6 +12,7 @@ internal class ProceduralExecutor
 	private readonly string? _defaultDatasetId;
 	private readonly Dictionary<string, object?> _variables = new(StringComparer.OrdinalIgnoreCase);
 	private readonly HashSet<string> _tempTableNames = new(StringComparer.OrdinalIgnoreCase);
+	private IList<Google.Apis.Bigquery.v2.Data.QueryParameter>? _queryParameters;
 	#pragma warning disable CS0169
 	private long _rowCount;
 #pragma warning restore CS0169
@@ -20,6 +21,11 @@ internal class ProceduralExecutor
 	{
 		_store = store;
 		_defaultDatasetId = defaultDatasetId;
+	}
+
+	public void SetParameters(IList<Google.Apis.Bigquery.v2.Data.QueryParameter>? parameters)
+	{
+		_queryParameters = parameters;
 	}
 
 	/// <summary>
@@ -182,6 +188,7 @@ internal class ProceduralExecutor
 		var substituted = SubstituteVariables(sql);
 		substituted = QualifyTempTables(substituted);
 		var executor = new QueryExecutor(_store, _defaultDatasetId);
+		if (_queryParameters is not null) executor.SetParameters(_queryParameters);
 		var result = executor.Execute(substituted);
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#system_variables
 		//   "@@row_count: The number of rows modified by the last DML statement."

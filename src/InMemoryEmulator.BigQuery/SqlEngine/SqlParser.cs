@@ -33,6 +33,14 @@ internal static class SqlParser
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/functions-and-operators
 	internal static string NormalizeSql(string sql)
 	{
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#comments
+		//   "Comments are sequences of characters that the parser ignores."
+		sql = StripComments(sql);
+
+		// Strip trailing semicolons (single-statement queries may include them).
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#semicolons
+		sql = sql.TrimEnd().TrimEnd(';').TrimEnd();
+
 		// WEEK(WEEKDAY) parameterized form → 'WEEK_WEEKDAY' string literal
 		// Must run BEFORE EXTRACT rewrite so that EXTRACT(WEEK(MONDAY) FROM ...) becomes EXTRACT('WEEK_MONDAY' FROM ...)
 		// and then the EXTRACT regex can handle it properly.
@@ -156,6 +164,56 @@ internal static class SqlParser
 		}
 
 		return sql;
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#comments
+	//   "Single-line comments: start with -- or #. Block comments: enclosed in /* ... */."
+	private static string StripComments(string sql)
+	{
+		var sb = new System.Text.StringBuilder(sql.Length);
+		bool inString = false;
+		char strChar = '\0';
+		for (int i = 0; i < sql.Length; i++)
+		{
+			if (inString)
+			{
+				sb.Append(sql[i]);
+				if (sql[i] == strChar && (i + 1 >= sql.Length || sql[i + 1] != strChar))
+					inString = false;
+				else if (sql[i] == strChar)
+					sb.Append(sql[++i]);
+				continue;
+			}
+			if (sql[i] == '\'' || sql[i] == '"' || sql[i] == '`')
+			{
+				inString = true;
+				strChar = sql[i];
+				sb.Append(sql[i]);
+				continue;
+			}
+			if (sql[i] == '-' && i + 1 < sql.Length && sql[i + 1] == '-')
+			{
+				while (i < sql.Length && sql[i] != '\n') i++;
+				if (i < sql.Length) sb.Append('\n');
+				continue;
+			}
+			if (sql[i] == '#' && !inString)
+			{
+				while (i < sql.Length && sql[i] != '\n') i++;
+				if (i < sql.Length) sb.Append('\n');
+				continue;
+			}
+			if (sql[i] == '/' && i + 1 < sql.Length && sql[i + 1] == '*')
+			{
+				i += 2;
+				while (i + 1 < sql.Length && !(sql[i] == '*' && sql[i + 1] == '/')) i++;
+				i++; // skip closing */
+				sb.Append(' ');
+				continue;
+			}
+			sb.Append(sql[i]);
+		}
+		return sb.ToString();
 	}
 
 	/// <summary>Token list parser that returns a value without consuming input.</summary>
