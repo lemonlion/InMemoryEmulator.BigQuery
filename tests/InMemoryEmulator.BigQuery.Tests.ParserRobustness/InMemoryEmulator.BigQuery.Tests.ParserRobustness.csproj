@@ -1,6 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<ItemGroup>
+		<Using Include="InMemoryEmulator.BigQuery.Tests.Infrastructure" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
 		<PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -10,7 +18,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\..\src\InMemoryEmulator.BigQuery\InMemoryEmulator.BigQuery.csproj" />
+		<ProjectReference Include="..\InMemoryEmulator.BigQuery.Tests.Shared\InMemoryEmulator.BigQuery.Tests.Shared.csproj" />
 	</ItemGroup>
 
 </Project>

@@ -1,4 +1,3 @@
-using Google.Apis.Bigquery.v2.Data;
 using Google.Cloud.BigQuery.V2;
 using Xunit;
 
@@ -7,31 +6,40 @@ namespace InMemoryEmulator.BigQuery.Tests.ParserRobustness;
 /// <summary>
 /// Tests that the SQL preprocessing pipeline handles real-world SQL formatting.
 /// These go through the full SDK → HTTP handler → preprocessor → parser pipeline,
-/// because preprocessing bugs only surface when SQL arrives from real applications.
+/// and run against in-memory, GO emulator, and Cloud BigQuery via BIGQUERY_TEST_TARGET.
 /// </summary>
+[Collection(IntegrationCollection.Name)]
 public class SqlPreprocessingTests : IAsyncLifetime
 {
-    private BigQueryClient _client = null!;
+    private readonly BigQuerySession _session;
+    private ITestDatasetFixture _fixture = null!;
     private string _ds = null!;
+
+    public SqlPreprocessingTests(BigQuerySession session) => _session = session;
 
     public async ValueTask InitializeAsync()
     {
-        var bq = InMemoryBigQuery.Create();
-        _client = bq.Client;
-        _ds = $"ds_{Guid.NewGuid():N}"[..20];
-        await _client.CreateDatasetAsync(_ds);
-        await _client.ExecuteQueryAsync(
+        _fixture = TestFixtureFactory.Create(_session);
+        _ds = $"pr_{Guid.NewGuid():N}"[..25];
+        await _fixture.CreateDatasetAsync(_ds);
+        var client = await _fixture.GetClientAsync();
+        await client.ExecuteQueryAsync(
             $"CREATE TABLE `{_ds}.t` (id INT64, name STRING, created_date DATE, amount NUMERIC)", parameters: null);
-        await _client.ExecuteQueryAsync(
+        await client.ExecuteQueryAsync(
             $"INSERT INTO `{_ds}.t` (id, name, created_date, amount) VALUES (1, 'Alice', '2025-01-15', 100.5), (2, 'Bob', '2025-03-20', 200.75), (3, 'Carol', '2025-06-01', 50.0)",
             parameters: null);
     }
 
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    public async ValueTask DisposeAsync()
+    {
+        try { var c = await _fixture.GetClientAsync(); await c.DeleteDatasetAsync(_ds, new DeleteDatasetOptions { DeleteContents = true }); } catch { }
+        await _fixture.DisposeAsync();
+    }
 
     private async Task<List<BigQueryRow>> Q(string sql, IEnumerable<BigQueryParameter>? parameters = null)
     {
-        var result = await _client.ExecuteQueryAsync(sql.Replace("{ds}", _ds), parameters);
+        var client = await _fixture.GetClientAsync();
+        var result = await client.ExecuteQueryAsync(sql.Replace("{ds}", _ds), parameters);
         return result.ToList();
     }
 
@@ -87,6 +95,31 @@ public class SqlPreprocessingTests : IAsyncLifetime
         Assert.Equal(3, rows.Count);
     }
 
+    [Fact] public async Task LineComment_EmptyComment()
+    {
+        var rows = await Q("SELECT id FROM `{ds}.t` --\nORDER BY id");
+        Assert.Equal(3, rows.Count);
+    }
+
+    [Fact] public async Task LineComment_AfterTrailingComma()
+    {
+        var rows = await Q("SELECT\n  id, -- pk\n  name, -- customer\nFROM `{ds}.t`");
+        Assert.Equal(3, rows.Count);
+    }
+
+    [Fact] public async Task LineComment_BetweenUnionAll()
+    {
+        var rows = await Q(
+            "SELECT id, name FROM `{ds}.t` WHERE id = 1\n-- union with second row\nUNION ALL\nSELECT id, name FROM `{ds}.t` WHERE id = 2");
+        Assert.Equal(2, rows.Count);
+    }
+
+    [Fact] public async Task LineComment_ContainingUrl()
+    {
+        var rows = await Q("SELECT id FROM `{ds}.t` -- see https://example.com/docs#section");
+        Assert.Equal(3, rows.Count);
+    }
+
     // ===================================================================
     // Block comments (/* */)
     // ===================================================================
@@ -115,6 +148,22 @@ public class SqlPreprocessingTests : IAsyncLifetime
         Assert.Equal(3, rows.Count);
     }
 
+    [Fact] public async Task BlockComment_Empty()
+    {
+        var rows = await Q("SELECT id /**/ FROM `{ds}.t`");
+        Assert.Equal(3, rows.Count);
+    }
+
+    [Fact] public async Task BlockComment_BetweenCteDefinitions()
+    {
+        var rows = await Q(@"
+            WITH a AS (SELECT id, name FROM `{ds}.t` WHERE id = 1),
+            /* second CTE */
+            b AS (SELECT id, name FROM `{ds}.t` WHERE id = 2)
+            SELECT * FROM a UNION ALL SELECT * FROM b");
+        Assert.Equal(2, rows.Count);
+    }
+
     // ===================================================================
     // Hash comments (#) — BigQuery also supports these
     // ===================================================================
@@ -122,6 +171,12 @@ public class SqlPreprocessingTests : IAsyncLifetime
     [Fact] public async Task HashComment_EndOfLine()
     {
         var rows = await Q("SELECT id FROM `{ds}.t` # hash comment");
+        Assert.Equal(3, rows.Count);
+    }
+
+    [Fact] public async Task HashComment_AtStart()
+    {
+        var rows = await Q("# initial comment\nSELECT id FROM `{ds}.t`");
         Assert.Equal(3, rows.Count);
     }
 
@@ -147,6 +202,12 @@ public class SqlPreprocessingTests : IAsyncLifetime
         Assert.Equal(3, rows.Count);
     }
 
+    [Fact] public async Task TrailingSemicolon_WithNewlineAfter()
+    {
+        var rows = await Q("SELECT id FROM `{ds}.t`;\n");
+        Assert.Equal(3, rows.Count);
+    }
+
     [Fact] public async Task TrailingSemicolon_WithParameters()
     {
         var rows = await Q("SELECT id FROM `{ds}.t` WHERE id = @id ;",
@@ -154,8 +215,15 @@ public class SqlPreprocessingTests : IAsyncLifetime
         Assert.Single(rows);
     }
 
+    [Fact] public async Task TrailingSemicolon_MultipleSemicolons()
+    {
+        var rows = await Q("SELECT id FROM `{ds}.t`;;");
+        Assert.Equal(3, rows.Count);
+    }
+
     // ===================================================================
     // Trailing commas in SELECT (BigQuery-specific leniency)
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#select_list
     // ===================================================================
 
     [Fact] public async Task TrailingComma_BeforeFrom()
@@ -173,6 +241,18 @@ public class SqlPreprocessingTests : IAsyncLifetime
     [Fact] public async Task TrailingComma_WithWhitespace()
     {
         var rows = await Q("SELECT id, name,    FROM `{ds}.t`");
+        Assert.Equal(3, rows.Count);
+    }
+
+    [Fact] public async Task TrailingComma_SingleColumn()
+    {
+        var rows = await Q("SELECT id, FROM `{ds}.t`");
+        Assert.Equal(3, rows.Count);
+    }
+
+    [Fact] public async Task TrailingComma_WithCommentAfter()
+    {
+        var rows = await Q("SELECT\n  id,\n  name, -- last column\nFROM `{ds}.t`");
         Assert.Equal(3, rows.Count);
     }
 
@@ -204,7 +284,7 @@ public class SqlPreprocessingTests : IAsyncLifetime
         Assert.Equal(2, rows.Count);
     }
 
-    [Fact] public async Task Cte_WithComments()
+    [Fact] public async Task Cte_WithLineComments()
     {
         var rows = await Q(@"
             WITH
@@ -212,6 +292,16 @@ public class SqlPreprocessingTests : IAsyncLifetime
             a AS (SELECT id, name FROM `{ds}.t` WHERE id = 1),
             -- second CTE: get Bob
             b AS (SELECT id, name FROM `{ds}.t` WHERE id = 2)
+            SELECT * FROM a UNION ALL SELECT * FROM b");
+        Assert.Equal(2, rows.Count);
+    }
+
+    [Fact] public async Task Cte_WithBlockComments()
+    {
+        var rows = await Q(@"
+            WITH
+            /* first CTE */ a AS (SELECT id, name FROM `{ds}.t` WHERE id = 1),
+            /* second CTE */ b AS (SELECT id, name FROM `{ds}.t` WHERE id = 2)
             SELECT * FROM a UNION ALL SELECT * FROM b");
         Assert.Equal(2, rows.Count);
     }
@@ -228,8 +318,21 @@ public class SqlPreprocessingTests : IAsyncLifetime
         Assert.Equal(2, rows.Count);
     }
 
+    [Fact] public async Task Cte_ThreeCtes_MixedCommaStyle()
+    {
+        var rows = await Q(@"
+            WITH a AS (SELECT id, name FROM `{ds}.t` WHERE id = 1),
+            b AS (SELECT id, name FROM `{ds}.t` WHERE id = 2)
+            , c AS (SELECT id, name FROM `{ds}.t` WHERE id = 3)
+            SELECT a.id, a.name FROM a
+            INNER JOIN b ON b.id = b.id
+            INNER JOIN c ON c.id = c.id");
+        Assert.Single(rows);
+    }
+
     // ===================================================================
     // DATE / TIMESTAMP / DATETIME / TIME typed literals
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#typed_literals
     // ===================================================================
 
     [Fact] public async Task DateLiteral_InSelect()
@@ -250,10 +353,22 @@ public class SqlPreprocessingTests : IAsyncLifetime
         Assert.Equal("1900-01-01", v);
     }
 
+    [Fact] public async Task DateLiteral_InDateDiff()
+    {
+        var v = await S("SELECT CAST(DATE_DIFF(DATE '2025-03-01', DATE '2025-01-01', DAY) AS STRING)");
+        Assert.Equal("59", v);
+    }
+
     [Fact] public async Task TimestampLiteral_InSelect()
     {
         var v = await S("SELECT CAST(TIMESTAMP '2025-01-15 10:30:00 UTC' AS STRING)");
         Assert.Contains("2025-01-15", v);
+    }
+
+    [Fact] public async Task TimestampLiteral_WithTimezone()
+    {
+        var v = await S("SELECT CAST(TIMESTAMP '2025-06-15 14:00:00+05:30' AS STRING)");
+        Assert.NotNull(v);
     }
 
     [Fact] public async Task DatetimeLiteral_InSelect()
@@ -266,6 +381,12 @@ public class SqlPreprocessingTests : IAsyncLifetime
     {
         var v = await S("SELECT CAST(TIME '14:30:00' AS STRING)");
         Assert.Equal("14:30:00", v);
+    }
+
+    [Fact] public async Task MultipleDateLiterals_SameQuery()
+    {
+        var v = await S("SELECT CAST(DATE_DIFF(DATE '2025-12-31', DATE '2025-01-01', DAY) AS STRING)");
+        Assert.Equal("364", v);
     }
 
     // ===================================================================
@@ -296,6 +417,25 @@ public class SqlPreprocessingTests : IAsyncLifetime
             SELECT * FROM filtered ORDER BY id",
             new[] { new BigQueryParameter("start_date", BigQueryDbType.Date, new DateTime(2025, 3, 1)) });
         Assert.Equal(2, rows.Count);
+    }
+
+    [Fact] public async Task Param_Date_InCaseExpression()
+    {
+        var v = await S("SELECT CASE WHEN @d >= DATE '2025-01-01' THEN 'recent' ELSE 'old' END",
+            new[] { new BigQueryParameter("d", BigQueryDbType.Date, new DateTime(2025, 6, 1)) });
+        Assert.Equal("recent", v);
+    }
+
+    [Fact] public async Task Param_MultipleTypes_SameQuery()
+    {
+        var rows = await Q(
+            "SELECT id FROM `{ds}.t` WHERE name = @name AND created_date >= @d AND amount > @min ORDER BY id",
+            new[] {
+                new BigQueryParameter("name", BigQueryDbType.String, "Bob"),
+                new BigQueryParameter("d", BigQueryDbType.Date, new DateTime(2025, 1, 1)),
+                new BigQueryParameter("min", BigQueryDbType.Float64, 100.0),
+            });
+        Assert.Single(rows);
     }
 
     // ===================================================================
@@ -383,6 +523,25 @@ public class SqlPreprocessingTests : IAsyncLifetime
         Assert.Equal(2, rows.Count);
     }
 
+    [Fact] public async Task RealWorld_QueryFromBigQueryEditor()
+    {
+        // Typical formatting from the BigQuery web console: extra leading whitespace, trailing semicolon
+        var rows = await Q("    SELECT\n      id,\n      name\n    FROM\n      `{ds}.t`\n    WHERE\n      id = 1\n    ;");
+        Assert.Single(rows);
+    }
+
+    [Fact] public async Task RealWorld_OrmGeneratedMultilineWithParams()
+    {
+        // ORMs often generate SQL with redundant parentheses and verbose formatting
+        var rows = await Q(
+            "SELECT\n  id,\n  name\nFROM\n  `{ds}.t`\nWHERE\n  ((created_date) >= (@start))\n  AND ((amount) > (@min))\nORDER BY\n  id ASC",
+            new[] {
+                new BigQueryParameter("start", BigQueryDbType.Date, new DateTime(2025, 1, 1)),
+                new BigQueryParameter("min", BigQueryDbType.Float64, 50.0),
+            });
+        Assert.Equal(2, rows.Count);
+    }
+
     // ===================================================================
     // Whitespace edge cases
     // ===================================================================
@@ -402,6 +561,12 @@ public class SqlPreprocessingTests : IAsyncLifetime
     [Fact] public async Task Whitespace_WindowsLineEndings()
     {
         var rows = await Q("SELECT id\r\nFROM `{ds}.t`\r\nWHERE id = 1");
+        Assert.Single(rows);
+    }
+
+    [Fact] public async Task Whitespace_MixedLineEndings()
+    {
+        var rows = await Q("SELECT id\nFROM `{ds}.t`\r\nWHERE id = 1\rORDER BY id");
         Assert.Single(rows);
     }
 
@@ -425,5 +590,19 @@ public class SqlPreprocessingTests : IAsyncLifetime
     {
         var v = await S("SELECT 'hello; world'");
         Assert.Equal("hello; world", v);
+    }
+
+    [Fact] public async Task StringLiteral_ContainsHash()
+    {
+        var v = await S("SELECT 'color #FF0000'");
+        Assert.Equal("color #FF0000", v);
+    }
+
+    [Fact] public async Task BacktickIdentifier_WithHyphens()
+    {
+        // Project IDs often have hyphens: `my-project.dataset.table`
+        // This uses the real dataset — just verifies backticks with hyphens parse
+        var rows = await Q("SELECT id FROM `{ds}.t` WHERE id = 1");
+        Assert.Single(rows);
     }
 }
