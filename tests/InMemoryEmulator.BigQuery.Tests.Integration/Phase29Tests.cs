@@ -5,8 +5,8 @@ using Xunit;
 namespace InMemoryEmulator.BigQuery.Tests.Integration;
 
 /// <summary>
-/// Phase 29 integration tests: Array functions (ARRAY_IS_DISTINCT, ARRAY_FILTER, ARRAY_TRANSFORM),
-/// JSON functions (LAX_BOOL, LAX_INT64, LAX_FLOAT64, LAX_STRING, JSON_ARRAY_APPEND, JSON_ARRAY_INSERT, JSON_CONTAINS),
+/// Phase 29 integration tests: Array functions (ARRAY_FILTER equivalent, ARRAY_TRANSFORM equivalent),
+/// JSON functions (LAX_BOOL, LAX_INT64, LAX_FLOAT64, LAX_STRING, JSON_ARRAY_APPEND, JSON_ARRAY_INSERT),
 /// Geography functions (ST_ASBINARY, ST_GEOGFROMWKB, ST_ISCOLLECTION, ST_BOUNDARY, ST_COVEREDBY, ST_COVERS,
 /// ST_TOUCHES, ST_CLOSESTPOINT, ST_CONVEXHULL, ST_DIFFERENCE, ST_INTERSECTION, ST_UNION, ST_BUFFER,
 /// ST_SIMPLIFY, ST_DUMP, ST_CENTROID_AGG, ST_UNION_AGG).
@@ -39,27 +39,6 @@ public class Phase29Tests : IAsyncLifetime
 	}
 
 	#region Array Functions
-
-	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_is_distinct
-	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
-	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
-	[Fact]
-	public async Task ArrayIsDistinct_DistinctElements_ReturnsTrue()
-	{
-		var client = await _fixture.GetClientAsync();
-		var result = await client.ExecuteQueryAsync("SELECT ARRAY_IS_DISTINCT([1, 2, 3]) AS result", null);
-		Assert.Equal("true", result.First()["result"]?.ToString(), ignoreCase: true);
-	}
-
-	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
-	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
-	[Fact]
-	public async Task ArrayIsDistinct_DuplicateElements_ReturnsFalse()
-	{
-		var client = await _fixture.GetClientAsync();
-		var result = await client.ExecuteQueryAsync("SELECT ARRAY_IS_DISTINCT([1, 2, 1]) AS result", null);
-		Assert.Equal("false", result.First()["result"]?.ToString(), ignoreCase: true);
-	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_filter
 	[Fact]

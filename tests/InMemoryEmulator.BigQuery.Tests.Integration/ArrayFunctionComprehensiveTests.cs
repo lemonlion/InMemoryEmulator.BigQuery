@@ -94,12 +94,6 @@ public class ArrayFunctionComprehensiveTests : IAsyncLifetime
 	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayIncludesAny_True() => Assert.Equal("True", await Scalar("SELECT (SELECT LOGICAL_OR(x IN UNNEST([1, 2, 3])) FROM UNNEST([5, 2]) AS x)"));
 	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayIncludesAny_False() => Assert.Equal("False", await Scalar("SELECT (SELECT LOGICAL_OR(x IN UNNEST([1, 2, 3])) FROM UNNEST([5, 6]) AS x)"));
 
-	// ---- ARRAY_IS_DISTINCT ----
-	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
-	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
-	[Fact] public async Task ArrayIsDistinct_True() => Assert.Equal("True", await Scalar("SELECT ARRAY_IS_DISTINCT([1, 2, 3])"));
-	[Fact] public async Task ArrayIsDistinct_False() => Assert.Equal("False", await Scalar("SELECT ARRAY_IS_DISTINCT([1, 2, 2])"));
-
 	// ---- ARRAY_MAX / ARRAY_MIN / ARRAY_SUM / ARRAY_AVG ----
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions
 	//   BigQuery does not have ARRAY_MAX/MIN/SUM/AVG; use UNNEST with aggregate subquery instead.

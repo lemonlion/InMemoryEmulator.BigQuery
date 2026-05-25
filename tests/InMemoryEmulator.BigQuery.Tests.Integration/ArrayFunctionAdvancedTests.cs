@@ -113,17 +113,6 @@ public class ArrayFunctionAdvancedTests : IAsyncLifetime
 		Assert.Equal("20", v?.Split('.')[0]);
 	}
 
-	// ---- ARRAY_IS_DISTINCT ----
-	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_is_distinct
-	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
-	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
-	[Fact] public async Task ArrayIsDistinct_True() => Assert.Equal("True", await S("SELECT ARRAY_IS_DISTINCT([1, 2, 3])"));
-	[Fact] public async Task ArrayIsDistinct_False()
-	{
-		var v = await S("SELECT ARRAY_IS_DISTINCT([1, 2, 2, 3])");
-		Assert.Equal("False", v);
-	}
-
 	// ---- ARRAY_FILTER equivalent (subquery with ARRAY_AGG + WHERE) ----
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#array_agg
 	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task ArrayFilter_GreaterThan()

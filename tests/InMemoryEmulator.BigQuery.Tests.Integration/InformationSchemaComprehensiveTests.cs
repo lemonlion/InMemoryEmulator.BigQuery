@@ -55,6 +55,10 @@ public class InformationSchemaComprehensiveTests : IAsyncLifetime
 
 		// Create a function
 		try { await client.ExecuteQueryAsync($"CREATE FUNCTION `{_datasetId}.my_func`(x INT64) RETURNS INT64 AS (x * 2)", parameters: null); } catch { }
+
+		// Create a search index on base_table.name
+		// Ref: https://cloud.google.com/bigquery/docs/search-index
+		try { await client.ExecuteQueryAsync($"CREATE SEARCH INDEX test_idx ON `{_datasetId}.base_table` (name)", parameters: null); } catch { }
 	}
 
 	public async ValueTask DisposeAsync()
@@ -225,5 +229,62 @@ public class InformationSchemaComprehensiveTests : IAsyncLifetime
 			ORDER BY table_name
 		");
 		Assert.True(rows.Count >= 2);
+	}
+
+	// ==== INFORMATION_SCHEMA.ROUTINE_OPTIONS ====
+	// Ref: https://cloud.google.com/bigquery/docs/information-schema-routine-options
+	[Fact] public async Task RoutineOptions_EmptyForRoutineWithoutDescription()
+	{
+		// my_func was created via DDL without OPTIONS, so ROUTINE_OPTIONS should return no rows for it.
+		var rows = await Query($"SELECT specific_name, option_name, option_value FROM `{_datasetId}.INFORMATION_SCHEMA.ROUTINE_OPTIONS`");
+		var myFuncOptions = rows.Where(r => r["specific_name"]?.ToString() == "my_func").ToList();
+		Assert.Empty(myFuncOptions);
+	}
+
+	// ==== INFORMATION_SCHEMA.PARAMETERS ====
+	// Ref: https://cloud.google.com/bigquery/docs/information-schema-parameters
+	[Fact] public async Task Parameters_ReturnTypeAndInputParameter()
+	{
+		var rows = await Query($@"
+			SELECT specific_name, ordinal_position, parameter_mode, parameter_name, data_type
+			FROM `{_datasetId}.INFORMATION_SCHEMA.PARAMETERS`
+			WHERE specific_name = 'my_func'
+			ORDER BY ordinal_position");
+		Assert.Equal(2, rows.Count);
+
+		// ordinal_position=0 is the return type
+		Assert.Equal("0", rows[0]["ordinal_position"]?.ToString());
+		Assert.Null(rows[0]["parameter_mode"]);
+		Assert.Null(rows[0]["parameter_name"]);
+		Assert.Equal("INT64", rows[0]["data_type"]?.ToString());
+
+		// ordinal_position=1 is the input parameter x
+		Assert.Equal("1", rows[1]["ordinal_position"]?.ToString());
+		Assert.Equal("IN", rows[1]["parameter_mode"]?.ToString());
+		Assert.Equal("x", rows[1]["parameter_name"]?.ToString());
+		Assert.Equal("INT64", rows[1]["data_type"]?.ToString());
+	}
+
+	// ==== INFORMATION_SCHEMA.SEARCH_INDEXES ====
+	// Ref: https://cloud.google.com/bigquery/docs/information-schema-indexes
+	[Fact] public async Task SearchIndexes_ListsCreatedIndex()
+	{
+		var rows = await Query($"SELECT index_name, table_name, index_status FROM `{_datasetId}.INFORMATION_SCHEMA.SEARCH_INDEXES`");
+		var idx = rows.FirstOrDefault(r => r["index_name"]?.ToString() == "test_idx");
+		Assert.NotNull(idx);
+		Assert.Equal("base_table", idx["table_name"]?.ToString());
+		Assert.Equal("ACTIVE", idx["index_status"]?.ToString());
+	}
+
+	// ==== INFORMATION_SCHEMA.JOBS ====
+	// Ref: https://cloud.google.com/bigquery/docs/information-schema-jobs
+	[Fact] public async Task Jobs_ContainsAtLeastOneCompletedJob()
+	{
+		// Setup already ran several queries, so JOBS should have at least one entry.
+		// JOBS is project/region-scoped, not dataset-scoped.
+		var rows = await Query("SELECT job_id, state FROM INFORMATION_SCHEMA.JOBS");
+		Assert.NotEmpty(rows);
+		// All completed jobs should be in DONE state
+		Assert.Contains(rows, r => r["state"]?.ToString() == "DONE");
 	}
 }

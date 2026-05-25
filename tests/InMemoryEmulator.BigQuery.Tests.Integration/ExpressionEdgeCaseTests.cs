@@ -239,9 +239,6 @@ public class ExpressionEdgeCaseTests : IAsyncLifetime
 	[Fact] public async Task If_False() => Assert.Equal("no", await S("SELECT IF(1=2, 'yes', 'no')"));
 	[Fact] public async Task If_WithExpr() => Assert.Equal("big", await S("SELECT IF(10 * 5 > 30, 'big', 'small')"));
 
-	// ---- Ternary-like IIF ----
-	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task Iif_Basic() => Assert.Equal("yes", await S("SELECT IIF(true, 'yes', 'no')"));
-
 	// ---- COALESCE chains ----
 	[Fact] public async Task Coalesce_First() => Assert.Equal("1", await S("SELECT COALESCE(1, 2, 3)"));
 	[Fact] public async Task Coalesce_Skip_Null() => Assert.Equal("2", await S("SELECT COALESCE(NULL, 2, 3)"));

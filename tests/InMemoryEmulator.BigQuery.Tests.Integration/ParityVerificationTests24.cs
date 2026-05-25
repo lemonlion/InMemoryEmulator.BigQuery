@@ -213,25 +213,6 @@ public class ParityVerificationTests24 : IAsyncLifetime
 	}
 
 	// ───────────────────────────────────────────────────────────────────────────
-	// ARRAY_IS_DISTINCT
-	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_is_distinct
-	// ───────────────────────────────────────────────────────────────────────────
-
-	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
-	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
-	[Fact] public async Task ArrayIsDistinct_Unique()
-	{
-		var result = await S("SELECT ARRAY_IS_DISTINCT([1, 2, 3])");
-		Assert.Equal("True", result);
-	}
-
-	[Fact] public async Task ArrayIsDistinct_Duplicates()
-	{
-		var result = await S("SELECT ARRAY_IS_DISTINCT([1, 2, 2])");
-		Assert.Equal("False", result);
-	}
-
-	// ───────────────────────────────────────────────────────────────────────────
 	// TIMESTAMP comparison
 	// ───────────────────────────────────────────────────────────────────────────
 

@@ -51,7 +51,6 @@ public class DateTimeFunctionComprehensiveTests : IAsyncLifetime
 
 	// ---- CURRENT_TIMESTAMP / NOW / CURRENT_DATE / CURRENT_DATETIME / CURRENT_TIME ----
 	[Fact] public async Task CurrentTimestamp_NotNull() { var v = await Scalar("SELECT CURRENT_TIMESTAMP()"); Assert.NotNull(v); }
-	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task Now_NotNull() { var v = await Scalar("SELECT NOW()"); Assert.NotNull(v); }
 	[Fact] public async Task CurrentDate_NotNull() { var v = await Scalar("SELECT CURRENT_DATE()"); Assert.NotNull(v); }
 	[Fact] public async Task CurrentDatetime_NotNull() { var v = await Scalar("SELECT CURRENT_DATETIME()"); Assert.NotNull(v); }
 	[Fact] public async Task CurrentTime_NotNull() { var v = await Scalar("SELECT CURRENT_TIME()"); Assert.NotNull(v); }

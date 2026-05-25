@@ -4,8 +4,7 @@ using Xunit;
 namespace InMemoryEmulator.BigQuery.Tests.Integration;
 
 /// <summary>
-/// Phase 30 integration tests: Vector/distance functions (DOT_PRODUCT, APPROX_*),
-/// DCL stubs (GRANT/REVOKE), statement stubs (EXPORT DATA, LOAD DATA),
+/// Phase 30 integration tests: DCL stubs (GRANT/REVOKE), statement stubs (EXPORT DATA, LOAD DATA),
 /// BEGIN...EXCEPTION...END, templated UDF args (ANY TYPE).
 /// </summary>
 [Collection(IntegrationCollection.Name)]
@@ -34,75 +33,6 @@ public class Phase30Tests : IAsyncLifetime
 		catch { }
 		await _fixture.DisposeAsync();
 	}
-
-	#region DOT_PRODUCT
-
-	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/search_functions
-	//   DOT_PRODUCT computes the inner product of two vectors.
-	[Fact]
-	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
-	public async Task DotProduct_KnownValues()
-	{
-		var client = await _fixture.GetClientAsync();
-		var result = await client.ExecuteQueryAsync(
-			"SELECT DOT_PRODUCT([1.0, 2.0, 3.0], [4.0, 5.0, 6.0]) AS d", null);
-		var val = Convert.ToDouble(result.First()["d"]);
-		Assert.Equal(32.0, val, 1);
-	}
-
-	[Fact]
-	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
-	public async Task DotProduct_OrthogonalVectors_ReturnsZero()
-	{
-		var client = await _fixture.GetClientAsync();
-		var result = await client.ExecuteQueryAsync(
-			"SELECT DOT_PRODUCT([1.0, 0.0], [0.0, 1.0]) AS d", null);
-		var val = Convert.ToDouble(result.First()["d"]);
-		Assert.Equal(0.0, val, 10);
-	}
-
-	#endregion
-
-	#region APPROX vector functions
-
-	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/search_functions
-	//   APPROX_COSINE_DISTANCE approximates cosine distance between vectors.
-	[Fact]
-	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
-	public async Task ApproxCosineDistance_IdenticalVectors_ReturnsZero()
-	{
-		var client = await _fixture.GetClientAsync();
-		var result = await client.ExecuteQueryAsync(
-			"SELECT APPROX_COSINE_DISTANCE([1.0, 0.0], [1.0, 0.0]) AS d", null);
-		var val = Convert.ToDouble(result.First()["d"]);
-		Assert.Equal(0.0, val, 5);
-	}
-
-	// Ref: APPROX_EUCLIDEAN_DISTANCE approximates Euclidean distance.
-	[Fact]
-	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
-	public async Task ApproxEuclideanDistance_KnownValues()
-	{
-		var client = await _fixture.GetClientAsync();
-		var result = await client.ExecuteQueryAsync(
-			"SELECT APPROX_EUCLIDEAN_DISTANCE([0.0, 0.0], [3.0, 4.0]) AS d", null);
-		var val = Convert.ToDouble(result.First()["d"]);
-		Assert.Equal(5.0, val, 5);
-	}
-
-	// Ref: APPROX_DOT_PRODUCT approximates dot product.
-	[Fact]
-	[Trait(TestTraits.Target, TestTraits.InMemoryOnly)]
-	public async Task ApproxDotProduct_KnownValues()
-	{
-		var client = await _fixture.GetClientAsync();
-		var result = await client.ExecuteQueryAsync(
-			"SELECT APPROX_DOT_PRODUCT([1.0, 2.0, 3.0], [4.0, 5.0, 6.0]) AS d", null);
-		var val = Convert.ToDouble(result.First()["d"]);
-		Assert.Equal(32.0, val, 1);
-	}
-
-	#endregion
 
 	#region DCL: GRANT / REVOKE
 

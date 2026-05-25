@@ -42,6 +42,9 @@ public InMemoryBigQueryResult Execute(string sql)
 {
 // Phase 27: Detect stub DDL patterns before parsing â€” these have complex syntax
 // that the parser doesn't handle, but we support them as no-ops for Go emulator parity.
+if (TryExecuteSearchIndexDdl(sql, out var siResult))
+	return siResult;
+
 if (IsStubDdl(sql))
 	return EmptyResult();
 
@@ -84,6 +87,58 @@ private static bool IsStubDdl(string sql)
 {
 	foreach (var pattern in StubDdlPatterns)
 		if (pattern.IsMatch(sql)) return true;
+	return false;
+}
+
+private bool TryExecuteSearchIndexDdl(string sql, out InMemoryBigQueryResult result)
+{
+	result = EmptyResult();
+	var trimmed = sql.Trim();
+	var upper = trimmed.ToUpperInvariant();
+	if (upper.StartsWith("CREATE SEARCH INDEX"))
+	{
+		var normalized = Regex.Replace(trimmed, "\\s+", " ");
+		var onIdx = normalized.IndexOf(" ON ", StringComparison.OrdinalIgnoreCase);
+		var parenIdx = normalized.IndexOf('(', onIdx >= 0 ? onIdx : 0);
+		if (onIdx > 0 && parenIdx > onIdx)
+		{
+			var beforeOn = normalized[..onIdx].Trim();
+			var indexName = beforeOn.Split(' ').Last().Trim('`');
+			var tablePart = normalized[(onIdx + 4)..parenIdx].Trim().Trim('`');
+			// Extract dataset from qualified table reference (e.g., "dataset.table" or "project.dataset.table")
+			var tableParts = tablePart.Split('.');
+			var tableName = tableParts.Last();
+			var dsId = tableParts.Length >= 2 ? tableParts[^2] : _defaultDatasetId;
+			if (dsId is not null && _store.Datasets.TryGetValue(dsId, out var ds))
+			{
+				var analyzer = "LOG_ANALYZER";
+				var optMatch = Regex.Match(normalized, "analyzer\\s*=\\s*'(\\w+)'", RegexOptions.IgnoreCase);
+				if (optMatch.Success) analyzer = optMatch.Groups[1].Value;
+				ds.SearchIndexes[indexName] = new InMemorySearchIndex(
+					indexName, tableName, trimmed.TrimEnd(';').Trim(), analyzer);
+			}
+		}
+		return true;
+	}
+	if (upper.StartsWith("DROP SEARCH INDEX"))
+	{
+		var normalized = Regex.Replace(trimmed, "\\s+", " ");
+		var onIdx = normalized.IndexOf(" ON ", StringComparison.OrdinalIgnoreCase);
+		if (onIdx > 0)
+		{
+			var beforeOn = normalized[..onIdx].Trim();
+			var indexName = beforeOn.Split(' ').Last().Trim('`');
+			// Extract dataset from qualified table reference after ON
+			var tablePart = normalized[(onIdx + 4)..].Trim().TrimEnd(';').Trim().Trim('`');
+			var tableParts = tablePart.Split('.');
+			var dsId = tableParts.Length >= 2 ? tableParts[^2] : _defaultDatasetId;
+			if (dsId is not null && _store.Datasets.TryGetValue(dsId, out var ds))
+			{
+				ds.SearchIndexes.TryRemove(indexName, out _);
+			}
+		}
+		return true;
+	}
 	return false;
 }
 
@@ -757,6 +812,33 @@ if (tableName.EndsWith("SCHEMATA", StringComparison.OrdinalIgnoreCase))
 	}, alias)).ToList();
 }
 
+// Ref: https://cloud.google.com/bigquery/docs/information-schema-jobs
+if (tableName.EndsWith("JOBS", StringComparison.OrdinalIgnoreCase))
+{
+	return _store.Jobs.Values.Select(j =>
+	{
+		var jobType = j.LoadConfig is not null ? "LOAD"
+			: j.ExtractConfig is not null ? "EXTRACT"
+			: "QUERY";
+		return new RowContext(new Dictionary<string, object?>
+		{
+			["job_id"] = j.JobId,
+			["project_id"] = j.ProjectId,
+			["user_email"] = (object?)null,
+			["creation_time"] = j.CreationTime.UtcDateTime.ToString("o"),
+			["start_time"] = j.StartTime.UtcDateTime.ToString("o"),
+			["end_time"] = j.EndTime.UtcDateTime.ToString("o"),
+			["job_type"] = jobType,
+			["statement_type"] = j.StatementType,
+			["state"] = j.State,
+			["query"] = j.Query,
+			["total_bytes_processed"] = j.TotalBytesProcessed,
+			["priority"] = "INTERACTIVE",
+			["total_slot_ms"] = 0L,
+		}, alias);
+	}).ToList();
+}
+
 if (dsId is null || !_store.Datasets.TryGetValue(dsId, out var ds)) return [];
 
 if (tableName.EndsWith("TABLES", StringComparison.OrdinalIgnoreCase))
@@ -817,6 +899,54 @@ return ds.Routines.Values.Select(r => new RowContext(new Dictionary<string, obje
 ["created"] = r.CreationTime,
 ["last_altered"] = r.CreationTime,
 }, alias)).ToList();
+}
+// Ref: https://cloud.google.com/bigquery/docs/information-schema-routine-options
+if (tableName.EndsWith("ROUTINE_OPTIONS", StringComparison.OrdinalIgnoreCase))
+{
+var rows = new List<RowContext>();
+foreach (var r in ds.Routines.Values)
+{
+	if (r.Description is not null)
+		rows.Add(MakeRoutineOptionRow(dsId, r.RoutineId, "description", "STRING",
+			"\"" + r.Description + "\"", alias));
+}
+return rows;
+}
+// Ref: https://cloud.google.com/bigquery/docs/information-schema-parameters
+if (tableName.EndsWith("PARAMETERS", StringComparison.OrdinalIgnoreCase))
+{
+var rows = new List<RowContext>();
+foreach (var r in ds.Routines.Values)
+{
+	if (r.ReturnType is not null)
+	{
+		rows.Add(new RowContext(new Dictionary<string, object?>
+		{
+			["specific_catalog"] = _store.ProjectId,
+			["specific_schema"] = dsId,
+			["specific_name"] = r.RoutineId,
+			["ordinal_position"] = 0L,
+			["parameter_mode"] = (object?)null,
+			["parameter_name"] = (object?)null,
+			["data_type"] = r.ReturnType,
+		}, alias));
+	}
+	for (int i = 0; i < r.Parameters.Count; i++)
+	{
+		var (name, type) = r.Parameters[i];
+		rows.Add(new RowContext(new Dictionary<string, object?>
+		{
+			["specific_catalog"] = _store.ProjectId,
+			["specific_schema"] = dsId,
+			["specific_name"] = r.RoutineId,
+			["ordinal_position"] = (long)(i + 1),
+			["parameter_mode"] = "IN",
+			["parameter_name"] = name,
+			["data_type"] = type,
+		}, alias));
+	}
+}
+return rows;
 }
 // Ref: https://cloud.google.com/bigquery/docs/information-schema-views
 //   "The INFORMATION_SCHEMA.VIEWS view contains metadata about views."
@@ -908,6 +1038,21 @@ rows.Add(new RowContext(new Dictionary<string, object?>
 }
 return rows;
 }
+// Ref: https://cloud.google.com/bigquery/docs/information-schema-indexes
+if (tableName.EndsWith("SEARCH_INDEXES", StringComparison.OrdinalIgnoreCase))
+{
+return ds.SearchIndexes.Values.Select(idx => new RowContext(new Dictionary<string, object?>
+{
+	["index_catalog"] = _store.ProjectId,
+	["index_schema"] = dsId,
+	["table_name"] = idx.TableName,
+	["index_name"] = idx.IndexName,
+	["ddl"] = idx.Ddl,
+	["coverage_percentage"] = 100L,
+	["index_status"] = "ACTIVE",
+	["analyzer"] = idx.Analyzer,
+}, alias)).ToList();
+}
 return [];
 }
 
@@ -919,6 +1064,20 @@ return new RowContext(new Dictionary<string, object?>
 ["table_catalog"] = _store.ProjectId,
 ["table_schema"] = dsId,
 ["table_name"] = tableId,
+["option_name"] = optionName,
+["option_type"] = optionType,
+["option_value"] = optionValue,
+}, alias);
+}
+
+private RowContext MakeRoutineOptionRow(string dsId, string routineId,
+string optionName, string optionType, string optionValue, string alias)
+{
+return new RowContext(new Dictionary<string, object?>
+{
+["specific_catalog"] = _store.ProjectId,
+["specific_schema"] = dsId,
+["specific_name"] = routineId,
 ["option_name"] = optionName,
 ["option_type"] = optionType,
 ["option_value"] = optionValue,
@@ -2527,7 +2686,7 @@ return name switch
 //   "Result type is the common supertype of both arguments."
 "IFNULL" => CoerceToCommonType(Evaluate(args[0], row) ?? Evaluate(args[1], row), args, row),
 "NULLIF" => EvaluateNullIf(args, row),
-"IIF" => CoerceToCommonType(IsTruthy(Evaluate(args[0], row)) ? Evaluate(args[1], row) : (args.Count > 2 ? Evaluate(args[2], row) : null), args.Skip(1).ToList(), row),
+// IIF is not a BigQuery function (T-SQL). Use IF() instead.
 
 // Math functions
 "ABS" => EvaluateAbs(args, row),
@@ -2589,7 +2748,7 @@ return name switch
 "RANGE_BUCKET" => EvaluateRangeBucket(args, row),
 
 // Date/Time functions
-"CURRENT_TIMESTAMP" or "NOW" => DateTimeOffset.UtcNow,
+"CURRENT_TIMESTAMP" => DateTimeOffset.UtcNow,
 "CURRENT_DATE" => DateOnly.FromDateTime(DateTime.UtcNow),
 "CURRENT_DATETIME" => DateTime.UtcNow,
 "DATE" => EvaluateDateConstructor(args, row),
@@ -2670,19 +2829,9 @@ return name switch
 "GENERATE_DATE_ARRAY" => EvaluateGenerateDateArray(args, row),
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#generate_timestamp_array
 "GENERATE_TIMESTAMP_ARRAY" => EvaluateGenerateTimestampArray(args, row),
-"ARRAY_INCLUDES" => EvaluateArrayIncludes(args, row),
-"ARRAY_INCLUDES_ALL" => EvaluateArrayIncludesAll(args, row),
-"ARRAY_INCLUDES_ANY" => EvaluateArrayIncludesAny(args, row),
-"ARRAY_MAX" => EvaluateArrayMax(args, row),
-"ARRAY_MIN" => EvaluateArrayMin(args, row),
-"ARRAY_SUM" => EvaluateArraySum(args, row),
-"ARRAY_AVG" => EvaluateArrayAvg(args, row),
-// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_is_distinct
-"ARRAY_IS_DISTINCT" => EvaluateArrayIsDistinct(args, row),
-// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_filter
-"ARRAY_FILTER" => EvaluateArrayFilter(fn.Args, row),
-// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_transform
-"ARRAY_TRANSFORM" => EvaluateArrayTransform(fn.Args, row),
+// ARRAY_INCLUDES, ARRAY_INCLUDES_ALL, ARRAY_INCLUDES_ANY, ARRAY_MAX, ARRAY_MIN,
+// ARRAY_SUM, ARRAY_AVG, ARRAY_IS_DISTINCT, ARRAY_FILTER, ARRAY_TRANSFORM
+// are NOT BigQuery functions — removed to maintain parity with real BigQuery.
 
 // Conversion functions
 "CAST" => args.Count >= 2 ? CastValue(Evaluate(args[0], row), Evaluate(args[1], row)?.ToString() ?? "STRING", false) : null,
@@ -2749,8 +2898,7 @@ return name switch
 "JSON_ARRAY_APPEND" => EvaluateJsonArrayAppend(args, row),
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_array_insert
 "JSON_ARRAY_INSERT" => EvaluateJsonArrayInsert(args, row),
-// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_contains
-"JSON_CONTAINS" => EvaluateJsonContains(args, row),
+// JSON_CONTAINS is NOT a BigQuery function — removed to maintain parity.
 
 // Regex additional functions
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions
@@ -2803,8 +2951,8 @@ return name switch
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#euclidean_distance
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/search_functions#vector_search
 //   APPROX_* variants use approximate algorithms in real BigQuery; in the emulator they are exact.
-"COSINE_DISTANCE" or "EUCLIDEAN_DISTANCE" or "DOT_PRODUCT"
-or "APPROX_COSINE_DISTANCE" or "APPROX_EUCLIDEAN_DISTANCE" or "APPROX_DOT_PRODUCT"
+"COSINE_DISTANCE" or "EUCLIDEAN_DISTANCE"
+or "APPROX_COSINE_DISTANCE" or "APPROX_EUCLIDEAN_DISTANCE"
     => EvaluateVectorDistanceFunction(name, args, row),
 
 // Geography functions
@@ -4916,133 +5064,10 @@ return part.ToUpperInvariant() switch
 };
 }
 
-// ARRAY_INCLUDES returns TRUE if the array contains the target value.
-private object? EvaluateArrayIncludes(IReadOnlyList<SqlExpression> args, RowContext row)
-{
-var val = Evaluate(args[0], row);
-var target = Evaluate(args[1], row);
-if (val is null) return null;
-if (val is IList<object?> list)
-    return list.Any(v => Equals(v, target) || (v?.ToString() == target?.ToString()));
-return false;
-}
-
-// ARRAY_INCLUDES_ALL returns TRUE if every element of the second array is in the first.
-private object? EvaluateArrayIncludesAll(IReadOnlyList<SqlExpression> args, RowContext row)
-{
-var val = Evaluate(args[0], row);
-var targets = Evaluate(args[1], row);
-if (val is null || targets is null) return null;
-if (val is not IList<object?> list || targets is not IList<object?> targetList) return false;
-var strSet = list.Select(v => v?.ToString()).ToHashSet();
-return targetList.All(t => strSet.Contains(t?.ToString()));
-}
-
-// ARRAY_INCLUDES_ANY returns TRUE if any element of the second array is in the first.
-private object? EvaluateArrayIncludesAny(IReadOnlyList<SqlExpression> args, RowContext row)
-{
-var val = Evaluate(args[0], row);
-var targets = Evaluate(args[1], row);
-if (val is null || targets is null) return null;
-if (val is not IList<object?> list || targets is not IList<object?> targetList) return false;
-var strSet = list.Select(v => v?.ToString()).ToHashSet();
-return targetList.Any(t => strSet.Contains(t?.ToString()));
-}
-
-// ARRAY_MAX returns the maximum value from an array.
-private object? EvaluateArrayMax(IReadOnlyList<SqlExpression> args, RowContext row)
-{
-var val = Evaluate(args[0], row);
-if (val is null) return null;
-if (val is not IList<object?> list) return null;
-var nonNull = list.Where(v => v is not null).ToList();
-if (nonNull.Count == 0) return null;
-return nonNull.Aggregate((a, b) => CompareRaw(a!, b!) > 0 ? a : b);
-}
-
-// ARRAY_MIN returns the minimum value from an array.
-private object? EvaluateArrayMin(IReadOnlyList<SqlExpression> args, RowContext row)
-{
-var val = Evaluate(args[0], row);
-if (val is null) return null;
-if (val is not IList<object?> list) return null;
-var nonNull = list.Where(v => v is not null).ToList();
-if (nonNull.Count == 0) return null;
-return nonNull.Aggregate((a, b) => CompareRaw(a!, b!) < 0 ? a : b);
-}
-
-// ARRAY_SUM returns the sum of values in an array.
-private object? EvaluateArraySum(IReadOnlyList<SqlExpression> args, RowContext row)
-{
-var val = Evaluate(args[0], row);
-if (val is null) return null;
-if (val is not IList<object?> list) return null;
-return SumValues(list.ToList());
-}
-
-// ARRAY_AVG returns the average of values in an array.
-private object? EvaluateArrayAvg(IReadOnlyList<SqlExpression> args, RowContext row)
-{
-var val = Evaluate(args[0], row);
-if (val is null) return null;
-if (val is not IList<object?> list) return null;
-return AvgValues(list.ToList());
-}
-
-// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_is_distinct
-//   "Returns TRUE if the array contains no repeated elements."
-private object? EvaluateArrayIsDistinct(IReadOnlyList<SqlExpression> args, RowContext row)
-{
-    var val = Evaluate(args[0], row);
-    if (val is null) return null;
-    if (val is not IList<object?> list) return null;
-    var seen = new HashSet<string>();
-    foreach (var item in list)
-    {
-        var key = item is null ? "\0NULL\0" : ConvertToString(item) ?? "\0NULL\0";
-        if (!seen.Add(key)) return false;
-    }
-    return true;
-}
-
-// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_filter
-//   "Returns an array containing elements from the input array for which lambda returns TRUE."
-private object? EvaluateArrayFilter(IReadOnlyList<SqlExpression> rawArgs, RowContext row)
-{
-    var arrVal = Evaluate(rawArgs[0], row);
-    if (arrVal is null) return null;
-    if (arrVal is not IList<object?> list) return null;
-    if (rawArgs.Count < 2 || rawArgs[1] is not LambdaExpr lambda)
-        throw new InvalidOperationException("ARRAY_FILTER requires a lambda expression as second argument");
-    var result = new List<object?>();
-    foreach (var item in list)
-    {
-        var fields = new Dictionary<string, object?>(row.Fields) { [lambda.ParamName] = item };
-        var lambdaRow = new RowContext(fields, row.Alias);
-        var cond = Evaluate(lambda.Body, lambdaRow);
-        if (IsTruthy(cond)) result.Add(item);
-    }
-    return result;
-}
-
-// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_transform
-//   "Returns an array with the results of applying the lambda to each element."
-private object? EvaluateArrayTransform(IReadOnlyList<SqlExpression> rawArgs, RowContext row)
-{
-    var arrVal = Evaluate(rawArgs[0], row);
-    if (arrVal is null) return null;
-    if (arrVal is not IList<object?> list) return null;
-    if (rawArgs.Count < 2 || rawArgs[1] is not LambdaExpr lambda)
-        throw new InvalidOperationException("ARRAY_TRANSFORM requires a lambda expression as second argument");
-    var result = new List<object?>();
-    foreach (var item in list)
-    {
-        var fields = new Dictionary<string, object?>(row.Fields) { [lambda.ParamName] = item };
-        var lambdaRow = new RowContext(fields, row.Alias);
-        result.Add(Evaluate(lambda.Body, lambdaRow));
-    }
-    return result;
-}
+// Removed: ARRAY_INCLUDES, ARRAY_INCLUDES_ALL, ARRAY_INCLUDES_ANY, ARRAY_MAX,
+// ARRAY_MIN, ARRAY_SUM, ARRAY_AVG, ARRAY_IS_DISTINCT, ARRAY_FILTER, ARRAY_TRANSFORM
+// — none of these are BigQuery functions. Supporting them would let tests pass locally
+// but fail against real BigQuery.
 
 private object? EvaluateMd5(IReadOnlyList<SqlExpression> args, RowContext row)
 {
@@ -6072,44 +6097,7 @@ private object? EvaluateJsonArrayInsert(IReadOnlyList<SqlExpression> args, RowCo
     return System.Text.Encoding.UTF8.GetString(ms.ToArray());
 }
 
-// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_contains
-//   "Returns TRUE if a JSON value contains a specific JSON value."
-private object? EvaluateJsonContains(IReadOnlyList<SqlExpression> args, RowContext row)
-{
-    var jsonVal = Evaluate(args[0], row);
-    if (jsonVal is null) return null;
-    var searchVal = Evaluate(args[1], row);
-    if (searchVal is null) return null;
-    var jsonStr = jsonVal.ToString()!;
-    var searchStr = searchVal.ToString()!;
-
-    try
-    {
-        using var doc = System.Text.Json.JsonDocument.Parse(jsonStr);
-        using var searchDoc = System.Text.Json.JsonDocument.Parse(searchStr);
-        return JsonContainsValue(doc.RootElement, searchDoc.RootElement);
-    }
-    catch
-    {
-        return false;
-    }
-}
-
-private static bool JsonContainsValue(System.Text.Json.JsonElement container, System.Text.Json.JsonElement target)
-{
-    if (JsonElementEquals(container, target)) return true;
-    if (container.ValueKind == System.Text.Json.JsonValueKind.Array)
-    {
-        foreach (var el in container.EnumerateArray())
-            if (JsonContainsValue(el, target)) return true;
-    }
-    else if (container.ValueKind == System.Text.Json.JsonValueKind.Object)
-    {
-        foreach (var prop in container.EnumerateObject())
-            if (JsonContainsValue(prop.Value, target)) return true;
-    }
-    return false;
-}
+// Removed: JSON_CONTAINS is NOT a BigQuery function.
 
 private static bool JsonElementEquals(System.Text.Json.JsonElement a, System.Text.Json.JsonElement b)
 {
@@ -9034,9 +9022,7 @@ private object? EvaluateVectorDistanceFunction(string name, IReadOnlyList<SqlExp
         //   "Computes the Euclidean distance between two vectors."
         //   euclidean_distance = sqrt(sum((a[i] - b[i])^2))
         "EUCLIDEAN_DISTANCE" or "APPROX_EUCLIDEAN_DISTANCE" => (object)EuclideanDistance(vec1, vec2),
-        // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/search_functions#vector_search
-        //   DOT_PRODUCT computes the inner product of two vectors: sum(v1[i] * v2[i]).
-        "DOT_PRODUCT" or "APPROX_DOT_PRODUCT" => (object)DotProduct(vec1, vec2),
+        // DOT_PRODUCT is NOT a BigQuery function — removed to maintain parity.
         _ => null,
     };
 
@@ -9073,16 +9059,6 @@ private static double EuclideanDistance(double[] a, double[] b)
         sum += diff * diff;
     }
     return Math.Sqrt(sum);
-}
-
-// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/search_functions#vector_search
-//   DOT_PRODUCT computes the inner product (dot product) of two vectors.
-private static double DotProduct(double[] a, double[] b)
-{
-    double sum = 0;
-    for (var i = 0; i < a.Length; i++)
-        sum += a[i] * b[i];
-    return sum;
 }
 
 private static double[]? ToDoubleArray(object? value)

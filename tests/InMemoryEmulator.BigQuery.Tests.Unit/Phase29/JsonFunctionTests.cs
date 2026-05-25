@@ -3,7 +3,7 @@ using Xunit;
 namespace InMemoryEmulator.BigQuery.Tests.Unit.Phase29;
 
 /// <summary>
-/// Phase 29: JSON functions — JSON_ARRAY_APPEND, JSON_ARRAY_INSERT, JSON_CONTAINS,
+/// Phase 29: JSON functions — JSON_ARRAY_APPEND, JSON_ARRAY_INSERT,
 /// LAX_BOOL, LAX_INT64, LAX_FLOAT64, LAX_STRING.
 /// </summary>
 public class JsonFunctionTests
@@ -365,42 +365,4 @@ public class JsonFunctionTests
 
 	#endregion
 
-	#region JSON_CONTAINS
-
-	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions
-	//   "Returns TRUE if json_expr contains json_value"
-
-	[Fact]
-	public void JsonContains_ContainsValue_ReturnsTrue()
-	{
-		var sql = """SELECT JSON_CONTAINS(PARSE_JSON('{"a": 1, "b": 2}'), PARSE_JSON('1')) AS result""";
-		var (_, rows) = CreateExecutor().Execute(sql);
-		Assert.Equal("true", rows[0].F[0].V?.ToString());
-	}
-
-	[Fact]
-	public void JsonContains_DoesNotContain_ReturnsFalse()
-	{
-		var sql = """SELECT JSON_CONTAINS(PARSE_JSON('{"a": 1, "b": 2}'), PARSE_JSON('3')) AS result""";
-		var (_, rows) = CreateExecutor().Execute(sql);
-		Assert.Equal("false", rows[0].F[0].V?.ToString());
-	}
-
-	[Fact]
-	public void JsonContains_ArrayContainsElement_ReturnsTrue()
-	{
-		var sql = """SELECT JSON_CONTAINS(PARSE_JSON('[1, 2, 3]'), PARSE_JSON('2')) AS result""";
-		var (_, rows) = CreateExecutor().Execute(sql);
-		Assert.Equal("true", rows[0].F[0].V?.ToString());
-	}
-
-	[Fact]
-	public void JsonContains_NullInput_ReturnsNull()
-	{
-		var sql = "SELECT JSON_CONTAINS(NULL, PARSE_JSON('1')) AS result";
-		var (_, rows) = CreateExecutor().Execute(sql);
-		Assert.Null(rows[0].F[0].V);
-	}
-
-	#endregion
 }

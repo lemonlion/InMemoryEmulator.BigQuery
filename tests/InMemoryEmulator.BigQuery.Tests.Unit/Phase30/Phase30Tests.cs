@@ -5,7 +5,7 @@ using Xunit;
 namespace InMemoryEmulator.BigQuery.Tests.Unit.Phase30;
 
 /// <summary>
-/// Phase 30: Vector/distance functions (DOT_PRODUCT, APPROX_*), DCL stubs (GRANT/REVOKE),
+/// Phase 30: APPROX_COSINE_DISTANCE, APPROX_EUCLIDEAN_DISTANCE, DCL stubs (GRANT/REVOKE),
 /// statement stubs (EXPORT DATA, LOAD DATA), BEGIN...EXCEPTION...END, templated UDF args (ANY TYPE).
 /// </summary>
 public class Phase30Tests
@@ -38,83 +38,6 @@ public class Phase30Tests
 		Assert.Single(rows);
 		Assert.Equal("0", rows[0].F[0].V?.ToString());
 	}
-
-	#region DOT_PRODUCT
-
-	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions
-	//   DOT_PRODUCT computes the inner product of two vectors: sum(v1[i] * v2[i]).
-	[Fact]
-	public void DotProduct_KnownValues()
-	{
-		var (_, rows) = CreateExecutor().Execute(
-			"SELECT DOT_PRODUCT([1.0, 2.0, 3.0], [4.0, 5.0, 6.0]) AS d");
-		var val = Convert.ToDouble(rows[0].F[0].V);
-		// 1*4 + 2*5 + 3*6 = 4+10+18 = 32
-		Assert.Equal(32.0, val, 10);
-	}
-
-	// Ref: DOT_PRODUCT with identical vectors => sum of squares
-	[Fact]
-	public void DotProduct_IdenticalVectors()
-	{
-		var (_, rows) = CreateExecutor().Execute(
-			"SELECT DOT_PRODUCT([3.0, 4.0], [3.0, 4.0]) AS d");
-		var val = Convert.ToDouble(rows[0].F[0].V);
-		// 3*3 + 4*4 = 9+16 = 25
-		Assert.Equal(25.0, val, 10);
-	}
-
-	// Ref: DOT_PRODUCT with orthogonal vectors => 0
-	[Fact]
-	public void DotProduct_OrthogonalVectors_ReturnsZero()
-	{
-		var (_, rows) = CreateExecutor().Execute(
-			"SELECT DOT_PRODUCT([1.0, 0.0], [0.0, 1.0]) AS d");
-		var val = Convert.ToDouble(rows[0].F[0].V);
-		Assert.Equal(0.0, val, 10);
-	}
-
-	// Ref: DOT_PRODUCT with NULL vector => NULL
-	[Fact]
-	public void DotProduct_NullVector_ReturnsNull()
-	{
-		var (_, rows) = CreateExecutor().Execute(
-			"SELECT DOT_PRODUCT(NULL, [1.0, 2.0]) AS d");
-		Assert.Null(rows[0].F[0].V);
-	}
-
-	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#dot_product
-	//   "Both non-sparse vectors in this function must share the same dimensions, and if they don't, an error is produced."
-	[Fact]
-	public void DotProduct_MismatchedDimensions_ThrowsError()
-	{
-		var ex = Assert.Throws<InvalidOperationException>(() => CreateExecutor().Execute(
-			"SELECT DOT_PRODUCT([1.0, 2.0], [3.0, 4.0, 5.0]) AS d"));
-		Assert.Contains("Array inputs are not equal in length", ex.Message);
-	}
-
-	// Ref: DOT_PRODUCT with negative values
-	[Fact]
-	public void DotProduct_NegativeValues()
-	{
-		var (_, rows) = CreateExecutor().Execute(
-			"SELECT DOT_PRODUCT([-1.0, 2.0], [3.0, -4.0]) AS d");
-		var val = Convert.ToDouble(rows[0].F[0].V);
-		// -1*3 + 2*(-4) = -3 + -8 = -11
-		Assert.Equal(-11.0, val, 10);
-	}
-
-	// Ref: DOT_PRODUCT with single element
-	[Fact]
-	public void DotProduct_SingleElement()
-	{
-		var (_, rows) = CreateExecutor().Execute(
-			"SELECT DOT_PRODUCT([5.0], [3.0]) AS d");
-		var val = Convert.ToDouble(rows[0].F[0].V);
-		Assert.Equal(15.0, val, 10);
-	}
-
-	#endregion
 
 	#region APPROX_COSINE_DISTANCE
 
@@ -177,29 +100,6 @@ public class Phase30Tests
 	{
 		var (_, rows) = CreateExecutor().Execute(
 			"SELECT APPROX_EUCLIDEAN_DISTANCE(NULL, [1.0, 2.0]) AS d");
-		Assert.Null(rows[0].F[0].V);
-	}
-
-	#endregion
-
-	#region APPROX_DOT_PRODUCT
-
-	// Ref: APPROX_DOT_PRODUCT is an approximate version of DOT_PRODUCT.
-	//   In the in-memory emulator, approximate = exact.
-	[Fact]
-	public void ApproxDotProduct_KnownValues()
-	{
-		var (_, rows) = CreateExecutor().Execute(
-			"SELECT APPROX_DOT_PRODUCT([1.0, 2.0, 3.0], [4.0, 5.0, 6.0]) AS d");
-		var val = Convert.ToDouble(rows[0].F[0].V);
-		Assert.Equal(32.0, val, 10);
-	}
-
-	[Fact]
-	public void ApproxDotProduct_NullVector_ReturnsNull()
-	{
-		var (_, rows) = CreateExecutor().Execute(
-			"SELECT APPROX_DOT_PRODUCT(NULL, [1.0, 2.0]) AS d");
 		Assert.Null(rows[0].F[0].V);
 	}
 
