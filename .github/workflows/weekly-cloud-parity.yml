@@ -8,6 +8,10 @@ on:
 jobs:
   cloud-full-parity:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -16,15 +20,50 @@ jobs:
       - uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
-      # Run ALL tests (including CloudOnly) against real BigQuery
-      - run: dotnet test --configuration Release --filter "Target!=InMemoryOnly" --logger "trx;LogFileName=results.trx"
+      - name: Restore
+        run: dotnet restore tests/InMemoryEmulator.BigQuery.Tests.Integration
+      - name: Build
+        run: dotnet build tests/InMemoryEmulator.BigQuery.Tests.Integration --configuration Release --no-restore
+      - name: Determine shard test classes
+        id: shard-filter
+        run: |
+          TOTAL_SHARDS=45
+          SHARD=${{ matrix.shard }}
+
+          classes=$(dotnet test tests/InMemoryEmulator.BigQuery.Tests.Integration \
+            --configuration Release --no-build --list-tests \
+            --filter "Target!=InMemoryOnly" \
+            2>&1 | grep -oP '^\s+\K\S+' | sed 's/\.[^.]*$//' | sort -u)
+
+          filter_parts=""
+          for class in $classes; do
+            hash=$(echo -n "$class" | cksum | awk '{print $1}')
+            if [ $((hash % TOTAL_SHARDS)) -eq $SHARD ]; then
+              if [ -n "$filter_parts" ]; then
+                filter_parts="${filter_parts}|"
+              fi
+              filter_parts="${filter_parts}FullyQualifiedName~${class}"
+            fi
+          done
+
+          echo "filter=${filter_parts}" >> "$GITHUB_OUTPUT"
+          echo "Shard $SHARD: $(echo "$filter_parts" | tr '|' '\n' | wc -l) classes"
+      - name: Run tests
+        if: steps.shard-filter.outputs.filter != ''
         env:
           BIGQUERY_TEST_TARGET: cloud
           BIGQUERY_PROJECT_ID: ${{ secrets.BIGQUERY_PROJECT_ID }}
+          SHARD_FILTER: ${{ steps.shard-filter.outputs.filter }}
+        run: |
+          dotnet test tests/InMemoryEmulator.BigQuery.Tests.Integration \
+            --configuration Release --no-build \
+            --filter "(Target!=InMemoryOnly)&($SHARD_FILTER)" \
+            --logger "trx;LogFileName=results.trx" \
+            -- RunConfiguration.MaxCpuCount=2
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: weekly-cloud-parity-results
+          name: weekly-cloud-parity-shard-${{ matrix.shard }}
           path: '**/*.trx'
 
   cloud-cleanup:
@@ -39,7 +78,6 @@ jobs:
       - uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
-      # Delete test datasets older than 2 hours (safety net for leaked resources)
       - run: |
           dotnet run --project scripts/CloudCleanup -- \
             --project-id ${{ secrets.BIGQUERY_PROJECT_ID }} \
