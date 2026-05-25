@@ -576,6 +576,173 @@ public class ExecutionCorrectnessTests : IAsyncLifetime
     // This re-tests with the current code to confirm status.
     // ===================================================================
 
-    // (Bug 5 tests already exist above — Bug5_MinMaxDate_ExactReportQuery
-    //  and Bug5_MinMaxDate_SchemaType_ShouldBeDate. If these pass, Bug 5 is fixed.)
+    // ===================================================================
+    // Bug 3b (v1.0.115): SAFE_DIVIDE NUMERIC rounding off by 1 ULP for negatives
+    // Report: truncation toward zero gives -0.015119283, emulator gives -0.015119284
+    // Exact minimal reproduction from report.
+    // ===================================================================
+
+    [Fact]
+    public async Task Bug3b_SafeDiv_NegativeNumeric_TruncateTowardZero()
+    {
+        var client = await _fixture.GetClientAsync();
+        await client.ExecuteQueryAsync(
+            $"CREATE TABLE `{_ds}.rounding_test` (spend NUMERIC, visits INT64, spend_lag NUMERIC, visits_lag INT64)",
+            parameters: null);
+        await client.ExecuteQueryAsync(
+            $"INSERT INTO `{_ds}.rounding_test` (spend, visits, spend_lag, visits_lag) VALUES (48126.63, 4481, 43292.97, 3970)",
+            parameters: null);
+
+        var rows = await Q(@"
+            SELECT CAST(SAFE_DIVIDE(
+                (SAFE_DIVIDE(spend, visits) - SAFE_DIVIDE(spend_lag, visits_lag)),
+                SAFE_DIVIDE(spend_lag, visits_lag)
+            ) AS STRING) AS result
+            FROM `{ds}.rounding_test`");
+
+        // Report: Expected -0.015119283, Actual was -0.015119284
+        // BigQuery truncates toward zero, not floor
+        Assert.Equal("-0.015119283", rows[0]["result"]!.ToString());
+    }
+
+    // ===================================================================
+    // Bug 4 (v1.0.115): QUALIFY without PARTITION BY — exact reproduction
+    // Report provides exact SQL: ROW_NUMBER() OVER (ORDER BY score DESC) <= 3
+    // WITHOUT PARTITION BY. Should keep top 3 by score.
+    // ===================================================================
+
+    [Fact]
+    public async Task Bug4v115_Qualify_WithoutPartitionBy_ExactReproduction()
+    {
+        var client = await _fixture.GetClientAsync();
+        await client.ExecuteQueryAsync(
+            $"CREATE TABLE `{_ds}.qualify_nopart` (id INT64, score NUMERIC, value NUMERIC)",
+            parameters: null);
+        // Exact data from report minimal reproduction
+        await client.ExecuteQueryAsync($@"
+            INSERT INTO `{_ds}.qualify_nopart` (id, score, value) VALUES
+            (1, 0.9, 100), (2, 0.8, 200), (3, 0.7, 300),
+            (4, 0.6, 400), (5, 0.5, 500)", parameters: null);
+
+        // Exact SQL from report — WITHOUT PARTITION BY
+        var rows = await Q(@"
+            SELECT id, ROW_NUMBER() OVER (ORDER BY score DESC) AS rank, value
+            FROM `{ds}.qualify_nopart`
+            QUALIFY rank <= 3");
+
+        // Expected: rows with id 1, 2, 3 (top 3 by score DESC)
+        Assert.Equal(3, rows.Count);
+        var ids = rows.Select(r => long.Parse(r["id"]!.ToString()!)).OrderBy(x => x).ToList();
+        Assert.Equal(new List<long> { 1, 2, 3 }, ids);
+    }
+
+    [Fact]
+    public async Task Bug4v115_Qualify_WithPartitionBy_WorksCorrectly()
+    {
+        // Report says: WITH PARTITION BY works. Verify the contrast.
+        var client = await _fixture.GetClientAsync();
+        try { await client.ExecuteQueryAsync(
+            $"CREATE TABLE `{_ds}.qualify_part` (id INT64, score NUMERIC, value NUMERIC)",
+            parameters: null); } catch { }
+        await client.ExecuteQueryAsync($@"
+            INSERT INTO `{_ds}.qualify_part` (id, score, value) VALUES
+            (1, 0.9, 100), (2, 0.8, 200), (3, 0.7, 300),
+            (4, 0.6, 400), (5, 0.5, 500)", parameters: null);
+
+        // WITH PARTITION BY 1 — report says this works
+        var rows = await Q(@"
+            SELECT id, ROW_NUMBER() OVER (PARTITION BY 1 ORDER BY score DESC) AS rank, value
+            FROM `{ds}.qualify_part`
+            QUALIFY rank <= 3");
+
+        Assert.Equal(3, rows.Count);
+        var ids = rows.Select(r => long.Parse(r["id"]!.ToString()!)).OrderBy(x => x).ToList();
+        Assert.Equal(new List<long> { 1, 2, 3 }, ids);
+    }
+
+    // ===================================================================
+    // Bug 5 (v1.0.115): SELECT DISTINCT + ORDER BY on DATE drops rows
+    // Exact minimal reproduction from report.
+    // Expected: 11 rows. Actual: missing 2025-09-15 and 2025-09-22.
+    // ===================================================================
+
+    [Fact]
+    public async Task Bug5v115_SelectDistinct_OrderByDate_DoesNotDropRows()
+    {
+        var client = await _fixture.GetClientAsync();
+        await client.ExecuteQueryAsync($@"
+            CREATE TABLE `{_ds}.dates_test` (
+                report_date DATE, category STRING, location_id STRING, customer_id STRING
+            )", parameters: null);
+
+        // Exact data from report
+        await client.ExecuteQueryAsync($@"
+            INSERT INTO `{_ds}.dates_test` (report_date, category, location_id, customer_id) VALUES
+            ('2025-09-15', 'Weekly', 'loc1', 'cust1'),
+            ('2025-09-22', 'Weekly', 'loc1', 'cust1'),
+            ('2025-09-29', 'Weekly', 'loc1', 'cust1'),
+            ('2025-10-06', 'Weekly', 'loc1', 'cust1'),
+            ('2025-10-13', 'Weekly', 'loc1', 'cust1'),
+            ('2025-10-20', 'Weekly', 'loc1', 'cust1'),
+            ('2025-10-27', 'Weekly', 'loc1', 'cust1'),
+            ('2025-11-03', 'Weekly', 'loc1', 'cust1'),
+            ('2025-11-10', 'Weekly', 'loc1', 'cust1'),
+            ('2025-09-01', 'Monthly', 'loc1', 'cust1'),
+            ('2025-09-01', 'Monthly', 'loc1', 'cust1'),
+            ('2025-10-01', 'Monthly', 'loc1', 'cust1'),
+            ('2025-10-01', 'Monthly', 'loc1', 'cust1')", parameters: null);
+
+        // Exact SQL from report
+        var rows = await Q(@"
+            SELECT DISTINCT report_date, category, location_id, customer_id
+            FROM `{ds}.dates_test`
+            WHERE location_id = 'loc1'
+            ORDER BY report_date DESC");
+
+        // Expected: 11 rows (9 weekly + 2 monthly, duplicates collapsed)
+        Assert.Equal(11, rows.Count);
+
+        // Verify all weekly dates present by casting to STRING in the query
+        var dateRows = await Q(@"
+            SELECT DISTINCT CAST(report_date AS STRING) AS d, category, location_id, customer_id
+            FROM `{ds}.dates_test`
+            WHERE location_id = 'loc1'
+            ORDER BY d DESC");
+        var dateStrings = dateRows.Select(r => r["d"]!.ToString()!).ToList();
+        Assert.Contains("2025-09-15", dateStrings);
+        Assert.Contains("2025-09-22", dateStrings);
+        Assert.Equal(11, dateStrings.Count);
+    }
+
+    // ===================================================================
+    // Bug 3a (v1.0.115): SAFE_DIVIDE type in CTE+QUALIFY context
+    // Report: SAFE_DIVIDE(NUMERIC, INT64) in CTE+QUALIFY returns FLOAT instead of NUMERIC
+    // ===================================================================
+
+    [Fact]
+    public async Task Bug3a_SafeDiv_InCteWithQualify_SchemaType_ShouldBeNumeric()
+    {
+        var client = await _fixture.GetClientAsync();
+        await client.ExecuteQueryAsync($@"
+            CREATE TABLE `{_ds}.cte_type_test` (id INT64, amount NUMERIC, cnt INT64, score NUMERIC)",
+            parameters: null);
+        await client.ExecuteQueryAsync($@"
+            INSERT INTO `{_ds}.cte_type_test` (id, amount, cnt, score) VALUES
+            (1, 100.50, 10, 0.9), (2, 200.75, 20, 0.8), (3, 50.25, 5, 0.7)",
+            parameters: null);
+
+        var result = await Raw(@"
+            WITH filtered AS (
+                SELECT id, amount, cnt, score,
+                       ROW_NUMBER() OVER (PARTITION BY 1 ORDER BY score DESC) AS rn
+                FROM `{ds}.cte_type_test`
+                QUALIFY rn <= 2
+            )
+            SELECT SAFE_DIVIDE(SUM(amount), SUM(cnt)) AS ratio
+            FROM filtered");
+
+        // SAFE_DIVIDE(NUMERIC, INT64) should return NUMERIC, not FLOAT
+        var field = result.Schema.Fields.First(f => f.Name == "ratio");
+        Assert.Equal("NUMERIC", field.Type);
+    }
 }

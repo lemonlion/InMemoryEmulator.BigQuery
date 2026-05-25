@@ -8815,7 +8815,9 @@ private static object? SumValues(List<object?> values)
 var nonNull = values.Where(v => v is not null).ToList();
 if (nonNull.Count == 0) return null;
 if (nonNull.All(v => v is long))
-return nonNull.Cast<long>().Sum();
+	return nonNull.Cast<long>().Sum();
+if (nonNull.Any(v => v is decimal))
+	return nonNull.Select(v => ToDecimal(v)).Sum();
 return nonNull.Select(v => ToDouble(v)).Sum();
 }
 
@@ -8823,6 +8825,8 @@ private static object? AvgValues(List<object?> values)
 {
 var nonNull = values.Where(v => v is not null).ToList();
 if (nonNull.Count == 0) return null;
+if (nonNull.Any(v => v is decimal))
+	return RoundNumeric(nonNull.Select(v => ToDecimal(v)).Average());
 return nonNull.Select(v => ToDouble(v)).Average();
 }
 
@@ -8969,8 +8973,13 @@ private static decimal ToDecimal(object? val) => val switch
 	_ => Convert.ToDecimal(val, CultureInfo.InvariantCulture),
 };
 
-private static decimal RoundNumeric(decimal val) =>
-	Math.Round(val, 9, MidpointRounding.ToEven);
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#numeric_type
+//   BigQuery NUMERIC truncates toward zero to 9 decimal places.
+private static decimal RoundNumeric(decimal val)
+{
+	var factor = 1_000_000_000m; // 10^9
+	return decimal.Truncate(val * factor) / factor;
+}
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_string
 //   CAST(NUMERIC AS STRING): trailing zeros stripped, up to 9 decimal places.
