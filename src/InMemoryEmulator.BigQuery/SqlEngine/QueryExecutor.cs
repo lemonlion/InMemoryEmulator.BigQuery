@@ -3796,23 +3796,27 @@ var part = Evaluate(args[2], row)?.ToString()?.ToUpperInvariant() ?? "SECOND";
 var diff = ts1 - ts2;
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#timestamp_diff
 //   "Gets the number of unit boundaries between two TIMESTAMP values at a particular time granularity."
-//   Boundary counting: truncate both timestamps to the given part, then compute the difference.
+//   Observed: BigQuery computes floor-division of the total microsecond difference by the unit size,
+//   truncating toward zero (not boundary counting).
+var totalMicroseconds = diff.Ticks / 10;
 return part switch
 {
 "NANOSECOND" => diff.Ticks * 100,
-"MICROSECOND" => diff.Ticks / 10,
-"MILLISECOND" => (long)diff.TotalMilliseconds,
-"SECOND" => (long)((TruncTimestamp(ts1, "SECOND") - TruncTimestamp(ts2, "SECOND")).TotalSeconds),
-"MINUTE" => (long)((TruncTimestamp(ts1, "MINUTE") - TruncTimestamp(ts2, "MINUTE")).TotalMinutes),
-"HOUR" => (long)((TruncTimestamp(ts1, "HOUR") - TruncTimestamp(ts2, "HOUR")).TotalHours),
-"DAY" => (long)((TruncTimestamp(ts1, "DAY") - TruncTimestamp(ts2, "DAY")).TotalDays),
+"MICROSECOND" => totalMicroseconds,
+"MILLISECOND" => Truncate(totalMicroseconds, 1000),
+"SECOND" => Truncate(totalMicroseconds, 1_000_000L),
+"MINUTE" => Truncate(totalMicroseconds, 60_000_000L),
+"HOUR" => Truncate(totalMicroseconds, 3_600_000_000L),
+"DAY" => Truncate(totalMicroseconds, 86_400_000_000L),
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#timestamp_diff
 //   "TIMESTAMP_DIFF does not support the WEEK date part when the argument is TIMESTAMP type"
 "WEEK" => throw new InvalidOperationException("TIMESTAMP_DIFF does not support the WEEK date part when the argument is TIMESTAMP type"),
 "ISOWEEK" => CountWeekBoundaries(ts1.UtcDateTime, ts2.UtcDateTime, DayOfWeek.Monday),
 _ when part.StartsWith("WEEK_") => throw new InvalidOperationException($"TIMESTAMP_DIFF does not support the WEEK({part[5..]}) date part when the argument is TIMESTAMP type"),
-_ => (long)diff.TotalSeconds
+_ => Truncate(totalMicroseconds, 1_000_000L)
 };
+static long Truncate(long totalMicroseconds, long unitMicroseconds) =>
+	totalMicroseconds / unitMicroseconds;
 }
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#timestamp_diff

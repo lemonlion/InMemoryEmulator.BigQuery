@@ -62,7 +62,7 @@ public class DdlPatternCoverageTests : IAsyncLifetime
 	[Fact] public async Task CreateOrReplace()
 	{
 		await Exec("CREATE TABLE `{ds}.ct4` (id INT64)");
-		await Exec("INSERT INTO `{ds}.ct4` (id, name) VALUES (1)");
+		await Exec("INSERT INTO `{ds}.ct4` (id) VALUES (1)");
 		await Exec("CREATE OR REPLACE TABLE `{ds}.ct4` (id INT64, name STRING)");
 		Assert.Equal("0", await S("SELECT COUNT(*) FROM `{ds}.ct4`")); // Data cleared
 	}

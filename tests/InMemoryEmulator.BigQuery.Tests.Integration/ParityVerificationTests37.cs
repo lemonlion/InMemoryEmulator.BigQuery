@@ -89,14 +89,14 @@ public class ParityVerificationTests37 : IAsyncLifetime
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#timestamp_diff
-	//   "Gets the number of unit boundaries between two TIMESTAMP values at a particular time granularity."
+	//   BigQuery computes floor-division of the total microsecond difference by the unit size.
+	//   2 hours apart = 0 complete days.
 	[Fact]
 	public async Task TimestampDiff_Day_BoundaryCounting()
 	{
-		// 23:00 to 01:00 next day = 1 day boundary (midnight crossed)
 		var result = await ScalarAsync(
 			"SELECT TIMESTAMP_DIFF(TIMESTAMP '2020-01-02 01:00:00 UTC', TIMESTAMP '2020-01-01 23:00:00 UTC', DAY)");
-		Assert.Equal("1", result);
+		Assert.Equal("0", result);
 	}
 
 	[Fact]
@@ -111,10 +111,10 @@ public class ParityVerificationTests37 : IAsyncLifetime
 	[Fact]
 	public async Task TimestampDiff_Day_NegativeDirection()
 	{
-		// Reversed: crossing midnight backwards = -1
+		// Reversed: 2 hours apart in negative direction = 0 complete days
 		var result = await ScalarAsync(
 			"SELECT TIMESTAMP_DIFF(TIMESTAMP '2020-01-01 23:00:00 UTC', TIMESTAMP '2020-01-02 01:00:00 UTC', DAY)");
-		Assert.Equal("-1", result);
+		Assert.Equal("0", result);
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#generate_array
@@ -206,10 +206,10 @@ public class ParityVerificationTests37 : IAsyncLifetime
 	[Fact]
 	public async Task TimestampDiff_Hour_BoundaryCounting()
 	{
-		// 12:59 to 13:01 crosses one hour boundary
+		// 2 minutes apart = 0 complete hours
 		var result = await ScalarAsync(
 			"SELECT TIMESTAMP_DIFF(TIMESTAMP '2024-01-01 13:01:00 UTC', TIMESTAMP '2024-01-01 12:59:00 UTC', HOUR)");
-		Assert.Equal("1", result);
+		Assert.Equal("0", result);
 	}
 
 	[Fact]
