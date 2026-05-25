@@ -8367,6 +8367,9 @@ return type?.ToUpperInvariant() switch
 		? DateTimeOffset.UnixEpoch.AddTicks(us * 10) : val,
 	"DATE" => DateTime.TryParseExact(s, "yyyy-MM-dd", CultureInfo.InvariantCulture,
 		System.Globalization.DateTimeStyles.None, out var dt) ? DateOnly.FromDateTime(dt) : val,
+	"NUMERIC" or "BIGNUMERIC" => decimal.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var m) ? m : val,
+	"DATETIME" => DateTime.TryParse(s, CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var dtm) ? dtm : val,
+	"TIME" => TimeSpan.TryParse(s, CultureInfo.InvariantCulture, out var ts) ? ts : val,
 	_ => val
 };
 }

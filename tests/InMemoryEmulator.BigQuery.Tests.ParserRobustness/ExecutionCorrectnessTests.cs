@@ -439,4 +439,62 @@ public class ExecutionCorrectnessTests : IAsyncLifetime
         Assert.Equal("DATE", result.Schema.Fields.First(f => f.Name == "first_report_date").Type);
         Assert.Equal("DATE", result.Schema.Fields.First(f => f.Name == "last_report_date").Type);
     }
+
+    // ===================================================================
+    // Bug 6 (v1.0.114 REGRESSION): MAX() on NUMERIC after CTE+QUALIFY returns STRING schema
+    // Exact minimal reproduction from report section 14.
+    // ===================================================================
+
+    [Fact]
+    public async Task Bug6_MaxNumeric_AfterCteWithQualify_SchemaType_ShouldBeNumeric()
+    {
+        var client = await _fixture.GetClientAsync();
+        await client.ExecuteQueryAsync(
+            $"CREATE TABLE `{_ds}.qualify_test` (id INT64, value NUMERIC, score NUMERIC)", parameters: null);
+        await client.ExecuteQueryAsync($@"
+            INSERT INTO `{_ds}.qualify_test` (id, value, score) VALUES
+            (1, 10.5, 0.95), (2, 20.3, 0.85), (3, 6.928, 0.75), (4, 99.9, 0.10)",
+            parameters: null);
+
+        // Exact SQL from report minimal reproduction
+        var result = await Raw(@"
+            WITH filtered AS (
+                SELECT id, value, score,
+                       ROW_NUMBER() OVER (ORDER BY score DESC) AS rn
+                FROM `{ds}.qualify_test`
+                QUALIFY rn <= 3
+            )
+            SELECT MAX(value) AS max_value
+            FROM filtered");
+
+        var field = result.Schema.Fields.First(f => f.Name == "max_value");
+        // Report: Expected NUMERIC, Actual was STRING
+        Assert.Equal("NUMERIC", field.Type);
+    }
+
+    [Fact]
+    public async Task Bug6_MaxNumeric_AfterCteWithQualify_ValueIsCorrect()
+    {
+        var client = await _fixture.GetClientAsync();
+        // Reuse table from above test if it exists, otherwise create
+        try { await client.ExecuteQueryAsync(
+            $"CREATE TABLE `{_ds}.qualify_test2` (id INT64, value NUMERIC, score NUMERIC)", parameters: null); } catch { }
+        await client.ExecuteQueryAsync($@"
+            INSERT INTO `{_ds}.qualify_test2` (id, value, score) VALUES
+            (1, 10.5, 0.95), (2, 20.3, 0.85), (3, 6.928, 0.75), (4, 99.9, 0.10)",
+            parameters: null);
+
+        var rows = await Q(@"
+            WITH filtered AS (
+                SELECT id, value, score,
+                       ROW_NUMBER() OVER (ORDER BY score DESC) AS rn
+                FROM `{ds}.qualify_test2`
+                QUALIFY rn <= 3
+            )
+            SELECT CAST(MAX(value) AS STRING) AS max_value
+            FROM filtered");
+
+        // Top 3 by score: id=1(10.5), id=2(20.3), id=3(6.928). MAX(value) = 20.3
+        Assert.Equal("20.3", rows[0]["max_value"]!.ToString());
+    }
 }
