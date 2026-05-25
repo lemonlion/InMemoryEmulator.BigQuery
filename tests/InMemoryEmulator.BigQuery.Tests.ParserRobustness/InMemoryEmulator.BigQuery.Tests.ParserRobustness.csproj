@@ -6,6 +6,11 @@
 
 	<ItemGroup>
 		<Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+		<Content Include="TestData\*.csv" CopyToOutputDirectory="PreserveNewest" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="CsvHelper" Version="33.0.1" />
 	</ItemGroup>
 
 	<ItemGroup>

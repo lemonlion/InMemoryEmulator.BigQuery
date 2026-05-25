@@ -444,6 +444,20 @@ if (hasWindowInGroupBy && resultRows.Count > 0)
 	}).ToList() };
 }
 
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#qualify_clause
+//   QUALIFY filters after window functions, including in GROUP BY context.
+if (sel.Qualify is not null)
+{
+	var qualifiedRows = new List<Dictionary<string, object?>>();
+	foreach (var dict in resultRows)
+	{
+		var ctx = new RowContext(dict, null);
+		var qualifyVal = Evaluate(sel.Qualify, ctx);
+		if (IsTruthy(qualifyVal)) qualifiedRows.Add(dict);
+	}
+	resultRows = qualifiedRows;
+}
+
 if (sel.OrderBy is { Count: > 0 })
 {
 var ctx2 = resultRows.Select(d => new RowContext(d, null)).ToList();
