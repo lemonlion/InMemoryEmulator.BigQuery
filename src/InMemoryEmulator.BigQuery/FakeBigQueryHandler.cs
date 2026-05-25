@@ -818,7 +818,18 @@ public class FakeBigQueryHandler : HttpMessageHandler
 				upperQ.StartsWith("UPDATE ", StringComparison.OrdinalIgnoreCase) ||
 				upperQ.StartsWith("DELETE ", StringComparison.OrdinalIgnoreCase) ||
 				upperQ.StartsWith("MERGE ", StringComparison.OrdinalIgnoreCase) ||
-				upperQ.StartsWith("TRUNCATE ", StringComparison.OrdinalIgnoreCase))
+				upperQ.StartsWith("TRUNCATE ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ.StartsWith("DECLARE ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ.StartsWith("SET ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ.StartsWith("EXECUTE ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ.StartsWith("RAISE", StringComparison.OrdinalIgnoreCase) ||
+				upperQ.StartsWith("CALL ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ.StartsWith("BEGIN", StringComparison.OrdinalIgnoreCase) ||
+				upperQ.StartsWith("IF ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ.StartsWith("WHILE ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ.StartsWith("LOOP", StringComparison.OrdinalIgnoreCase) ||
+				upperQ.StartsWith("FOR ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ.StartsWith("ASSERT ", StringComparison.OrdinalIgnoreCase))
 			{
 				var procExecutor = new SqlEngine.ProceduralExecutor(_store, defaultDatasetId);
 				procExecutor.SetParameters(body.QueryParameters);
@@ -941,7 +952,18 @@ public class FakeBigQueryHandler : HttpMessageHandler
 				upperQ2.StartsWith("UPDATE ", StringComparison.OrdinalIgnoreCase) ||
 				upperQ2.StartsWith("DELETE ", StringComparison.OrdinalIgnoreCase) ||
 				upperQ2.StartsWith("MERGE ", StringComparison.OrdinalIgnoreCase) ||
-				upperQ2.StartsWith("TRUNCATE ", StringComparison.OrdinalIgnoreCase))
+				upperQ2.StartsWith("TRUNCATE ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ2.StartsWith("DECLARE ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ2.StartsWith("SET ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ2.StartsWith("EXECUTE ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ2.StartsWith("RAISE", StringComparison.OrdinalIgnoreCase) ||
+				upperQ2.StartsWith("CALL ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ2.StartsWith("BEGIN", StringComparison.OrdinalIgnoreCase) ||
+				upperQ2.StartsWith("IF ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ2.StartsWith("WHILE ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ2.StartsWith("LOOP", StringComparison.OrdinalIgnoreCase) ||
+				upperQ2.StartsWith("FOR ", StringComparison.OrdinalIgnoreCase) ||
+				upperQ2.StartsWith("ASSERT ", StringComparison.OrdinalIgnoreCase))
 			{
 				var procExecutor = new SqlEngine.ProceduralExecutor(_store, defaultDatasetId);
 				procExecutor.SetParameters(queryConfig.QueryParameters);
