@@ -497,4 +497,85 @@ public class ExecutionCorrectnessTests : IAsyncLifetime
         // Top 3 by score: id=1(10.5), id=2(20.3), id=3(6.928). MAX(value) = 20.3
         Assert.Equal("20.3", rows[0]["max_value"]!.ToString());
     }
+
+    // ===================================================================
+    // Additional Bug (v1.0.114): SAFE_DIVIDE on FLOAT columns returns NUMERIC schema
+    // Report: "SAFE_DIVIDE(total_spend, total_unique_visits)" where total_spend is FLOAT
+    //   should return FLOAT, but emulator returns NUMERIC
+    // ===================================================================
+
+    [Fact]
+    public async Task AdditionalBug_SafeDiv_FloatOverInt_SchemaType_ShouldBeFloat()
+    {
+        var client = await _fixture.GetClientAsync();
+        // Note: using FLOAT64 columns (not NUMERIC) — this is the key distinction
+        await client.ExecuteQueryAsync(
+            $"CREATE TABLE `{_ds}.float_test` (amount FLOAT64, cnt INT64)", parameters: null);
+        await client.ExecuteQueryAsync(
+            $"INSERT INTO `{_ds}.float_test` (amount, cnt) VALUES (71863.43, 6996)", parameters: null);
+
+        var result = await Raw(
+            "SELECT SAFE_DIVIDE(amount, cnt) AS ratio FROM `{ds}.float_test`");
+
+        // Report: SAFE_DIVIDE(FLOAT64, INT64) → should be FLOAT, emulator returns NUMERIC
+        Assert.Equal("FLOAT", result.Schema.Fields.First(f => f.Name == "ratio").Type);
+    }
+
+    [Fact]
+    public async Task AdditionalBug_SafeDiv_FloatOverFloat_SchemaType_ShouldBeFloat()
+    {
+        var client = await _fixture.GetClientAsync();
+        await client.ExecuteQueryAsync(
+            $"CREATE TABLE `{_ds}.float_test2` (amount FLOAT64, amount_lag FLOAT64)", parameters: null);
+        await client.ExecuteQueryAsync(
+            $"INSERT INTO `{_ds}.float_test2` (amount, amount_lag) VALUES (71863.43, 62892.59)", parameters: null);
+
+        var result = await Raw(
+            "SELECT SAFE_DIVIDE(amount - amount_lag, amount_lag) AS change FROM `{ds}.float_test2`");
+
+        Assert.Equal("FLOAT", result.Schema.Fields.First(f => f.Name == "change").Type);
+    }
+
+    // ===================================================================
+    // Bug 4 (v1.0.114): QUALIFY without PARTITION BY — wrong rows
+    // Report says: ROW_NUMBER() OVER (ORDER BY x DESC) <= 20 without PARTITION BY
+    //   includes wrong rows. Values off by 2-6%.
+    // Testing the specific pattern: QUALIFY + ROW_NUMBER without PARTITION BY
+    // ===================================================================
+
+    [Fact]
+    public async Task Bug4v114_Qualify_WithoutPartitionBy_CorrectRowSelection()
+    {
+        var client = await _fixture.GetClientAsync();
+        await client.ExecuteQueryAsync($@"
+            CREATE TABLE `{_ds}.qualify_order` (id INT64, val NUMERIC, score NUMERIC)",
+            parameters: null);
+        // Insert 6 rows. QUALIFY top 3 by score DESC should keep ids 1,2,3 (scores 90,80,70).
+        await client.ExecuteQueryAsync($@"
+            INSERT INTO `{_ds}.qualify_order` (id, val, score) VALUES
+            (1, 100.0, 90.0), (2, 200.0, 80.0), (3, 150.0, 70.0),
+            (4, 50.0, 60.0), (5, 75.0, 50.0), (6, 300.0, 40.0)",
+            parameters: null);
+
+        var rows = await Q(@"
+            WITH ranked AS (
+                SELECT id, val, score,
+                       ROW_NUMBER() OVER (ORDER BY score DESC) AS rn
+                FROM `{ds}.qualify_order`
+                QUALIFY rn <= 3
+            )
+            SELECT CAST(SUM(val) AS STRING) AS total_val FROM ranked");
+
+        // Top 3 by score: id=1(100), id=2(200), id=3(150). SUM = 450
+        Assert.Equal("450", rows[0]["total_val"]!.ToString());
+    }
+
+    // ===================================================================
+    // Bug 5 (v1.0.114): MIN/MAX on DATE wrong boundaries
+    // Report says still unfixed. Verify with our seeded data.
+    // This re-tests with the current code to confirm status.
+    // ===================================================================
+
+    // (Bug 5 tests already exist above — Bug5_MinMaxDate_ExactReportQuery
+    //  and Bug5_MinMaxDate_SchemaType_ShouldBeDate. If these pass, Bug 5 is fixed.)
 }
