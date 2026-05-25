@@ -174,4 +174,51 @@ public class MetadataAndPartitionTests : IAsyncLifetime
 		var rows = results.ToList();
 		Assert.Equal(2, rows.Count);
 	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/creating-integer-range-partitions
+	//   "You can partition a table on an INTEGER column with PARTITION BY RANGE_BUCKET."
+	// GO emulator limitation: CREATE TABLE with PARTITION BY unsupported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
+	[Fact]
+	public async Task RangePartitionedTable_CreateAndQuery()
+	{
+		var client = await _fixture.GetClientAsync();
+		await client.ExecuteQueryAsync(
+			$@"CREATE TABLE `{_datasetId}.range_part`
+			(id INT64, category INT64, name STRING)
+			PARTITION BY RANGE_BUCKET(category, GENERATE_ARRAY(0, 100, 10))",
+			parameters: null);
+		await client.ExecuteQueryAsync(
+			$@"INSERT INTO `{_datasetId}.range_part` (id, category, name)
+			VALUES (1, 5, 'Low'), (2, 55, 'Mid')",
+			parameters: null);
+		var results = await client.ExecuteQueryAsync(
+			$"SELECT * FROM `{_datasetId}.range_part`", parameters: null);
+		Assert.Equal(2, results.ToList().Count);
+	}
+
+	// Ref: https://cloud.google.com/bigquery/docs/creating-clustered-tables
+	//   "A clustered table is a table that has a user-defined column sort order."
+	// GO emulator limitation: CREATE TABLE with CLUSTER BY unsupported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
+	[Fact]
+	public async Task ClusteredTable_CreateAndQuery()
+	{
+		var client = await _fixture.GetClientAsync();
+		await client.ExecuteQueryAsync(
+			$@"CREATE TABLE `{_datasetId}.clustered`
+			(id INT64, event_date DATE, category STRING, name STRING)
+			PARTITION BY event_date
+			CLUSTER BY category",
+			parameters: null);
+		await client.ExecuteQueryAsync(
+			$@"INSERT INTO `{_datasetId}.clustered` (id, event_date, category, name)
+			VALUES (1, DATE '2024-01-15', 'A', 'First'), (2, DATE '2024-01-15', 'B', 'Second')",
+			parameters: null);
+		var results = await client.ExecuteQueryAsync(
+			$"SELECT * FROM `{_datasetId}.clustered` ORDER BY category", parameters: null);
+		var rows = results.ToList();
+		Assert.Equal(2, rows.Count);
+		Assert.Equal("A", rows[0]["category"]?.ToString());
+	}
 }
