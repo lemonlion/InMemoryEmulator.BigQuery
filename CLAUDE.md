@@ -3,6 +3,16 @@
 ## Purpose
 The sole purpose of this project is to be an in-process emulator of GCP BigQuery for use in integration tests.  It should be mirror the behaviour of GCP BigQuery as much as is feasibly possibly in the context of an in-process emulator.  eg we shouldn't be supporting SQL feature that it doesn't, we want it to fail when GCP fails and pass when GCP passes.  If tests are passing on the InMemoryEmulator but failing when using the Official GO emulator, it's most likely that there is incorrect behaviour in the InMemoryEmulator and the tests are incorrect.  If tests are passing on the InMemoryEmulator but failing when using the Official GCP Bigquery, it's almost certain that there is incorrect behaviour in the InMemoryEmulator and the tests are incorrect - the only exception is convenience methods that help with integration tests (eg a ClearAll method or something like that), not something to do with standard CRUD.
 
+## CRITICAL: Never Weaken Tests to Avoid Fixing Bugs
+
+**When a test fails, the test is telling you about a bug. Fix the bug, not the test.**
+
+- If a test uses a feature and that feature doesn't work, that's a bug to fix — not a reason to rewrite the test to avoid the feature.
+- If a user provides exact reproduction SQL/parameters in a bug report, use them VERBATIM. Do not "simplify" the test to avoid constructs the emulator can't handle. Those constructs are the bug.
+- Never replace exact reproduction SQL with "equivalent" queries that happen to work. The original SQL failed for a reason — find and fix that reason.
+- If you catch yourself thinking "let me simplify this to avoid X" — stop. X is the bug. Fix X.
+- The same applies to any situation where you are tempted to change assertions, weaken expected values, add tolerances, or skip edge cases to make tests pass. The purpose of this project is to match real BigQuery behavior exactly. A passing test that doesn't test the right thing is worse than a failing test.
+
 ## TDD Workflow
 
 - Always use Test-Driven Development (TDD): write tests first, then follow the red-green-refactor cycle.
@@ -15,16 +25,6 @@ The sole purpose of this project is to be an in-process emulator of GCP BigQuery
 - Always fix all bugs you find along the way, even if they are outside the immediate scope of the current task.
 - When fixing a bug, identify missing test coverage in and around the affected area and create that coverage — again following the TDD red-green-refactor cycle.
 - Fix any additional bugs discovered during that expanded test coverage work.
-
-## CRITICAL: Never Weaken Tests to Avoid Fixing Bugs
-
-**When a test fails, the test is telling you about a bug. Fix the bug, not the test.**
-
-- If a test uses a feature and that feature doesn't work, that's a bug to fix — not a reason to rewrite the test to avoid the feature.
-- If a user provides exact reproduction SQL/parameters in a bug report, use them VERBATIM. Do not "simplify" the test to avoid constructs the emulator can't handle. Those constructs are the bug.
-- Never replace exact reproduction SQL with "equivalent" queries that happen to work. The original SQL failed for a reason — find and fix that reason.
-- If you catch yourself thinking "let me simplify this to avoid X" — stop. X is the bug. Fix X.
-- The same applies to any situation where you are tempted to change assertions, weaken expected values, add tolerances, or skip edge cases to make tests pass. The purpose of this project is to match real BigQuery behavior exactly. A passing test that doesn't test the right thing is worse than a failing test.
 
 ## Reflection Policy
 
