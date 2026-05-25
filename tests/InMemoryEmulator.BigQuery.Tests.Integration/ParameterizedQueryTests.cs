@@ -323,6 +323,27 @@ SELECT * FROM bounds";
         Assert.Equal(2, rows.Count);
     }
 
+    // Ref: https://github.com/lemonlion/InMemoryEmulator.BigQuery/issues/3 — Issue 2
+    //   CTE with leading-comma separator style: `) \n , name AS (`
+    [Fact] public async Task Issue3_Cte_LeadingComma()
+    {
+        var sql = @"WITH a AS (SELECT name FROM `{ds}.items` WHERE id = 1)
+, b AS (SELECT name FROM `{ds}.items` WHERE id = 2)
+SELECT * FROM a UNION ALL SELECT * FROM b";
+        var rows = await Query(sql, Array.Empty<BigQueryParameter>());
+        Assert.Equal(2, rows.Count);
+    }
+
+    // Ref: https://github.com/lemonlion/InMemoryEmulator.BigQuery/issues/3 — Issue 4
+    //   Trailing comma before FROM — BigQuery allows SELECT a, b, FROM table
+    [Fact] public async Task Issue3_TrailingCommaBeforeFrom()
+    {
+        var result = await Scalar(
+            "SELECT id, name, FROM `{ds}.items` WHERE id = 1",
+            Array.Empty<BigQueryParameter>());
+        Assert.Equal("1", result);
+    }
+
     // Ref: https://github.com/lemonlion/InMemoryEmulator.BigQuery/issues/3
     //   DATE literal with comment on same line
     [Fact] public async Task Query_DateLiteralWithComment()

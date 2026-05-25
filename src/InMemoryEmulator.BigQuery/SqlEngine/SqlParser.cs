@@ -41,6 +41,10 @@ internal static class SqlParser
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#semicolons
 		sql = sql.TrimEnd().TrimEnd(';').TrimEnd();
 
+		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#select_list
+		//   BigQuery allows trailing commas in SELECT lists: SELECT a, b, FROM t
+		sql = Regex.Replace(sql, @",(\s+)FROM\b", "$1FROM", RegexOptions.IgnoreCase);
+
 		// WEEK(WEEKDAY) parameterized form → 'WEEK_WEEKDAY' string literal
 		// Must run BEFORE EXTRACT rewrite so that EXTRACT(WEEK(MONDAY) FROM ...) becomes EXTRACT('WEEK_MONDAY' FROM ...)
 		// and then the EXTRACT regex can handle it properly.
