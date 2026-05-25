@@ -2394,27 +2394,31 @@ if (_parameters is null) return null;
 var param = _parameters.FirstOrDefault(p => p.Name == name);
 if (param is null) return null;
 var pv = param.ParameterValue;
-if (pv?.Value is not null)
-{
-var type = 
-param.ParameterType?.Type?.ToUpperInvariant() ?? "STRING";
+var type = param.ParameterType?.Type?.ToUpperInvariant() ?? "STRING";
 // Ref: https://cloud.google.com/bigquery/docs/reference/rest/v2/QueryParameter
-//   Parameter values are serialised as strings in the REST API; parse to CLR types.
-return type switch
+//   ARRAY parameters use arrayValues instead of value.
+if (type == "ARRAY" && pv?.ArrayValues is { Count: > 0 })
 {
-"INT64" or "INTEGER" => long.Parse(pv.Value, CultureInfo.InvariantCulture),
-"FLOAT64" or "FLOAT" => double.Parse(pv.Value, CultureInfo.InvariantCulture),
-"BOOL" or "BOOLEAN" => bool.Parse(pv.Value),
-"DATE" => DateOnly.ParseExact(pv.Value.Length > 10 ? pv.Value[..10] : pv.Value, "yyyy-MM-dd", CultureInfo.InvariantCulture),
-"DATETIME" => DateTime.Parse(pv.Value, CultureInfo.InvariantCulture),
-"TIMESTAMP" => DateTimeOffset.Parse(pv.Value, CultureInfo.InvariantCulture),
-"TIME" => TimeOnly.Parse(pv.Value, CultureInfo.InvariantCulture),
-"NUMERIC" or "BIGNUMERIC" => decimal.Parse(pv.Value, CultureInfo.InvariantCulture),
-_ => pv.Value
-};
+	var elemType = param.ParameterType?.ArrayType?.Type?.ToUpperInvariant() ?? "STRING";
+	return pv.ArrayValues.Select(av => ParseScalarParameterValue(av.Value, elemType)).ToList() as IList<object?>;
 }
+if (pv?.Value is not null)
+	return ParseScalarParameterValue(pv.Value, type);
 return null;
 }
+
+private static object? ParseScalarParameterValue(string value, string type) => type switch
+{
+	"INT64" or "INTEGER" => long.Parse(value, CultureInfo.InvariantCulture),
+	"FLOAT64" or "FLOAT" => double.Parse(value, CultureInfo.InvariantCulture),
+	"BOOL" or "BOOLEAN" => bool.Parse(value),
+	"DATE" => DateOnly.ParseExact(value.Length > 10 ? value[..10] : value, "yyyy-MM-dd", CultureInfo.InvariantCulture),
+	"DATETIME" => DateTime.Parse(value, CultureInfo.InvariantCulture),
+	"TIMESTAMP" => DateTimeOffset.Parse(value, CultureInfo.InvariantCulture),
+	"TIME" => TimeOnly.Parse(value, CultureInfo.InvariantCulture),
+	"NUMERIC" or "BIGNUMERIC" => decimal.Parse(value, CultureInfo.InvariantCulture),
+	_ => value,
+};
 
 #endregion
 #region Function evaluation

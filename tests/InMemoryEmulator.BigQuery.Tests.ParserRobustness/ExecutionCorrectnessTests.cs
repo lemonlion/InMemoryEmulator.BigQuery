@@ -404,7 +404,6 @@ public class ExecutionCorrectnessTests : IAsyncLifetime
     public async Task Bug5_MinMaxDate_ExactReportQuery()
     {
         // Exact SQL from report: CustomerReportDateQuery.cs
-        // Simplified: replaced IN UNNEST(@LocationIds) with = @LocationId (single location)
         var rows = await Q($@"
             SELECT
                 location_id,
@@ -412,12 +411,12 @@ public class ExecutionCorrectnessTests : IAsyncLifetime
                 CAST(MAX(transaction_period) AS STRING) AS last_report_date
             FROM `{{ds}}.trf_transactions_daily`
             WHERE customer_id = @CustomerId
-                AND location_id = @LocationId
+                AND location_id IN UNNEST(@LocationIds)
             GROUP BY location_id
             ORDER BY first_report_date ASC",
             new[] {
                 new BigQueryParameter("CustomerId", BigQueryDbType.String, "221613823456184"),
-                new BigQueryParameter("LocationId", BigQueryDbType.String, "216149122232148"),
+                new BigQueryParameter("LocationIds", BigQueryDbType.Array, new[] { "216149122232148" }),
             });
 
         Assert.Single(rows);
