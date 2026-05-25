@@ -41,6 +41,8 @@ public class Phase29Tests : IAsyncLifetime
 	#region Array Functions
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_is_distinct
+	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task ArrayIsDistinct_DistinctElements_ReturnsTrue()
 	{
@@ -49,6 +51,8 @@ public class Phase29Tests : IAsyncLifetime
 		Assert.Equal("true", result.First()["result"]?.ToString(), ignoreCase: true);
 	}
 
+	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task ArrayIsDistinct_DuplicateElements_ReturnsFalse()
 	{
@@ -84,6 +88,8 @@ public class Phase29Tests : IAsyncLifetime
 	#region JSON Functions
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#lax_bool
+	// GO emulator limitation: LAX_BOOL function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task LaxBool_TrueValue_ReturnsTrue()
 	{
@@ -92,6 +98,8 @@ public class Phase29Tests : IAsyncLifetime
 		Assert.Equal("true", result.First()["result"]?.ToString(), ignoreCase: true);
 	}
 
+	// GO emulator limitation: LAX_BOOL function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task LaxBool_NumberZero_ReturnsFalse()
 	{
@@ -101,6 +109,8 @@ public class Phase29Tests : IAsyncLifetime
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#lax_int64
+	// GO emulator limitation: LAX_INT64 function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task LaxInt64_NumberValue_ReturnsInt()
 	{
@@ -110,6 +120,8 @@ public class Phase29Tests : IAsyncLifetime
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#lax_float64
+	// GO emulator limitation: LAX_FLOAT64 function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task LaxFloat64_NumberValue_ReturnsFloat()
 	{
@@ -120,6 +132,8 @@ public class Phase29Tests : IAsyncLifetime
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#lax_string
+	// GO emulator limitation: LAX_STRING function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task LaxString_StringValue_ReturnsString()
 	{
@@ -144,6 +158,8 @@ public class Phase29Tests : IAsyncLifetime
 	#region Geography Functions
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_iscollection
+	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task StIsCollection_Point_ReturnsFalse()
 	{
@@ -153,6 +169,8 @@ public class Phase29Tests : IAsyncLifetime
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_boundary
+	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task StBoundary_Point_ReturnsEmpty()
 	{
@@ -162,6 +180,8 @@ public class Phase29Tests : IAsyncLifetime
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_convexhull
+	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task StConvexHull_Point_ReturnsSamePoint()
 	{
@@ -172,6 +192,8 @@ public class Phase29Tests : IAsyncLifetime
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_buffer
+	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task StBuffer_PointWithDistance_ReturnsPolygon()
 	{
@@ -182,6 +204,8 @@ public class Phase29Tests : IAsyncLifetime
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_dump
+	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task StDump_Point_ReturnsSingleElementArray()
 	{
@@ -192,6 +216,8 @@ public class Phase29Tests : IAsyncLifetime
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_centroid_agg
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task StCentroidAgg_MultiplePoints_ReturnsCentroid()
 	{
@@ -204,6 +230,8 @@ public class Phase29Tests : IAsyncLifetime
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_union_agg
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task StUnionAgg_MultiplePoints_ReturnsGeography()
 	{

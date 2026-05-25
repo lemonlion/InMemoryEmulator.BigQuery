@@ -122,6 +122,8 @@ public class AggregateComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- ANY_VALUE ----
+	// GO emulator bug: ARRAY_AGG rejects NULL values instead of handling them per BigQuery spec.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task AnyValue_Basic()
 	{
 		var v = await Scalar("SELECT ANY_VALUE(grp) FROM `{ds}.data`");
@@ -212,6 +214,8 @@ public class AggregateComprehensiveTests : IAsyncLifetime
 		var v = await Scalar("SELECT BIT_AND(x) FROM UNNEST([7, 3, 5]) AS x");
 		Assert.Equal("1", v); // 111 & 011 & 101 = 001
 	}
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task BitOr_Basic()
 	{
 		var v = await Scalar("SELECT BIT_OR(x) FROM UNNEST([1, 2, 4]) AS x");

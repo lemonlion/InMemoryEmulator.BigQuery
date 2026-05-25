@@ -47,6 +47,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 	// ============================================================
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#declare
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Declare_Int64()
 	{
@@ -54,6 +56,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("42", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Declare_String()
 	{
@@ -61,6 +65,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("hello", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Declare_Float64()
 	{
@@ -68,6 +74,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.StartsWith("3.14", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Declare_Bool()
 	{
@@ -86,6 +94,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("2024-06-15", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Declare_WithDefault()
 	{
@@ -93,6 +103,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("99", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Declare_WithExpressionDefault()
 	{
@@ -100,6 +112,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("30", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Declare_MultipleVariables()
 	{
@@ -107,6 +121,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("3", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Set_ToExpression()
 	{
@@ -114,6 +130,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("11", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Set_ToFunctionResult()
 	{
@@ -121,6 +139,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("hello world", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Set_Reassignment()
 	{
@@ -128,6 +148,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("3", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Variable_InSelect()
 	{
@@ -140,6 +162,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 	// ============================================================
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#if
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task If_TrueCondition()
 	{
@@ -147,6 +171,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("yes", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task If_FalseCondition()
 	{
@@ -154,6 +180,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("no", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task If_Else()
 	{
@@ -161,6 +189,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("small", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task If_Elseif_Else()
 	{
@@ -175,6 +205,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("mid", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task If_Nested()
 	{
@@ -190,6 +222,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("very high", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task If_ComplexCondition()
 	{
@@ -207,6 +241,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 	// ============================================================
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#while
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task While_CountTo10()
 	{
@@ -217,6 +253,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("10", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task While_NeverExecutes()
 	{
@@ -227,6 +265,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("100", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task While_WithBreak()
 	{
@@ -240,6 +280,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("5", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task While_WithContinue()
 	{
@@ -256,6 +298,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("25", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task While_BuildingSum()
 	{
@@ -275,6 +319,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 	// ============================================================
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#loop
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Loop_WithBreak()
 	{
@@ -288,6 +334,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("7", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Loop_WithContinueAndBreak()
 	{
@@ -309,6 +357,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 	// Nested loops
 	// ============================================================
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task NestedWhile()
 	{
@@ -333,6 +383,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 	// ============================================================
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#beginexceptionend
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task BeginException_CatchesDivisionByZero()
 	{
@@ -347,6 +399,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("caught", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task BeginException_NoError_SkipsHandler()
 	{
@@ -366,6 +420,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 	// ============================================================
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#execute_immediate
+	// GO emulator limitation: ExecuteImmediateStatement not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task ExecuteImmediate_SimpleQuery()
 	{
@@ -373,6 +429,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("42", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task ExecuteImmediate_WithVariable()
 	{
@@ -382,6 +440,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("3", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task ExecuteImmediate_WithConcat()
 	{
@@ -391,6 +451,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("42", result);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task ExecuteImmediate_Into()
 	{
@@ -405,6 +467,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 	// CREATE TEMP TABLE
 	// ============================================================
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task CreateTempTable_InsertAndSelect()
 	{
@@ -415,6 +479,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("2", result);
 	}
 
+	// GO emulator limitation: requires explicit column list in INSERT...SELECT.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task CreateTempTable_UsedInSubsequentStatement()
 	{
@@ -485,6 +551,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 	// DROP FUNCTION
 	// ============================================================
 
+	// GO emulator bug: DROP FUNCTION fails with 'failed to find function spec'.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task DropFunction_IfExists()
 	{
@@ -500,6 +568,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 	// ============================================================
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#assert
+	// GO emulator limitation: AssertStatement not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Assert_TrueCondition()
 	{
@@ -509,6 +579,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("passed", result);
 	}
 
+	// GO emulator limitation: AssertStatement not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Assert_WithMessage_Passes()
 	{
@@ -542,6 +614,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 	// Variable used in DML
 	// ============================================================
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Variable_InDml()
 	{
@@ -563,6 +637,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 	// CASE statement (procedural, not expression)
 	// ============================================================
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task CaseStatement_SearchedForm()
 	{
@@ -624,6 +700,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 	// FOR...IN loop
 	// ============================================================
 
+	// GO emulator limitation: FOR...IN not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task ForIn_SimpleQuery()
 	{
@@ -636,6 +714,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("15", result);
 	}
 
+	// GO emulator limitation: FOR...IN not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task ForIn_EmptyResultSet()
 	{
@@ -648,6 +728,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 		Assert.Equal("0", result);
 	}
 
+	// GO emulator limitation: FOR...IN not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task ForIn_WithBreak()
 	{
@@ -665,6 +747,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 	// RAISE
 	// ============================================================
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Raise_CaughtByException()
 	{
@@ -683,6 +767,8 @@ public class ProceduralDeepTests : IAsyncLifetime
 	// Variable scoping
 	// ============================================================
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Variable_OuterScopeVisibleInner()
 	{

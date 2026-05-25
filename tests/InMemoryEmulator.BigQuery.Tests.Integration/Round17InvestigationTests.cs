@@ -36,6 +36,8 @@ public class Round17InvestigationTests : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#comparison_operators
 	//   "All comparisons with NaN return FALSE, except for != which returns TRUE"
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task NaN_Equals_NaN_ReturnsFalse()
 	{
@@ -44,6 +46,8 @@ public class Round17InvestigationTests : IAsyncLifetime
 		Assert.Equal("False", v);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task NaN_NotEquals_NaN_ReturnsTrue()
 	{
@@ -52,6 +56,8 @@ public class Round17InvestigationTests : IAsyncLifetime
 		Assert.Equal("True", v);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task NaN_LessThan_ReturnsNotTrue()
 	{
@@ -60,6 +66,8 @@ public class Round17InvestigationTests : IAsyncLifetime
 		Assert.Equal("False", v);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task NaN_GreaterThan_ReturnsNotTrue()
 	{
@@ -68,6 +76,8 @@ public class Round17InvestigationTests : IAsyncLifetime
 		Assert.Equal("False", v);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task NaN_IsNotNull()
 	{
@@ -76,6 +86,8 @@ public class Round17InvestigationTests : IAsyncLifetime
 		Assert.Equal("False", v);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task NaN_LessThanOrEqual_ReturnsFalse()
 	{
@@ -83,6 +95,8 @@ public class Round17InvestigationTests : IAsyncLifetime
 		Assert.Equal("False", v);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task NaN_GreaterThanOrEqual_ReturnsFalse()
 	{
@@ -95,6 +109,8 @@ public class Round17InvestigationTests : IAsyncLifetime
 	//   "Returns an approximate string representation. A returned NaN or 0 will not be signed."
 	//   BigQuery returns "nan" for CAST(NaN AS STRING), "inf" for positive infinity.
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Cast_NaN_ToString_Casing()
 	{
@@ -104,6 +120,8 @@ public class Round17InvestigationTests : IAsyncLifetime
 		Assert.Equal("nan", v);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Cast_Inf_ToString()
 	{
@@ -111,6 +129,8 @@ public class Round17InvestigationTests : IAsyncLifetime
 		Assert.Equal("inf", v);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Cast_NegInf_ToString()
 	{
@@ -170,6 +190,8 @@ public class Round17InvestigationTests : IAsyncLifetime
 	}
 
 	// ===== Infinity comparisons =====
+	// GO emulator bug: cannot parse inf/nan string literals to FLOAT64.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Infinity_GreaterThan_LargeNumber()
 	{
@@ -177,6 +199,8 @@ public class Round17InvestigationTests : IAsyncLifetime
 		Assert.Equal("True", v);
 	}
 
+	// GO emulator bug: cannot parse inf/nan string literals to FLOAT64.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task NegInfinity_LessThan_LargeNegNumber()
 	{
@@ -227,6 +251,8 @@ public class Round17InvestigationTests : IAsyncLifetime
 	}
 
 	// ===== NaN in IN =====
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task NaN_In_List_ReturnsFalse()
 	{
@@ -234,6 +260,8 @@ public class Round17InvestigationTests : IAsyncLifetime
 		Assert.Equal("False", v);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task NaN_In_NaN_ReturnsFalse()
 	{
@@ -245,6 +273,8 @@ public class Round17InvestigationTests : IAsyncLifetime
 	// ===== HAVING without GROUP BY =====
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#having_clause
 	//   HAVING without GROUP BY treats entire table as single group
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Having_Without_GroupBy()
 	{
@@ -252,6 +282,8 @@ public class Round17InvestigationTests : IAsyncLifetime
 		Assert.Equal("6", v);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Having_Without_GroupBy_NoMatch()
 	{
@@ -262,6 +294,8 @@ public class Round17InvestigationTests : IAsyncLifetime
 	// ===== CAST negative zero =====
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_string
 	//   "A returned NaN or 0 will not be signed."
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Cast_NegativeZero_As_String()
 	{
@@ -331,6 +365,8 @@ public class Round17InvestigationTests : IAsyncLifetime
 		Assert.Empty(rows);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Where_NaN_NotEquals_MatchesAll()
 	{

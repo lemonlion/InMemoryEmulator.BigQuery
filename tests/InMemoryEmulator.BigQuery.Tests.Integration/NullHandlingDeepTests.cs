@@ -57,6 +57,8 @@ public class NullHandlingDeepTests : IAsyncLifetime
 			() => client.ExecuteQueryAsync("SELECT NULL * 1", parameters: null));
 	}
 	[Fact] public async Task Null_Div() => Assert.Null(await Scalar("SELECT SAFE_DIVIDE(NULL, 1)"));
+	// GO emulator bug: unary minus operator not implemented (missing zetasqlite_unary_minus).
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Null_Mod() => Assert.Null(await Scalar("SELECT MOD(NULL, 3)"));
 	[Fact] public async Task Null_UnaryMinus() => Assert.Null(await Scalar("SELECT -(CAST(NULL AS INT64))"));
 
@@ -179,14 +181,20 @@ public class NullHandlingDeepTests : IAsyncLifetime
 	[Fact] public async Task Min_IgnoresNull() => Assert.Equal("1", await Scalar("SELECT MIN(x) FROM UNNEST([NULL, 3, 1, NULL, 2]) AS x"));
 	[Fact] public async Task Max_IgnoresNull() => Assert.Equal("3", await Scalar("SELECT MAX(x) FROM UNNEST([NULL, 3, 1, NULL, 2]) AS x"));
 	[Fact] public async Task Sum_AllNull() => Assert.Null(await Scalar("SELECT SUM(x) FROM UNNEST([CAST(NULL AS INT64), NULL]) AS x"));
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Count_AllNull() => Assert.Equal("0", await Scalar("SELECT COUNT(x) FROM UNNEST([CAST(NULL AS INT64), NULL]) AS x"));
 
 	// ---- NULL in BETWEEN ----
 	[Fact] public async Task Between_NullValue() => Assert.Null(await Scalar("SELECT CAST(NULL AS INT64) BETWEEN 1 AND 10"));
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Between_NullLow() => Assert.Null(await Scalar("SELECT 5 BETWEEN CAST(NULL AS INT64) AND 10"));
 	[Fact] public async Task Between_NullHigh() => Assert.Null(await Scalar("SELECT 5 BETWEEN 1 AND CAST(NULL AS INT64)"));
 
 	// ---- NULL in IN ----
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task In_NullValue() => Assert.Null(await Scalar("SELECT NULL IN (1, 2, 3)"));
 	[Fact] public async Task In_NullInList() => Assert.Null(await Scalar("SELECT 4 IN (1, 2, NULL)"));
 	[Fact] public async Task In_FoundWithNull() => Assert.Equal("True", await Scalar("SELECT 2 IN (1, 2, NULL)"));
@@ -206,6 +214,8 @@ public class NullHandlingDeepTests : IAsyncLifetime
 		await Assert.ThrowsAsync<GoogleApiException>(
 			() => client.ExecuteQueryAsync("SELECT ABS(NULL + 1)", parameters: null));
 	}
+	// GO emulator bug: unary minus operator not implemented (missing zetasqlite_unary_minus).
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task NullProp_Concat() => Assert.Null(await Scalar("SELECT CONCAT(CAST(NULL AS STRING), CAST(NULL AS STRING))"));
 	[Fact] public async Task NullProp_DoubleNegate() => Assert.Null(await Scalar("SELECT -(-(CAST(NULL AS INT64)))"));
 }

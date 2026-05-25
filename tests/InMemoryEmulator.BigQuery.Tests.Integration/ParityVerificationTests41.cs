@@ -54,6 +54,8 @@ public class ParityVerificationTests41 : IAsyncLifetime
 		await AssertThrowsAsync("SELECT SUBSTR('hello', 1, -1)");
 	}
 
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Substr_ZeroLength_ReturnsEmpty()
 	{

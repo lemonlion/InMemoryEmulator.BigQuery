@@ -36,6 +36,8 @@ public class GeographyTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_geogpoint
 	//   "Creates a GEOGRAPHY with a single point."
+	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task StGeogPoint_CreatesPoint()
 	{
@@ -49,6 +51,8 @@ public class GeographyTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_distance
 	//   "Returns the shortest distance in meters between two non-empty GEOGRAPHY values."
+	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task StDistance_KnownPoints()
 	{
@@ -62,6 +66,8 @@ public class GeographyTests : IAsyncLifetime
 		Assert.InRange(meters, 100000, 120000);
 	}
 
+	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task StDistance_SamePoint_ReturnsZero()
 	{
@@ -75,6 +81,8 @@ public class GeographyTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_contains
 	//   "Returns TRUE if the second GEOGRAPHY is completely contained by the first."
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task StContains_PointInsidePolygon()
 	{
@@ -89,6 +97,8 @@ public class GeographyTests : IAsyncLifetime
 		Assert.True((bool)rows[0]["inside"]);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task StContains_PointOutsidePolygon()
 	{
@@ -105,6 +115,8 @@ public class GeographyTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_area
 	//   "Returns the area in square meters of the polygons in the input GEOGRAPHY."
+	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task StArea_Polygon()
 	{
@@ -117,6 +129,8 @@ public class GeographyTests : IAsyncLifetime
 		Assert.True(area > 0);
 	}
 
+	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task StX_StY_ReturnCoordinates()
 	{
@@ -129,6 +143,8 @@ public class GeographyTests : IAsyncLifetime
 		Assert.Equal(47.62, Convert.ToDouble(rows[0]["y"]), 2);
 	}
 
+	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task StGeogFromText_Linestring()
 	{
@@ -142,6 +158,8 @@ public class GeographyTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/geography_functions#st_dwithin
 	//   "Returns TRUE if the distance between two GEOGRAPHY values is at most the given distance."
+	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task StDWithin_ClosePoints()
 	{
@@ -153,6 +171,8 @@ public class GeographyTests : IAsyncLifetime
 		Assert.True((bool)rows[0]["close"]);
 	}
 
+	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task StLength_Linestring()
 	{

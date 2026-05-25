@@ -64,6 +64,8 @@ public class MetadataAndPartitionTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/information-schema-tables
 	//   "INFORMATION_SCHEMA.TABLES provides metadata about tables."
+	// GO emulator limitation: INFORMATION_SCHEMA tables not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task InformationSchema_Tables_ListsAllTables()
 	{
@@ -77,6 +79,8 @@ public class MetadataAndPartitionTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/information-schema-columns
 	//   "INFORMATION_SCHEMA.COLUMNS provides metadata about columns."
+	// GO emulator limitation: INFORMATION_SCHEMA tables not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task InformationSchema_Columns_ListsColumns()
 	{
@@ -144,6 +148,8 @@ public class MetadataAndPartitionTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/creating-partitioned-tables
 	//   "A partitioned table is divided into segments called partitions."
+	// GO emulator limitation: CREATE TABLE with PARTITION BY unsupported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task PartitionedTable_CreateAndQuery()
 	{

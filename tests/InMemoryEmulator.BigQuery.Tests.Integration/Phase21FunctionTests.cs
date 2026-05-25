@@ -234,6 +234,8 @@ public class Phase21FunctionTests : IAsyncLifetime
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#json_type
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task JsonType_NullInput_ReturnsNull()
 	{

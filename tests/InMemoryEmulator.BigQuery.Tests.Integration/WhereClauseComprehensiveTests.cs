@@ -59,6 +59,8 @@ public class WhereClauseComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task Where_NotAnd() => Assert.True(int.Parse(await S("SELECT COUNT(*) FROM `{ds}.t` WHERE NOT (grade = 'A' AND active = true)") ?? "0") >= 6);
 
 	// ---- BETWEEN ----
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Where_Between() => Assert.Equal("4", await S("SELECT COUNT(*) FROM `{ds}.t` WHERE score BETWEEN 70 AND 90"));
 	[Fact] public async Task Where_NotBetween() => Assert.Equal("5", await S("SELECT COUNT(*) FROM `{ds}.t` WHERE score NOT BETWEEN 70 AND 90"));
 	[Fact] public async Task Where_BetweenInclusive()
@@ -97,6 +99,8 @@ public class WhereClauseComprehensiveTests : IAsyncLifetime
 		var rows = await Q("SELECT name FROM `{ds}.t` WHERE name LIKE '%e'");
 		Assert.True(rows.Count >= 2); // Alice, Dave, Eve, Grace
 	}
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Where_LikeContains()
 	{
 		var rows = await Q("SELECT name FROM `{ds}.t` WHERE name LIKE '%a%'");

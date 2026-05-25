@@ -113,6 +113,8 @@ public class WindowFunctionTests : IAsyncLifetime
 	}
 
 	// ---- NTILE ----
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Ntile_Two()
 	{
@@ -123,6 +125,8 @@ public class WindowFunctionTests : IAsyncLifetime
 		Assert.Equal("2", rows[3]["tile"]?.ToString());
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Ntile_Three()
 	{
@@ -263,6 +267,8 @@ public class WindowFunctionTests : IAsyncLifetime
 		Assert.True(rows.All(r => r["total"]?.ToString() == "6"));
 	}
 
+	// GO emulator bug: internal 'mismatch rowid' error in window function computation.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task WindowTotal_Count()
 	{

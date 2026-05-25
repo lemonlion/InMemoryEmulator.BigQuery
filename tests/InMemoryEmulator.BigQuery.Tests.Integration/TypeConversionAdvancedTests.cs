@@ -143,6 +143,8 @@ public class TypeConversionAdvancedTests : IAsyncLifetime
 	[Fact] public async Task NotBetween() => Assert.Equal("True", await S("SELECT 15 NOT BETWEEN 1 AND 10"));
 
 	// ---- IN ----
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task In_Found() => Assert.Equal("True", await S("SELECT 3 IN (1, 2, 3, 4, 5)"));
 	[Fact] public async Task In_NotFound() => Assert.Equal("False", await S("SELECT 6 IN (1, 2, 3, 4, 5)"));
 	[Fact] public async Task NotIn_Found() => Assert.Equal("True", await S("SELECT 6 NOT IN (1, 2, 3)"));
@@ -151,6 +153,8 @@ public class TypeConversionAdvancedTests : IAsyncLifetime
 	// ---- LIKE ----
 	[Fact] public async Task Like_Prefix() => Assert.Equal("True", await S("SELECT 'hello world' LIKE 'hello%'"));
 	[Fact] public async Task Like_Suffix() => Assert.Equal("True", await S("SELECT 'hello world' LIKE '%world'"));
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Like_Contains() => Assert.Equal("True", await S("SELECT 'hello world' LIKE '%lo wo%'"));
 	[Fact] public async Task Like_SingleChar() => Assert.Equal("True", await S("SELECT 'abc' LIKE 'a_c'"));
 	[Fact] public async Task Like_NoMatch() => Assert.Equal("False", await S("SELECT 'hello' LIKE 'world%'"));

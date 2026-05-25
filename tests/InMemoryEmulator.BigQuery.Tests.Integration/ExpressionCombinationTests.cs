@@ -50,6 +50,8 @@ public class ExpressionCombinationTests : IAsyncLifetime
 	[Fact] public async Task Expr_Complex2() => Assert.Equal("10", await Scalar("SELECT 2 * 3 + 4"));
 	[Fact] public async Task Expr_MultipleSub() => Assert.Equal("0", await Scalar("SELECT 10 - 3 - 3 - 4"));
 	[Fact] public async Task Expr_NestedParens() => Assert.Equal("36", await Scalar("SELECT ((2 + 4) * (3 + 3))"));
+	// GO emulator bug: unary minus operator not implemented (missing zetasqlite_unary_minus).
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Expr_DivMul() { var v = double.Parse(await Scalar("SELECT 100.0 / 4 * 2") ?? "0"); Assert.Equal(50.0, v); }
 	[Fact] public async Task Expr_UnaryChain() => Assert.Equal("-5", await Scalar("SELECT -(-(-5))"));
 

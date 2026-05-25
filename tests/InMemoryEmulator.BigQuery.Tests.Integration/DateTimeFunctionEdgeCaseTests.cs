@@ -63,6 +63,8 @@ public class DateTimeFunctionEdgeCaseTests : IAsyncLifetime
 	[Fact] public async Task Extract_Day() => Assert.Equal("15", await Scalar("SELECT EXTRACT(DAY FROM DATE '2024-03-15')"));
 	[Fact] public async Task Extract_DayOfWeek() { var v = int.Parse(await Scalar("SELECT EXTRACT(DAYOFWEEK FROM DATE '2024-03-15')") ?? "0"); Assert.True(v >= 1 && v <= 7); }
 	[Fact] public async Task Extract_DayOfYear() => Assert.Equal("75", await Scalar("SELECT EXTRACT(DAYOFYEAR FROM DATE '2024-03-15')"));
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Extract_Quarter() => Assert.Equal("1", await Scalar("SELECT EXTRACT(QUARTER FROM DATE '2024-03-15')"));
 	[Fact] public async Task Extract_Week() { var v = int.Parse(await Scalar("SELECT EXTRACT(WEEK FROM DATE '2024-03-15')") ?? "-1"); Assert.True(v >= 0 && v <= 53); }
 	[Fact] public async Task Extract_IsoWeek() { var v = int.Parse(await Scalar("SELECT EXTRACT(ISOWEEK FROM DATE '2024-03-15')") ?? "-1"); Assert.True(v >= 1 && v <= 53); }

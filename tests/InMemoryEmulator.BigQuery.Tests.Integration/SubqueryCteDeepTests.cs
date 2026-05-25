@@ -263,6 +263,8 @@ public class SubqueryCteDeepTests : IAsyncLifetime
 	// Recursive CTEs
 	// ============================================================
 
+	// GO emulator limitation: RECURSIVE CTEs not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task RecursiveCte_GenerateSequence()
 	{
@@ -276,6 +278,8 @@ public class SubqueryCteDeepTests : IAsyncLifetime
 		Assert.Equal("10", result);
 	}
 
+	// GO emulator limitation: RECURSIVE CTEs not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task RecursiveCte_Sum()
 	{
@@ -289,6 +293,8 @@ public class SubqueryCteDeepTests : IAsyncLifetime
 		Assert.Equal("15", result);
 	}
 
+	// GO emulator limitation: RECURSIVE CTEs not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task RecursiveCte_Factorial()
 	{

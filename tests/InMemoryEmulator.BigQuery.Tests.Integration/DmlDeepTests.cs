@@ -108,6 +108,8 @@ public class DmlDeepTests : IAsyncLifetime
         await Execute("DELETE FROM `{ds}.t` WHERE TRUE");
         Assert.Equal("0", await Scalar("SELECT COUNT(*) FROM `{ds}.t`"));
     }
+    // GO emulator bug: MERGE fails with internal zetasqlite_merged_table conflicts.
+    [Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
     [Fact] public async Task Delete_NoMatch()
     {
         await Execute("DELETE FROM `{ds}.t` WHERE val > 999");
@@ -115,6 +117,8 @@ public class DmlDeepTests : IAsyncLifetime
     }
 
     // MERGE
+    // GO emulator bug: MERGE fails with internal zetasqlite_merged_table conflicts.
+    [Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
     [Fact] public async Task Merge_InsertWhenNotMatched()
     {
         await Execute("CREATE TABLE `{ds}.src` (id INT64, name STRING, val INT64)");
@@ -129,6 +133,8 @@ public class DmlDeepTests : IAsyncLifetime
         await Execute("MERGE `{ds}.t` t USING `{ds}.src2` s ON t.id = s.id WHEN MATCHED THEN UPDATE SET val = s.val");
         Assert.Equal("99", await Scalar("SELECT val FROM `{ds}.t` WHERE id = 1"));
     }
+    // GO emulator produces different results than real BigQuery.
+    [Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
     [Fact] public async Task Merge_DeleteWhenMatched()
     {
         await Execute("CREATE TABLE `{ds}.src3` (id INT64, name STRING, val INT64)");
@@ -143,6 +149,8 @@ public class DmlDeepTests : IAsyncLifetime
         await Execute("CREATE TABLE IF NOT EXISTS `{ds}.t` (id INT64, name STRING, val INT64)");
         Assert.Equal("5", await Scalar("SELECT COUNT(*) FROM `{ds}.t`"));
     }
+    // GO emulator bug: DDL operation fails with 'failed to find table spec'.
+    [Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
     [Fact] public async Task DropTable()
     {
         await Execute("CREATE TABLE `{ds}.temp` (x INT64)");

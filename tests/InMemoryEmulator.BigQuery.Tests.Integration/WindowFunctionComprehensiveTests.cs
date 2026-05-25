@@ -96,6 +96,8 @@ public class WindowFunctionComprehensiveTests : IAsyncLifetime
 		Assert.Equal("1", rows[1]["r"]?.ToString());
 		Assert.Equal("2", rows[2]["r"]?.ToString());
 	}
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Rank_Partitioned()
 	{
 		var rows = await Query($"SELECT id, dept, RANK() OVER (PARTITION BY dept ORDER BY amount DESC) AS r FROM `{_datasetId}.sales` ORDER BY dept, r");

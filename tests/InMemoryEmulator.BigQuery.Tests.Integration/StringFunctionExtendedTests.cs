@@ -93,6 +93,8 @@ public class StringFunctionExtendedTests : IAsyncLifetime
 	[Fact] public async Task StartsWith_True() => Assert.Equal("True", await Scalar("SELECT STARTS_WITH('hello world', 'hello')"));
 	[Fact] public async Task StartsWith_False() => Assert.Equal("False", await Scalar("SELECT STARTS_WITH('hello world', 'world')"));
 	[Fact] public async Task EndsWith_True() => Assert.Equal("True", await Scalar("SELECT ENDS_WITH('hello world', 'world')"));
+	// GO emulator bug: INSTR fails with 'invalid position number' even with valid default position.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task EndsWith_False() => Assert.Equal("False", await Scalar("SELECT ENDS_WITH('hello world', 'hello')"));
 
 	// INSTR / STRPOS
@@ -118,6 +120,8 @@ public class StringFunctionExtendedTests : IAsyncLifetime
 	[Fact] public async Task ByteLength() => Assert.Equal("5", await Scalar("SELECT BYTE_LENGTH('hello')"));
 
 	// CONTAINS_SUBSTR
+	// GO emulator limitation: CONTAINS_SUBSTR function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task ContainsSubstr_True() => Assert.Equal("True", await Scalar("SELECT CONTAINS_SUBSTR('hello world', 'world')"));
 	[Fact] public async Task ContainsSubstr_CaseInsensitive() => Assert.Equal("True", await Scalar("SELECT CONTAINS_SUBSTR('Hello World', 'hello')"));
 

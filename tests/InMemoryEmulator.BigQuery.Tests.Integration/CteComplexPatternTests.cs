@@ -233,6 +233,8 @@ public class CteComplexPatternTests : IAsyncLifetime
 	}
 
 	// ---- CTE used in INSERT ----
+	// GO emulator limitation: requires explicit column list in INSERT...SELECT.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Cte_Insert()
 	{
 		var c = await _fixture.GetClientAsync();
@@ -270,6 +272,8 @@ public class CteComplexPatternTests : IAsyncLifetime
 	}
 
 	// ---- CTE with NTILE ----
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Cte_Ntile()
 	{
 		var rows = await Q(@"

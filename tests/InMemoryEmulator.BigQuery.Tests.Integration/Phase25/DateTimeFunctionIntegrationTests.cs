@@ -264,6 +264,8 @@ public class DateTimeFunctionIntegrationTests : IAsyncLifetime
 	#region TABLESAMPLE
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#tablesample_operator
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Tablesample_100Percent_ReturnsAll()
 	{

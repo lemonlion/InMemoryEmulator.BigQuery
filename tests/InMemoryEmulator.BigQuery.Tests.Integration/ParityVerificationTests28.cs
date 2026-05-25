@@ -135,6 +135,8 @@ public class ParityVerificationTests28 : IAsyncLifetime
 	// GROUP BY expression (not just column name)
 	// ───────────────────────────────────────────────────────────────────────────
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task GroupBy_Expression()
 	{
 		var rows = await Q(@"
@@ -179,6 +181,8 @@ public class ParityVerificationTests28 : IAsyncLifetime
 	// SUM/AVG with DISTINCT
 	// ───────────────────────────────────────────────────────────────────────────
 
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Sum_Distinct()
 	{
 		var result = await S("SELECT SUM(DISTINCT x) FROM UNNEST([1, 2, 2, 3, 3, 3]) AS x");
@@ -279,6 +283,8 @@ public class ParityVerificationTests28 : IAsyncLifetime
 	// TIMESTAMP_TRUNC
 	// ───────────────────────────────────────────────────────────────────────────
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task TimestampTrunc_Hour()
 	{
 		var result = await S("SELECT CAST(TIMESTAMP_TRUNC(TIMESTAMP '2024-06-15 14:35:22 UTC', HOUR) AS STRING)");

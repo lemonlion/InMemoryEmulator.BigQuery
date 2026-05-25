@@ -181,6 +181,8 @@ public class MissingMathFunctionIntegrationTests : IAsyncLifetime
 		Assert.Equal(false, rows[0]["result"]);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task IsNan_True()
 	{

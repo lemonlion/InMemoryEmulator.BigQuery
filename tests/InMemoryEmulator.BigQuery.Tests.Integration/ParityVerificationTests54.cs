@@ -61,6 +61,8 @@ public class ParityVerificationTests54 : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#translate
 	//   "A duplicate character in source_characters results in an error."
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Translate_DuplicateSourceChars_ThrowsError()
 	{
@@ -100,6 +102,8 @@ public class ParityVerificationTests54 : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/functions-reference
 	//   General rule: "If an operand is NULL, the function result is NULL."
 
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task ArrayToString_NullDelimiter_ReturnsNull()
 	{

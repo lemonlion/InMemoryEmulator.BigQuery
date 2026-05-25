@@ -51,6 +51,8 @@ public class RegexpFunctionDeepTests : IAsyncLifetime
     [Fact] public async Task RegexpReplace_Basic() => Assert.Equal("hello universe", await Scalar("SELECT REGEXP_REPLACE('hello world', r'world', 'universe')"));
     [Fact] public async Task RegexpReplace_Digits() => Assert.Equal("abc***def", await Scalar("SELECT REGEXP_REPLACE('abc123def', r'\\d+', '***')"));
     [Fact] public async Task RegexpReplace_NoMatch() => Assert.Equal("hello", await Scalar("SELECT REGEXP_REPLACE('hello', r'\\d+', 'x')"));
+    // GO emulator produces different results than real BigQuery.
+    [Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
     [Fact] public async Task RegexpReplace_Null() => Assert.Null(await Scalar("SELECT REGEXP_REPLACE(NULL, r'\\d+', 'x')"));
     [Fact] public async Task RegexpReplace_BackRef() => Assert.Equal("world hello", await Scalar(@"SELECT REGEXP_REPLACE('hello world', r'(\w+) (\w+)', '\\2 \\1')"));
 

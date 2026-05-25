@@ -70,6 +70,8 @@ public class SubqueryComprehensiveTests : IAsyncLifetime
 		Assert.Equal(5, rows.Count);
 		Assert.Equal("3", rows.First(r => r["name"]?.ToString() == "Alice")["order_count"]?.ToString());
 	}
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Correlated_MaxAmount()
 	{
 		var rows = await Q(@"

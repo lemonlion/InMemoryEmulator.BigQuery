@@ -25,11 +25,17 @@ public class ArrayFunctionBoundaryTests : IAsyncLifetime
 	}
 
 	// ---- ARRAY_LENGTH ----
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task ArrayLength_Three() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH([1, 2, 3])"));
 	[Fact] public async Task ArrayLength_One() => Assert.Equal("1", await Scalar("SELECT ARRAY_LENGTH([42])"));
 	[Fact] public async Task ArrayLength_Empty() => Assert.Equal("0", await Scalar("SELECT ARRAY_LENGTH([])"));
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task ArrayLength_Strings() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(['a', 'b', 'c'])"));
 	[Fact] public async Task ArrayLength_Null() => Assert.Null(await Scalar("SELECT ARRAY_LENGTH(CAST(NULL AS ARRAY<INT64>))"));
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task ArrayLength_Five() => Assert.Equal("5", await Scalar("SELECT ARRAY_LENGTH([1,2,3,4,5])"));
 
 	// ---- ARRAY_TO_STRING ----
@@ -53,15 +59,21 @@ public class ArrayFunctionBoundaryTests : IAsyncLifetime
 	[Fact] public async Task ArrayConcat_Strings() { var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY_CONCAT(['a', 'b'], ['c']), ',')"); Assert.Equal("a,b,c", v); }
 
 	// ---- GENERATE_ARRAY ----
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task GenerateArray_Basic() { var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(GENERATE_ARRAY(1, 5)) AS x), ',')"); Assert.Equal("1,2,3,4,5", v); }
 	[Fact] public async Task GenerateArray_Step2() { var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(GENERATE_ARRAY(1, 10, 2)) AS x), ',')"); Assert.Equal("1,3,5,7,9", v); }
 	[Fact] public async Task GenerateArray_Step3() { var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(GENERATE_ARRAY(0, 9, 3)) AS x), ',')"); Assert.Equal("0,3,6,9", v); }
 	[Fact] public async Task GenerateArray_Single() { var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(GENERATE_ARRAY(5, 5)) AS x), ',')"); Assert.Equal("5", v); }
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task GenerateArray_Negative() { var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(GENERATE_ARRAY(-3, 3)) AS x), ',')"); Assert.Equal("-3,-2,-1,0,1,2,3", v); }
 	[Fact] public async Task GenerateArray_Large() { var v = await Scalar("SELECT ARRAY_LENGTH(GENERATE_ARRAY(1, 100))"); Assert.Equal("100", v); }
 
 	// ---- GENERATE_DATE_ARRAY ----
 	[Fact] public async Task GenerateDateArray_Days() { var v = await Scalar("SELECT ARRAY_LENGTH(GENERATE_DATE_ARRAY(DATE '2024-01-01', DATE '2024-01-10'))"); Assert.Equal("10", v); }
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task GenerateDateArray_Months() { var v = await Scalar("SELECT ARRAY_LENGTH(GENERATE_DATE_ARRAY(DATE '2024-01-01', DATE '2024-06-01', INTERVAL 1 MONTH))"); Assert.Equal("6", v); }
 	[Fact] public async Task GenerateDateArray_Weeks() { var v = await Scalar("SELECT ARRAY_LENGTH(GENERATE_DATE_ARRAY(DATE '2024-01-01', DATE '2024-02-01', INTERVAL 1 WEEK))"); Assert.NotNull(v); var n = int.Parse(v!); Assert.True(n > 0); }
 
@@ -74,6 +86,8 @@ public class ArrayFunctionBoundaryTests : IAsyncLifetime
 	[Fact] public async Task ArraySubscript_SafeOrdinal() => Assert.Null(await Scalar("SELECT [10, 20, 30][SAFE_ORDINAL(5)]"));
 
 	// ---- Array in expressions ----
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Array_InSelect() { var v = await Scalar("SELECT ARRAY_LENGTH([1, 2, 3]) + ARRAY_LENGTH([4, 5])"); Assert.Equal("5", v); }
 	[Fact] public async Task Array_NestedConcat() { var v = await Scalar("SELECT ARRAY_LENGTH(ARRAY_CONCAT([1], [2], [3, 4]))"); Assert.Equal("4", v); }
 	[Fact] public async Task Array_ConcatReverse() { var v = await Scalar("SELECT ARRAY_TO_STRING(ARRAY(SELECT CAST(x AS STRING) FROM UNNEST(ARRAY_REVERSE(ARRAY_CONCAT([1, 2], [3, 4]))) AS x), ',')"); Assert.Equal("4,3,2,1", v); }

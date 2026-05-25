@@ -136,6 +136,8 @@ public class Round15BugFixTests : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#pow
 	// ================================================================
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Pow_ZeroNegativeExponent_Throws()
 	{
@@ -145,6 +147,8 @@ public class Round15BugFixTests : IAsyncLifetime
 			() => client.ExecuteQueryAsync("SELECT POW(0, -1)", parameters: null));
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Pow_NegativeBaseNonIntegerExponent_Throws()
 	{
@@ -214,6 +218,8 @@ public class Round15BugFixTests : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#extract
 	// ================================================================
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Extract_WeekMonday()
 	{
@@ -230,6 +236,8 @@ public class Round15BugFixTests : IAsyncLifetime
 		Assert.Equal("1", v);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Extract_WeekSaturday_BeforeFirstSaturday()
 	{

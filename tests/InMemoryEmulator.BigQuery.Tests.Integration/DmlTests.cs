@@ -88,6 +88,8 @@ public class DmlTests : IAsyncLifetime
 		Assert.Equal("Test", (string)rows[0]["name"]);
 	}
 
+	// GO emulator limitation: requires explicit column list in INSERT...SELECT.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task InsertSelect_CopiesRows()
 	{
@@ -156,6 +158,8 @@ public class DmlTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement
 	//   "Use the MERGE statement to combine INSERT, UPDATE, and DELETE operations."
+	// GO emulator bug: MERGE fails with internal zetasqlite_merged_table conflicts.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Merge_UpdatesAndInserts()
 	{

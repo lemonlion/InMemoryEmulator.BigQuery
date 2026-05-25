@@ -122,6 +122,8 @@ public class TableCrudTests : IAsyncLifetime
 		Assert.Equal(System.Net.HttpStatusCode.NotFound, (System.Net.HttpStatusCode)ex.HttpStatusCode);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Client_PatchTable_AddsColumn()
 	{

@@ -128,6 +128,8 @@ public class DmlOperationPatternTests : IAsyncLifetime
 		Assert.Equal("0", await Scalar("SELECT COUNT(*) FROM `{ds}.t`"));
 	}
 
+	// GO emulator bug: MERGE fails with internal zetasqlite_merged_table conflicts.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Delete_NoMatch()
 	{
 		await Exec("INSERT INTO `{ds}.t` (id, name, value) VALUES (1, 'A', 10)");
@@ -152,6 +154,8 @@ public class DmlOperationPatternTests : IAsyncLifetime
 		Assert.Equal("200", await Scalar("SELECT value FROM `{ds}.t` WHERE id = 2"));
 	}
 
+	// GO emulator bug: MERGE fails with internal zetasqlite_merged_table conflicts.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Merge_DeleteWhenMatched()
 	{
 		await Exec("INSERT INTO `{ds}.t` (id, name, value) VALUES (1, 'A', 10), (2, 'B', 20), (3, 'C', 30)");
@@ -166,6 +170,8 @@ public class DmlOperationPatternTests : IAsyncLifetime
 	}
 
 	// TRUNCATE
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Truncate_Table()
 	{
 		await Exec("INSERT INTO `{ds}.t` (id, name, value) VALUES (1, 'A', 10), (2, 'B', 20)");

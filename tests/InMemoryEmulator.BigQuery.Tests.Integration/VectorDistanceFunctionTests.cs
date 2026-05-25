@@ -44,6 +44,8 @@ public class VectorDistanceFunctionTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#cosine_distance
 	//   COSINE_DISTANCE([1.0, 2.0], [3.0, 4.0]) => 0.016130...
+	// GO emulator limitation: COSINE_DISTANCE function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task CosineDistance_KnownValues()
 	{
@@ -56,6 +58,8 @@ public class VectorDistanceFunctionTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#cosine_distance
 	//   Identical vectors have cosine distance 0.
+	// GO emulator limitation: COSINE_DISTANCE function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task CosineDistance_IdenticalVectors_ReturnsZero()
 	{
@@ -67,6 +71,8 @@ public class VectorDistanceFunctionTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#cosine_distance
 	//   Opposite vectors have cosine distance 2.
+	// GO emulator limitation: COSINE_DISTANCE function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task CosineDistance_OppositeVectors_ReturnsTwo()
 	{
@@ -78,6 +84,8 @@ public class VectorDistanceFunctionTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#cosine_distance
 	//   Orthogonal vectors have cosine distance 1.
+	// GO emulator limitation: COSINE_DISTANCE function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task CosineDistance_OrthogonalVectors_ReturnsOne()
 	{
@@ -89,6 +97,8 @@ public class VectorDistanceFunctionTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#cosine_distance
 	//   "If a vector is NULL, NULL is returned."
+	// GO emulator limitation: COSINE_DISTANCE function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task CosineDistance_NullVector_ReturnsNull()
 	{
@@ -125,6 +135,8 @@ public class VectorDistanceFunctionTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#euclidean_distance
 	//   EUCLIDEAN_DISTANCE([1.0, 2.0], [3.0, 4.0]) => sqrt(8) = 2.828...
+	// GO emulator limitation: EUCLIDEAN_DISTANCE function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task EuclideanDistance_KnownValues()
 	{
@@ -136,6 +148,8 @@ public class VectorDistanceFunctionTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#euclidean_distance
 	//   Identical vectors → distance 0.
+	// GO emulator limitation: EUCLIDEAN_DISTANCE function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task EuclideanDistance_IdenticalVectors_ReturnsZero()
 	{
@@ -147,6 +161,8 @@ public class VectorDistanceFunctionTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#euclidean_distance
 	//   3-4-5 triangle: EUCLIDEAN_DISTANCE([0.0, 0.0], [3.0, 4.0]) => 5.0
+	// GO emulator limitation: EUCLIDEAN_DISTANCE function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task EuclideanDistance_345Triangle()
 	{
@@ -158,6 +174,8 @@ public class VectorDistanceFunctionTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#euclidean_distance
 	//   "If a vector is NULL, NULL is returned."
+	// GO emulator limitation: EUCLIDEAN_DISTANCE function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task EuclideanDistance_NullVector_ReturnsNull()
 	{
@@ -179,6 +197,8 @@ public class VectorDistanceFunctionTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#euclidean_distance
 	//   4D vector
+	// GO emulator limitation: EUCLIDEAN_DISTANCE function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task EuclideanDistance_FourDimensional()
 	{
@@ -195,6 +215,8 @@ public class VectorDistanceFunctionTests : IAsyncLifetime
 	// ======================================================================
 
 	// Both functions should work with GENERATE_ARRAY-produced arrays
+	// GO emulator limitation: EUCLIDEAN_DISTANCE function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task EuclideanDistance_WithGenerateArray()
 	{
@@ -207,6 +229,8 @@ public class VectorDistanceFunctionTests : IAsyncLifetime
 	}
 
 	// Both functions with negative values
+	// GO emulator limitation: EUCLIDEAN_DISTANCE function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task EuclideanDistance_NegativeValues()
 	{

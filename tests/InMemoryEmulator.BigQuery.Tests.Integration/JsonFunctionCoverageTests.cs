@@ -48,6 +48,8 @@ public class JsonFunctionCoverageTests : IAsyncLifetime
 	[Fact] public async Task JsonExtractScalar_Missing() => Assert.Null(await S("SELECT JSON_EXTRACT_SCALAR(data, '$.missing') FROM `{ds}.docs` WHERE id = 1"));
 	[Fact] public async Task JsonExtractScalar_ArrayElement() => Assert.Equal("90", await S("SELECT JSON_EXTRACT_SCALAR(data, '$.scores[0]') FROM `{ds}.docs` WHERE id = 4"));
 	[Fact] public async Task JsonExtractScalar_ArrayElement2() => Assert.Equal("85", await S("SELECT JSON_EXTRACT_SCALAR(data, '$.scores[1]') FROM `{ds}.docs` WHERE id = 4"));
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task JsonExtractScalar_NullInput() => Assert.Null(await S("SELECT JSON_EXTRACT_SCALAR(NULL, '$.name')"));
 	[Fact] public async Task JsonExtractScalar_Float() => Assert.Equal("75000.50", await S("SELECT JSON_EXTRACT_SCALAR(data, '$.salary') FROM `{ds}.docs` WHERE id = 5"));
 	[Fact] public async Task JsonExtractScalar_Literal() => Assert.Equal("hello", await S(@"SELECT JSON_EXTRACT_SCALAR('{""key"":""hello""}', '$.key')"));

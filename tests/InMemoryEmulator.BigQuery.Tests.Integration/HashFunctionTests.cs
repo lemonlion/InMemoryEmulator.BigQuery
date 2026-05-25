@@ -113,6 +113,8 @@ public class HashFunctionTests : IAsyncLifetime
     [Fact] public async Task ToHex_Null() => Assert.Null(await Scalar("SELECT TO_HEX(NULL)"));
     
     // TO_BASE64 / FROM_BASE64
+    // GO emulator produces different results than real BigQuery.
+    [Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
     [Fact] public async Task ToBase64_Basic()
     {
         var result = await Scalar("SELECT TO_BASE64(b'hello')");

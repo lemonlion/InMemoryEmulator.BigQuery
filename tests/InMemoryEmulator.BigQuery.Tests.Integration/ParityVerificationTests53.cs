@@ -51,6 +51,8 @@ public class ParityVerificationTests53 : IAsyncLifetime
 
 	// --- PARSE_TIMESTAMP with %Z ---
 
+	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task ParseTimestamp_PercentZ_UTC_Parses()
 	{

@@ -124,6 +124,8 @@ public class AggregateFunctionIntegrationTests : IAsyncLifetime
 	#region COVAR_POP / COVAR_SAMP
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/statistical_aggregate_functions#covar_pop
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task CovarPop_Basic()
 	{

@@ -55,6 +55,8 @@ public class ParityVerificationTests10 : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#timestamp_trunc
 	// ───────────────────────────────────────────────────────────────────────────
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task TimestampTrunc_Quarter()
 	{
 		// 2024-05-15 is in Q2 (April 1)
@@ -69,6 +71,8 @@ public class ParityVerificationTests10 : IAsyncLifetime
 		Assert.Equal("2024-01-14 00:00:00+00", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task TimestampTrunc_Millisecond()
 	{
 		var result = await S("SELECT CAST(TIMESTAMP_TRUNC(TIMESTAMP '2024-01-15 10:30:45.123456 UTC', MILLISECOND) AS STRING)");
@@ -87,6 +91,8 @@ public class ParityVerificationTests10 : IAsyncLifetime
 	//   "ISOWEEK: Truncates date_expression to the preceding Monday."
 	// ───────────────────────────────────────────────────────────────────────────
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task DateTrunc_Isoweek()
 	{
 		// 2024-01-17 is Wednesday. ISOWEEK truncates to Monday = Jan 15
@@ -94,6 +100,8 @@ public class ParityVerificationTests10 : IAsyncLifetime
 		Assert.Equal("2024-01-15", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task DateTrunc_Isoweek_Sunday()
 	{
 		// 2024-01-14 is Sunday. ISOWEEK truncates to Monday of PREVIOUS week = Jan 8
@@ -112,6 +120,8 @@ public class ParityVerificationTests10 : IAsyncLifetime
 	// TIMESTAMP_TRUNC ISOWEEK
 	// ───────────────────────────────────────────────────────────────────────────
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task TimestampTrunc_Isoweek()
 	{
 		// 2024-01-17 Wed → preceding Monday = Jan 15
@@ -124,6 +134,8 @@ public class ParityVerificationTests10 : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/numbering_functions
 	// ───────────────────────────────────────────────────────────────────────────
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Ntile_Basic()
 	{
 		var rows = await Q(@"
@@ -179,6 +191,8 @@ public class ParityVerificationTests10 : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#regexp_replace
 	// ───────────────────────────────────────────────────────────────────────────
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task RegexpReplace_Basic()
 	{
 		var result = await S(@"SELECT REGEXP_REPLACE('hello world', r'(\w+)', 'X')");

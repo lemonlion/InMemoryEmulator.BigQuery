@@ -54,6 +54,8 @@ public class ParityVerificationTests42 : IAsyncLifetime
 		Assert.All(results, r => Assert.Equal("10", r));
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task FirstValue_RespectNulls_Default()
 	{
@@ -99,6 +101,8 @@ public class ParityVerificationTests42 : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#timestamp_trunc
 	//   "TIMESTAMP_TRUNC(timestamp_expression, date_time_part[, timezone])"
 	//   "If time_zone is specified, the truncation is performed with respect to that time zone."
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task TimestampTrunc_Month_WithTimezone()
 	{
@@ -109,6 +113,8 @@ public class ParityVerificationTests42 : IAsyncLifetime
 		Assert.Equal("2024-03-01 08:00:00+00", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task TimestampTrunc_Day_WithTimezone()
 	{
@@ -119,6 +125,8 @@ public class ParityVerificationTests42 : IAsyncLifetime
 		Assert.Equal("2024-01-14 08:00:00+00", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task TimestampTrunc_Hour_WithTimezone_SameAsWithout()
 	{

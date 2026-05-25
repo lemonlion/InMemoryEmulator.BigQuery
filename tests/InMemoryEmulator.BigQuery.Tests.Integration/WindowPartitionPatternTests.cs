@@ -47,6 +47,8 @@ public class WindowPartitionPatternTests : IAsyncLifetime
 		Assert.Equal("1", rows[0]["rn"]?.ToString());
 		Assert.Equal("10", rows[9]["rn"]?.ToString());
 	}
+	// GO emulator bug: incorrectly attempts to parse string columns as integers in window ORDER BY.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task RowNumber_ByRegion()
 	{
 		var rows = await Q("SELECT id, region, ROW_NUMBER() OVER (PARTITION BY region ORDER BY amount DESC) AS rn FROM `{ds}.sales` ORDER BY region, rn");
@@ -63,6 +65,8 @@ public class WindowPartitionPatternTests : IAsyncLifetime
 		// Gadget x4 all rank 1, Widget x6 all rank 5
 		Assert.Equal("1", rows[0]["rnk"]?.ToString());
 	}
+	// GO emulator bug: incorrectly attempts to parse string columns as integers in window ORDER BY.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Rank_ByRegion()
 	{
 		var rows = await Q(@"
@@ -84,6 +88,8 @@ public class WindowPartitionPatternTests : IAsyncLifetime
 	}
 
 	// ---- NTILE ----
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Ntile_Quartiles()
 	{
 		var rows = await Q("SELECT id, NTILE(4) OVER (ORDER BY amount) AS quartile FROM `{ds}.sales` ORDER BY amount");

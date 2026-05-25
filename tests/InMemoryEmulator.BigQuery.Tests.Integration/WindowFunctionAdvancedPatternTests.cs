@@ -100,6 +100,8 @@ public class WindowFunctionAdvancedPatternTests : IAsyncLifetime
 	}
 
 	// NTILE
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Ntile_FourBuckets()
 	{
 		var rows = await Query("SELECT id, NTILE(4) OVER (ORDER BY id) AS quartile FROM `{ds}.sales` ORDER BY id");
@@ -225,6 +227,8 @@ public class WindowFunctionAdvancedPatternTests : IAsyncLifetime
 	}
 
 	// Multiple window functions in same query
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task MultipleWindows_InSameQuery()
 	{
 		var rows = await Query(@"

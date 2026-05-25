@@ -217,6 +217,8 @@ public class ParityVerificationTests24 : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/array_functions#array_is_distinct
 	// ───────────────────────────────────────────────────────────────────────────
 
+	// GO emulator limitation: function unimplemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task ArrayIsDistinct_Unique()
 	{
 		var result = await S("SELECT ARRAY_IS_DISTINCT([1, 2, 3])");
@@ -270,6 +272,8 @@ public class ParityVerificationTests24 : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#round
 	// ───────────────────────────────────────────────────────────────────────────
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Round_NegativeDecimalPlaces()
 	{
 		// ROUND(1234.56, -2) → 1200 (rounds to nearest hundred)

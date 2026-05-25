@@ -158,6 +158,8 @@ public class UpdateDeletePatternTests : IAsyncLifetime
 	}
 
 	// ---- INSERT patterns ----
+	// GO emulator limitation: requires explicit column list in INSERT...SELECT.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Insert_Values()
 	{
 		await E("CREATE TABLE `{ds}.i1` (id INT64, name STRING)");

@@ -250,6 +250,8 @@ public class ParityVerificationTests23 : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#in_operators
 	// ───────────────────────────────────────────────────────────────────────────
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task NotIn_Basic()
 	{
 		var result = await S("SELECT 5 NOT IN (1, 2, 3)");

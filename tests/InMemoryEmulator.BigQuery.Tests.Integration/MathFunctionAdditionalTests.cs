@@ -76,6 +76,8 @@ public class MathFunctionAdditionalTests : IAsyncLifetime
 	[Fact] public async Task Sign_Zero() => Assert.Equal("0", await S("SELECT SIGN(0)"));
 
 	// ---- LOG / LN ----
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Log10_100() { var v = await S("SELECT LOG10(100)"); Assert.NotNull(v); Assert.Contains("2", v); }
 	[Fact] public async Task Log_Base2() { var v = await S("SELECT LOG(8, 2)"); Assert.NotNull(v); Assert.Contains("3", v); }
 

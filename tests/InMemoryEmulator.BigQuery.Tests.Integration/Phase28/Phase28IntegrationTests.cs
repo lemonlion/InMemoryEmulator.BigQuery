@@ -153,6 +153,8 @@ public class Phase28IntegrationTests : IAsyncLifetime
 	#region AEAD Encryption Functions
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aead_encryption_functions#keysnew_keyset
+	// GO emulator limitation: KEYS function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Keys_NewKeyset_ReturnsNonNull()
 	{
@@ -165,6 +167,8 @@ public class Phase28IntegrationTests : IAsyncLifetime
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aead_encryption_functions#keyskeyset_length
+	// GO emulator limitation: KEYS function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Keys_KeysetLength_Returns1()
 	{
@@ -177,6 +181,8 @@ public class Phase28IntegrationTests : IAsyncLifetime
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aead_encryption_functions#aeadencrypt
+	// GO emulator limitation: AEAD function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Aead_Encrypt_ProducesCiphertext()
 	{

@@ -133,6 +133,8 @@ public class WindowFunctionEdgeCaseTests : IAsyncLifetime
 	}
 
 	// ---- Ranking on NULLs ----
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task RowNumber_WithSubquery()
 	{
 		var rows = await Q("SELECT x, ROW_NUMBER() OVER (ORDER BY x) AS rn FROM UNNEST([3,1,2]) AS x ORDER BY rn");
@@ -200,6 +202,8 @@ public class WindowFunctionEdgeCaseTests : IAsyncLifetime
 	}
 
 	// ---- NTILE edge cases ----
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Ntile_MoreBucketsThanRows()
 	{
 		var rows = await Q($"SELECT id, NTILE(10) OVER (ORDER BY id) AS nt FROM `{_datasetId}.t` WHERE grp='B' ORDER BY id");
@@ -232,6 +236,8 @@ public class WindowFunctionEdgeCaseTests : IAsyncLifetime
 	}
 
 	// ---- FIRST_VALUE with frame ----
+	// GO emulator bug: internal 'mismatch rowid' error in window function computation.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task FirstValue_WithRowsFrame()
 	{
 		var rows = await Q($"SELECT id, FIRST_VALUE(val) OVER (ORDER BY id ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS fv FROM `{_datasetId}.t` WHERE grp='A' ORDER BY id");

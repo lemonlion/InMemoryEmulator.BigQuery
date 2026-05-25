@@ -129,6 +129,8 @@ public class AnalyticalWindowCoverageTests : IAsyncLifetime
 	}
 
 	// ---- NTH_VALUE ----
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task NthValue_Second()
 	{
 		var rows = await Q("SELECT month, NTH_VALUE(revenue, 2) OVER (PARTITION BY region ORDER BY month ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS second_val FROM `{ds}.sales` WHERE region = 'East' ORDER BY month");

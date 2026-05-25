@@ -40,12 +40,16 @@ public class DdlPatternCoverageTests : IAsyncLifetime
 		await Exec("INSERT INTO `{ds}.ct1` (id, name) VALUES (1, 'test')");
 		Assert.Equal("1", await S("SELECT COUNT(*) FROM `{ds}.ct1`"));
 	}
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Create_WithTypes()
 	{
 		await Exec("CREATE TABLE `{ds}.ct2` (a INT64, b FLOAT64, c STRING, d BOOL, e DATE, f TIMESTAMP)");
 		await Exec("INSERT INTO `{ds}.ct2` (a, b, c, d, e, f) VALUES (1, 3.14, 'hello', true, DATE '2024-01-01', TIMESTAMP '2024-01-01 00:00:00')");
 		Assert.Equal("1", await S("SELECT COUNT(*) FROM `{ds}.ct2`"));
 	}
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Create_IfNotExists()
 	{
 		await Exec("CREATE TABLE `{ds}.ct3` (id INT64)");
@@ -86,12 +90,16 @@ public class DdlPatternCoverageTests : IAsyncLifetime
 		await Exec("DROP TABLE `{ds}.dt1`");
 		await Assert.ThrowsAnyAsync<Exception>(async () => await Exec("SELECT * FROM `{ds}.dt1`"));
 	}
+	// GO emulator limitation: AlterTableStatement not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Drop_IfExists()
 	{
 		await Exec("DROP TABLE IF EXISTS `{ds}.nonexistent`"); // Should not error
 	}
 
 	// ---- ALTER TABLE ----
+	// GO emulator limitation: AlterTableStatement not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Alter_AddColumn()
 	{
 		await Exec("CREATE TABLE `{ds}.at1` (id INT64)");
@@ -99,6 +107,8 @@ public class DdlPatternCoverageTests : IAsyncLifetime
 		await Exec("INSERT INTO `{ds}.at1` (id, name) VALUES (1, 'test')");
 		Assert.Equal("test", await S("SELECT name FROM `{ds}.at1` WHERE id = 1"));
 	}
+	// GO emulator limitation: AlterTableStatement not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Alter_DropColumn()
 	{
 		await Exec("CREATE TABLE `{ds}.at2` (id INT64, name STRING, extra STRING)");
@@ -127,6 +137,8 @@ public class DdlPatternCoverageTests : IAsyncLifetime
 	}
 
 	// ---- CREATE TABLE with STRUCT type ----
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Create_WithStruct()
 	{
 		await Exec("CREATE TABLE `{ds}.st1` (id INT64, info STRUCT<name STRING, age INT64>)");

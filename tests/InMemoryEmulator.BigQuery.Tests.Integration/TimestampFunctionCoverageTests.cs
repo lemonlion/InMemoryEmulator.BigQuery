@@ -135,6 +135,8 @@ public class TimestampFunctionCoverageTests : IAsyncLifetime
 	}
 
 	// ---- EXTRACT from TIMESTAMP ----
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Extract_Year()
 	{
 		var c = await _fixture.GetClientAsync();
@@ -196,6 +198,8 @@ public class TimestampFunctionCoverageTests : IAsyncLifetime
 		var rows = r.ToList();
 		Assert.Equal("3", rows[0][0]?.ToString()); // event_c, event_d, event_e
 	}
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task OrderBy_Timestamp()
 	{
 		var c = await _fixture.GetClientAsync();

@@ -109,6 +109,8 @@ public class StringFunctionTests : IAsyncLifetime
 	[Fact] public async Task EndsWith_Empty() => Assert.Equal("True", await Scalar("SELECT ENDS_WITH('Hello', '')"));
 
 	// ---- CONTAINS_SUBSTR ----
+	// GO emulator limitation: CONTAINS_SUBSTR function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task ContainsSubstr_True() => Assert.Equal("True", await Scalar("SELECT CONTAINS_SUBSTR('Hello World', 'World')"));
 	[Fact] public async Task ContainsSubstr_CaseInsensitive() => Assert.Equal("True", await Scalar("SELECT CONTAINS_SUBSTR('Hello World', 'hello')"));
 	[Fact] public async Task ContainsSubstr_False() => Assert.Equal("False", await Scalar("SELECT CONTAINS_SUBSTR('Hello', 'xyz')"));
@@ -120,6 +122,8 @@ public class StringFunctionTests : IAsyncLifetime
 	[Fact] public async Task Instr_Found() => Assert.Equal("2", await Scalar("SELECT INSTR('Hello', 'ell')"));
 
 	// ---- LPAD / RPAD ----
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Lpad_Pad() => Assert.Equal("00abc", await Scalar("SELECT LPAD('abc', 5, '0')"));
 	[Fact] public async Task Lpad_NoChange() => Assert.Equal("abc", await Scalar("SELECT LPAD('abc', 3, '0')"));
 	[Fact] public async Task Lpad_Truncate() => Assert.Equal("ab", await Scalar("SELECT LPAD('abc', 2, '0')"));

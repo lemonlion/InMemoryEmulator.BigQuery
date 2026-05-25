@@ -132,6 +132,8 @@ public class NullPropagationPatternTests : IAsyncLifetime
 	// ---- IS NULL / IS NOT NULL ----
 	[Fact] public async Task IsNull_Literal() => Assert.Equal("True", await S("SELECT NULL IS NULL"));
 	[Fact] public async Task IsNotNull_Literal() => Assert.Equal("True", await S("SELECT 5 IS NOT NULL"));
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task IsNull_Column()
 	{
 		var rows = await Q("SELECT id FROM `{ds}.data` WHERE val IS NULL ORDER BY id");
@@ -245,6 +247,8 @@ public class NullPropagationPatternTests : IAsyncLifetime
 		var v = await S("SELECT MIN(val) FROM `{ds}.data`");
 		Assert.Equal("-1", v);
 	}
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Max_IgnoresNull()
 	{
 		var v = await S("SELECT MAX(val) FROM `{ds}.data`");
@@ -258,6 +262,8 @@ public class NullPropagationPatternTests : IAsyncLifetime
 
 	// ---- Null in IN ----
 	[Fact] public async Task In_NullValue() => Assert.Null(await S("SELECT NULL IN (1, 2, 3)"));
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task In_ListContainsNull()
 	{
 		var v = await S("SELECT 1 IN (1, NULL, 3)");

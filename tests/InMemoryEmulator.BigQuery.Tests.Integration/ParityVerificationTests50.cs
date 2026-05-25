@@ -53,6 +53,8 @@ public class ParityVerificationTests50 : IAsyncLifetime
 		Assert.Equal(true, row[0]);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Like_EscapedBackslash_MatchesLiteralBackslash()
 	{
@@ -107,6 +109,8 @@ public class ParityVerificationTests50 : IAsyncLifetime
 		Assert.Equal(false, row[0]);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Between_NullLow_ValueBelowHigh_ReturnsNull()
 	{
@@ -115,6 +119,8 @@ public class ParityVerificationTests50 : IAsyncLifetime
 		Assert.Null(row[0]);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Between_NullHigh_ValueAboveLow_ReturnsNull()
 	{
@@ -123,6 +129,8 @@ public class ParityVerificationTests50 : IAsyncLifetime
 		Assert.Null(row[0]);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Between_NullValue_ReturnsNull()
 	{

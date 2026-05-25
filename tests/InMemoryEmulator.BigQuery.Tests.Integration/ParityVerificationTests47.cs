@@ -37,6 +37,8 @@ public class ParityVerificationTests47 : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_date
 	//   "Casting from a timestamp to a date effectively truncates the timestamp
 	//    as of the default time zone (UTC)."
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task CastTimestampAsDate_UsesUtc()
 	{
@@ -62,6 +64,8 @@ public class ParityVerificationTests47 : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_datetime
 	//   "Casting from a timestamp to datetime effectively truncates the
 	//    timestamp as of the default time zone (UTC)."
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task CastTimestampAsDatetime_UsesUtc()
 	{
@@ -70,6 +74,8 @@ public class ParityVerificationTests47 : IAsyncLifetime
 		Assert.Equal("2024-01-02 04:00:00", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task CastTimestampAsDatetime_PositiveOffset()
 	{
@@ -101,6 +107,8 @@ public class ParityVerificationTests47 : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/json_functions#to_json_string
 	//   "A non-finite number (NaN, Infinity, -Infinity) converts to a JSON string."
+	// GO emulator bug: cannot parse inf/nan string literals to FLOAT64.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task ToJsonString_Nan()
 	{
@@ -109,6 +117,8 @@ public class ParityVerificationTests47 : IAsyncLifetime
 		Assert.Contains("NaN", result);
 	}
 
+	// GO emulator bug: cannot parse inf/nan string literals to FLOAT64.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task ToJsonString_Infinity()
 	{
@@ -116,6 +126,8 @@ public class ParityVerificationTests47 : IAsyncLifetime
 		Assert.Contains("Infinity", result);
 	}
 
+	// GO emulator bug: cannot parse inf/nan string literals to FLOAT64.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task ToJsonString_NegativeInfinity()
 	{

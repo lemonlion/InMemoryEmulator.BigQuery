@@ -252,6 +252,8 @@ public class ParityVerificationTests15 : IAsyncLifetime
 	// GROUP BY with expression
 	// ───────────────────────────────────────────────────────────────────────────
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task GroupBy_Expression()
 	{
 		var rows = await Q(@"

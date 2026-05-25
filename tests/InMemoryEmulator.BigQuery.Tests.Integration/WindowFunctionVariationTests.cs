@@ -142,6 +142,8 @@ public class WindowFunctionVariationTests : IAsyncLifetime
 		Assert.Equal("30", rows[2]["cat_total"]?.ToString()); // B: 30
 	}
 
+	// GO emulator bug: internal 'mismatch rowid' error in window function computation.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task CountWindow_All()
 	{

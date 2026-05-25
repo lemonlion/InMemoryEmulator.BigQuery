@@ -123,6 +123,8 @@ public class ParityVerificationTests18 : IAsyncLifetime
 	//   "If fill_string is empty, returns original_value truncated to length."
 	// ───────────────────────────────────────────────────────────────────────────
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Lpad_EmptyFill_Truncates()
 	{
 		// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#lpad
@@ -244,6 +246,8 @@ public class ParityVerificationTests18 : IAsyncLifetime
 		Assert.Equal("True", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task LogicalAnd_WithFalse()
 	{
 		var result = await S("SELECT LOGICAL_AND(x) FROM UNNEST([true, false, true]) AS x");
@@ -279,6 +283,8 @@ public class ParityVerificationTests18 : IAsyncLifetime
 		Assert.Equal("False", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task LogicalOr_WithTrue()
 	{
 		var result = await S("SELECT LOGICAL_OR(x) FROM UNNEST([false, true, false]) AS x");
@@ -320,6 +326,8 @@ public class ParityVerificationTests18 : IAsyncLifetime
 		Assert.Null(result);
 	}
 
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task GenerateArray_NullEnd()
 	{
 		var result = await S("SELECT ARRAY_LENGTH(GENERATE_ARRAY(1, CAST(NULL AS INT64)))");

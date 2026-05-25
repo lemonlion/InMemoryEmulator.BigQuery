@@ -148,6 +148,8 @@ public class ParityVerificationTests40 : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#array_agg
 	//   "DISTINCT: Each distinct value of expression is aggregated only once into the result."
 	//   NULLs are treated as equal values for DISTINCT purposes; one NULL is preserved.
+	// GO emulator bug: ARRAY_AGG rejects NULL values instead of handling them per BigQuery spec.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task ArrayAgg_Distinct_PreservesOneNull()
 	{
@@ -166,6 +168,8 @@ public class ParityVerificationTests40 : IAsyncLifetime
 		Assert.Equal("2", result);
 	}
 
+	// GO emulator bug: ARRAY_AGG rejects NULL values instead of handling them per BigQuery spec.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task ArrayAgg_Distinct_StringValues()
 	{

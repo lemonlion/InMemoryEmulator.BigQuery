@@ -76,6 +76,8 @@ public class ParityVerificationTests2 : IAsyncLifetime
 	// ===== FORMAT_DATE edge cases =====
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#format_date
 	
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task FormatDate_DayOfYear()
 	{
@@ -452,6 +454,8 @@ public class ParityVerificationTests2 : IAsyncLifetime
 	// ===== NTILE =====
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/numbering_functions#ntile
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Ntile_Basic()
 	{
@@ -483,6 +487,8 @@ public class ParityVerificationTests2 : IAsyncLifetime
 		Assert.Equal("10", rows[2]["fv"]?.ToString());
 	}
 
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task LastValue_WithFrameUnbounded()
 	{
@@ -597,6 +603,8 @@ public class ParityVerificationTests2 : IAsyncLifetime
 	// ===== TIMESTAMP arithmetic =====
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/timestamp_functions#timestamp_add
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task TimestampAdd_Minutes()
 	{

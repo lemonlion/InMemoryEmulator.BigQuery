@@ -164,6 +164,8 @@ public class ParityVerificationTests8 : IAsyncLifetime
 		Assert.Equal("60.5", rows[2]["running"]?.ToString());
 	}
 
+	// GO emulator bug: incorrectly attempts to parse string columns as integers in window ORDER BY.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Window_RowNumber()
 	{
 		var rows = await Q("SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS rn FROM `{ds}.items` ORDER BY id");
@@ -183,6 +185,8 @@ public class ParityVerificationTests8 : IAsyncLifetime
 		Assert.Equal("4", rows[3]["rnk"]?.ToString());
 	}
 
+	// GO emulator bug: incorrectly attempts to parse string columns as integers in window ORDER BY.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Window_DenseRank()
 	{
 		var rows = await Q(@"
@@ -352,6 +356,8 @@ public class ParityVerificationTests8 : IAsyncLifetime
 	// BETWEEN
 	// ───────────────────────────────────────────────────────────────────────────
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Between_Inclusive()
 	{
 		var rows = await Q("SELECT id FROM `{ds}.items` WHERE price BETWEEN 15 AND 25.5 ORDER BY id");
@@ -517,6 +523,8 @@ public class ParityVerificationTests8 : IAsyncLifetime
 	// CAST TIMESTAMP edge cases
 	// ───────────────────────────────────────────────────────────────────────────
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task CastTimestamp_WithFractional()
 	{
 		// Fractional seconds should be included when non-zero
@@ -524,6 +532,8 @@ public class ParityVerificationTests8 : IAsyncLifetime
 		Assert.Equal("2024-01-01 12:30:45.123456+00", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task CastTimestamp_NoFractional()
 	{
 		var result = await S("SELECT CAST(TIMESTAMP '2024-01-01 12:30:45 UTC' AS STRING)");

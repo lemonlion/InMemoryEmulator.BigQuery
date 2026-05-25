@@ -72,6 +72,8 @@ public class ParityVerificationTests16 : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#update_with_joins
 	// ───────────────────────────────────────────────────────────────────────────
 
+	// GO emulator limitation: UPDATE with FROM/JOIN not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Update_WithFrom()
 	{
 		await Exec(@"
@@ -93,6 +95,8 @@ public class ParityVerificationTests16 : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/dml-syntax#merge_statement
 	// ───────────────────────────────────────────────────────────────────────────
 
+	// GO emulator bug: MERGE fails with internal zetasqlite_merged_table conflicts.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Merge_DeleteWhenMatched()
 	{
 		await Exec(@"
@@ -112,6 +116,8 @@ public class ParityVerificationTests16 : IAsyncLifetime
 	// MERGE with multiple WHEN clauses
 	// ───────────────────────────────────────────────────────────────────────────
 
+	// GO emulator bug: MERGE fails with internal zetasqlite_merged_table conflicts.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Merge_MultipleWhenClauses()
 	{
 		await Exec(@"
@@ -151,6 +157,8 @@ public class ParityVerificationTests16 : IAsyncLifetime
 	// INSERT INTO...SELECT from another table
 	// ───────────────────────────────────────────────────────────────────────────
 
+	// GO emulator limitation: requires explicit column list in INSERT...SELECT.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task InsertSelect_FromTable()
 	{
 		await Exec(@"
@@ -263,6 +271,8 @@ public class ParityVerificationTests16 : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_table_add_column
 	// ───────────────────────────────────────────────────────────────────────────
 
+	// GO emulator limitation: AlterTableStatement not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task AlterTable_AddColumn()
 	{
 		await Exec("ALTER TABLE `{ds}.products` ADD COLUMN description STRING");

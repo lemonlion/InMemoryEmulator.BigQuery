@@ -206,6 +206,8 @@ WHERE t.x > 2");
 	}
 
 	// ---- Subquery with ORDER BY + LIMIT ----
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Subquery_Top3()
 	{

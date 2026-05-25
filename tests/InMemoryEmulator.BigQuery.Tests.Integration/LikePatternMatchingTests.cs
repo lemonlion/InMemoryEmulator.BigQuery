@@ -72,6 +72,8 @@ public class LikePatternMatchingTests : IAsyncLifetime
 	}
 
 	// ---- LIKE with _ ----
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Like_SingleChar()
 	{
 		var rows = await Q("SELECT word FROM `{ds}.words` WHERE word LIKE 'app__' ORDER BY word");
@@ -166,6 +168,8 @@ public class LikePatternMatchingTests : IAsyncLifetime
 	}
 
 	// ---- CONTAINS_SUBSTR ----
+	// GO emulator limitation: CONTAINS_SUBSTR function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task ContainsSubstr_Basic()
 	{
 		var v = await S("SELECT CONTAINS_SUBSTR('hello world', 'world')");
@@ -176,6 +180,8 @@ public class LikePatternMatchingTests : IAsyncLifetime
 		var v = await S("SELECT CONTAINS_SUBSTR('Hello World', 'hello')");
 		Assert.Equal("True", v);
 	}
+	// GO emulator limitation: CONTAINS_SUBSTR function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task ContainsSubstr_NoMatch()
 	{
 		var v = await S("SELECT CONTAINS_SUBSTR('hello world', 'xyz')");

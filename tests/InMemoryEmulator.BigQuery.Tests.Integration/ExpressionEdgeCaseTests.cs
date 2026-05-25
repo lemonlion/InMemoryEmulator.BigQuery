@@ -55,6 +55,8 @@ public class ExpressionEdgeCaseTests : IAsyncLifetime
 	// ---- Unary minus ----
 	[Fact] public async Task UnaryMinus_Int() => Assert.Equal("-5", await S("SELECT -5"));
 	[Fact] public async Task UnaryMinus_Float() => Assert.Equal("-3.14", await S("SELECT -3.14"));
+	// GO emulator bug: unary minus operator not implemented (missing zetasqlite_unary_minus).
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task UnaryMinus_Column()
 	{
 		var v = await S("SELECT -i FROM `{ds}.nums` WHERE id = 1");

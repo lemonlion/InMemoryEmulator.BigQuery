@@ -62,6 +62,8 @@ public class Round20InvestigationTests : IAsyncLifetime
 	//   "Two STRUCTs are equal if all their fields are equal. NULL fields propagate NULL."
 	// ================================================================
 
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task StructEquality_BothNullFields_ReturnsNull()
 	{
@@ -145,6 +147,8 @@ public class Round20InvestigationTests : IAsyncLifetime
 		Assert.Null(result); // should be NULL, not FALSE
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task In_ValueNotFoundButNullExists_ReturnsNull()
 	{
@@ -235,6 +239,8 @@ public class Round20InvestigationTests : IAsyncLifetime
 	//   "CUME_DIST = NP/NR where NP = number of rows preceding or peer with current row"
 	// ================================================================
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task CumeDist_WithTies()
 	{
@@ -397,6 +403,8 @@ public class Round20InvestigationTests : IAsyncLifetime
 	//   "Returns the value of value_expression at the Nth row of the current window frame."
 	// ================================================================
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task NthValue_WithDefaultFrame()
 	{
@@ -521,6 +529,8 @@ public class Round20InvestigationTests : IAsyncLifetime
 	// 20. Scalar subquery returning multiple rows should error
 	// ================================================================
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task ScalarSubquery_MultipleRows_ShouldError()
 	{
@@ -607,6 +617,8 @@ public class Round20InvestigationTests : IAsyncLifetime
 	//   "STRUCT(1, NULL) != STRUCT(1, NULL) → NULL (not FALSE)"
 	// ================================================================
 
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task StructInequality_BothNullFields_ReturnsNull()
 	{
@@ -618,6 +630,8 @@ public class Round20InvestigationTests : IAsyncLifetime
 	// 26. Struct comparison: one NULL field, other fields differ
 	// ================================================================
 
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task StructEquality_OneNullDifferentOther_ReturnsFalse()
 	{

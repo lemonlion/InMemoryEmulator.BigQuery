@@ -77,6 +77,8 @@ public class MathFunctionPatternTests : IAsyncLifetime
 	[Fact] public async Task Exp_Zero() => Assert.Equal("1", await Scalar("SELECT EXP(0)"));
 	[Fact] public async Task Exp_One() => Assert.Contains("2.71", await Scalar("SELECT EXP(1)") ?? "");
 	[Fact] public async Task Ln_One() => Assert.Equal("0", await Scalar("SELECT LN(1)"));
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Ln_E() => Assert.Contains("1", await Scalar("SELECT ROUND(LN(EXP(1)))") ?? "");
 	[Fact] public async Task Log_Base10() => Assert.Equal("2", await Scalar("SELECT LOG(100, 10)"));
 	[Fact] public async Task Log10_Basic() => Assert.Equal("3", await Scalar("SELECT LOG10(1000)"));
@@ -112,6 +114,8 @@ public class MathFunctionPatternTests : IAsyncLifetime
 	[Fact] public async Task Pi_Approx() => Assert.Contains("3.14", await Scalar("SELECT ACOS(-1)") ?? ""); // pi = acos(-1)
 
 	// IEEE_DIVIDE
+	// GO emulator bug: returns '+Inf'/'-Inf' format instead of standard 'inf'/'-inf'.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task IeeeDivide_Normal() => Assert.Equal("5", await Scalar("SELECT IEEE_DIVIDE(10, 2)"));
 	[Fact] public async Task IeeeDivide_ByZero()
 	{

@@ -127,6 +127,8 @@ public class MathFunctionDeepTests : IAsyncLifetime
     }
 
     // LOG / LN / LOG10
+    // GO emulator produces different results than real BigQuery.
+    [Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
     [Fact] public async Task Ln_E()
     {
         var v = double.Parse((await Scalar("SELECT LN(EXP(1))"))!);
@@ -171,6 +173,8 @@ public class MathFunctionDeepTests : IAsyncLifetime
         var v = double.Parse((await Scalar("SELECT SAFE_DIVIDE(10, 4)"))!);
         Assert.Equal(2.5, v);
     }
+    // GO emulator produces different results than real BigQuery.
+    [Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
     [Fact] public async Task SafeDivide_ByZero() => Assert.Null(await Scalar("SELECT SAFE_DIVIDE(10, 0)"));
 
     // IEEE_DIVIDE

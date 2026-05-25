@@ -70,6 +70,8 @@ public class StringManipulationTests : IAsyncLifetime
 	[Fact] public async Task StrEq_True() => Assert.Equal("True", await Scalar("SELECT 'hello' = 'hello'"));
 	[Fact] public async Task StrEq_False() => Assert.Equal("False", await Scalar("SELECT 'hello' = 'world'"));
 	[Fact] public async Task StrEq_CaseSensitive() => Assert.Equal("False", await Scalar("SELECT 'Hello' = 'hello'"));
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task StrNeq_True() => Assert.Equal("True", await Scalar("SELECT 'hello' != 'world'"));
 	[Fact] public async Task StrLt_True2() => Assert.Equal("True", await Scalar("SELECT 'abc' < 'abd'"));
 	[Fact] public async Task StrGt_True2() => Assert.Equal("True", await Scalar("SELECT 'abd' > 'abc'"));
@@ -98,10 +100,14 @@ public class StringManipulationTests : IAsyncLifetime
 	[Fact] public async Task Unicode_Upper() => Assert.Equal("HÉLLO", await Scalar("SELECT UPPER('héllo')"));
 	[Fact] public async Task Unicode_Lower() => Assert.Equal("héllo", await Scalar("SELECT LOWER('HÉLLO')"));
 	[Fact] public async Task Unicode_Reverse() => Assert.Equal("olléh", await Scalar("SELECT REVERSE('héllo')"));
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Unicode_Substr() => Assert.Equal("hé", await Scalar("SELECT SUBSTR('héllo', 1, 2)"));
 
 	// ---- Edge cases ----
 	[Fact] public async Task SingleChar_Upper() => Assert.Equal("A", await Scalar("SELECT UPPER('a')"));
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task SingleChar_Lower() => Assert.Equal("a", await Scalar("SELECT LOWER('A')"));
 	[Fact] public async Task SingleChar_Reverse() => Assert.Equal("a", await Scalar("SELECT REVERSE('a')"));
 	[Fact] public async Task SingleChar_Length() => Assert.Equal("1", await Scalar("SELECT LENGTH('a')"));

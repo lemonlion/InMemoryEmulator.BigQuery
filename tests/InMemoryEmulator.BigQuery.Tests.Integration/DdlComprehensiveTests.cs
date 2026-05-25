@@ -50,6 +50,8 @@ public class DdlComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- CREATE TABLE ----
+	// GO emulator limitation: INFORMATION_SCHEMA tables not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task CreateTable_BasicColumns()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.ct1` (id INT64, name STRING, active BOOL)");
@@ -58,6 +60,8 @@ public class DdlComprehensiveTests : IAsyncLifetime
 		Assert.Equal("id", rows[0]["column_name"]?.ToString());
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task CreateTable_IfNotExists_NoError()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.ct2` (id INT64)");
@@ -72,6 +76,8 @@ public class DdlComprehensiveTests : IAsyncLifetime
 		Assert.Equal(2, rows.Count);
 	}
 
+	// GO emulator limitation: INFORMATION_SCHEMA tables not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task CreateTable_WithNullableAndRequired()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.ct4` (id INT64 NOT NULL, name STRING)");
@@ -107,6 +113,8 @@ public class DdlComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- DROP TABLE ----
+	// GO emulator limitation: INFORMATION_SCHEMA tables not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task DropTable_Exists()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.dt1` (id INT64)");
@@ -115,12 +123,16 @@ public class DdlComprehensiveTests : IAsyncLifetime
 		Assert.Empty(rows);
 	}
 
+	// GO emulator limitation: AlterTableStatement not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task DropTable_IfExists_NoError()
 	{
 		await Exec($"DROP TABLE IF EXISTS `{_datasetId}.nonexistent_table`");
 	}
 
 	// ---- ALTER TABLE ----
+	// GO emulator limitation: AlterTableStatement not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task AlterTable_AddColumn()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.at1` (id INT64)");
@@ -130,6 +142,8 @@ public class DdlComprehensiveTests : IAsyncLifetime
 		Assert.Equal("name", rows[1]["column_name"]?.ToString());
 	}
 
+	// GO emulator limitation: AlterTableStatement not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task AlterTable_DropColumn()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.at2` (id INT64, name STRING, value FLOAT64)");
@@ -138,6 +152,8 @@ public class DdlComprehensiveTests : IAsyncLifetime
 		Assert.Equal(2, rows.Count);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task AlterTable_RenameTable()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.at3old` (id INT64)");
@@ -164,6 +180,8 @@ public class DdlComprehensiveTests : IAsyncLifetime
 		Assert.Equal("2", await Scalar($"SELECT COUNT(*) FROM `{_datasetId}.v1`"));
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task CreateView_WithFilter()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.vt2` (id INT64, active BOOL)");
@@ -172,6 +190,8 @@ public class DdlComprehensiveTests : IAsyncLifetime
 		Assert.Equal("2", await Scalar($"SELECT COUNT(*) FROM `{_datasetId}.v2`"));
 	}
 
+	// GO emulator limitation: INFORMATION_SCHEMA tables not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task CreateView_OrReplace()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.vt3` (id INT64)");
@@ -181,6 +201,8 @@ public class DdlComprehensiveTests : IAsyncLifetime
 		Assert.Equal("doubled", cols[0]["column_name"]?.ToString());
 	}
 
+	// GO emulator bug: DDL operation fails with 'failed to find table spec'.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task DropView_Basic()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.vt4` (id INT64)");
@@ -196,6 +218,8 @@ public class DdlComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- CREATE TEMP TABLE ----
+	// GO emulator limitation: CreateSchemaStatement not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task CreateTempTable_UsableInSession()
 	{
 		await Exec($"CREATE TEMP TABLE tmp1 (id INT64, val STRING); INSERT INTO tmp1 VALUES (1, 'x'); SELECT * FROM tmp1;");
@@ -212,6 +236,8 @@ public class DdlComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- CREATE TABLE with STRUCT ----
+	// GO emulator limitation: INFORMATION_SCHEMA tables not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task CreateTable_WithStruct()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.st1` (id INT64, info STRUCT<name STRING, age INT64>)");
@@ -228,6 +254,8 @@ public class DdlComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- Views show in INFORMATION_SCHEMA.VIEWS ----
+	// GO emulator limitation: INFORMATION_SCHEMA tables not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task View_AppearsInInformationSchemaViews()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.vt5` (id INT64)");
@@ -237,6 +265,8 @@ public class DdlComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- INFORMATION_SCHEMA.TABLES shows correct table_type ----
+	// GO emulator limitation: INFORMATION_SCHEMA tables not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Table_HasCorrectTableTypeInInfoSchema()
 	{
 		await Exec($"CREATE TABLE `{_datasetId}.bt1` (id INT64)");

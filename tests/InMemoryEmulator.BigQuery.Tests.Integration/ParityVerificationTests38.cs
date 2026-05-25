@@ -42,6 +42,8 @@ public class ParityVerificationTests38 : IAsyncLifetime
 		Assert.Equal("45.123456", result);
 	}
 
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task FormatTimestamp_E3S_ThreeDigits()
 	{
@@ -91,6 +93,8 @@ public class ParityVerificationTests38 : IAsyncLifetime
 		Assert.Equal("hel", result);
 	}
 
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Rpad_Truncation()
 	{
@@ -128,6 +132,8 @@ public class ParityVerificationTests38 : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#regexp_extract
 	//   REGEXP_EXTRACT(value, regexp[, position[, occurrence]])
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task RegexpExtract_WithPosition()
 	{
@@ -153,6 +159,8 @@ public class ParityVerificationTests38 : IAsyncLifetime
 		Assert.Equal("NULL", result);
 	}
 
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task SafeDivide_Normal()
 	{
@@ -163,6 +171,8 @@ public class ParityVerificationTests38 : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#ieee_divide
 	//   "Division of X by Y, never raises an error."
 	//   "Returns FLOAT64. X / 0 = inf or -inf or NaN"
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task IeeeDivide_ByZero_ReturnsInfinity()
 	{
@@ -170,6 +180,8 @@ public class ParityVerificationTests38 : IAsyncLifetime
 		Assert.Equal("inf", result);
 	}
 
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task IeeeDivide_NegativeByZero_ReturnsNegInf()
 	{
@@ -185,6 +197,8 @@ public class ParityVerificationTests38 : IAsyncLifetime
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#is_nan
+	// GO emulator bug: cannot parse inf/nan string literals to FLOAT64.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task IsNan_True()
 	{
@@ -192,6 +206,8 @@ public class ParityVerificationTests38 : IAsyncLifetime
 		Assert.Equal("True", result);
 	}
 
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task IsNan_False()
 	{
@@ -200,6 +216,8 @@ public class ParityVerificationTests38 : IAsyncLifetime
 	}
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/mathematical_functions#is_inf
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task IsInf_PositiveInfinity()
 	{
@@ -207,6 +225,8 @@ public class ParityVerificationTests38 : IAsyncLifetime
 		Assert.Equal("True", result);
 	}
 
+	// GO emulator bug: cannot parse inf/nan string literals to FLOAT64.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task IsInf_NegativeInfinity()
 	{
@@ -222,6 +242,8 @@ public class ParityVerificationTests38 : IAsyncLifetime
 	}
 
 	// GENERATE_ARRAY with negative step
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task GenerateArray_NegativeStep()
 	{

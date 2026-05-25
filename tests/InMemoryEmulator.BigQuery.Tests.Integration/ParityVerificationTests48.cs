@@ -151,6 +151,8 @@ public class ParityVerificationTests48 : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/datetime_functions#datetime
 	//   "If TIMESTAMP, the datetime is extracted at UTC."
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task DatetimeConstructor_FromTimestamp_UsesUtc()
 	{

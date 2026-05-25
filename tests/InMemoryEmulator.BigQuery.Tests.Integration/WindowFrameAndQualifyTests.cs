@@ -97,6 +97,8 @@ public class WindowFrameAndQualifyTests : IAsyncLifetime
 		Assert.Equal("7", rows[0]["drnk"].ToString());
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Ntile_2()
 	{
@@ -194,6 +196,8 @@ public class WindowFrameAndQualifyTests : IAsyncLifetime
 		Assert.Equal("Alice", (string)rows[2]["first_name"]);
 	}
 
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task LastValue_WithFullFrame()
 	{
@@ -365,6 +369,8 @@ public class WindowFrameAndQualifyTests : IAsyncLifetime
 	// COUNT OVER () = total per row
 	// ============================================================
 
+	// GO emulator bug: internal 'mismatch rowid' error in window function computation.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task CountOver_NoOrderBy()
 	{

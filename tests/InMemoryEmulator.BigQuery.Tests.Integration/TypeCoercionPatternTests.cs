@@ -62,6 +62,8 @@ public class TypeCoercionPatternTests : IAsyncLifetime
 
 	// BOOL casts
 	[Fact] public async Task Cast_IntToBool_Nonzero() => Assert.Equal("True", await Scalar("SELECT CAST(1 AS BOOL)"));
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Cast_IntToBool_Zero() => Assert.Equal("False", await Scalar("SELECT CAST(0 AS BOOL)"));
 
 	// DATE casts

@@ -29,6 +29,8 @@ public class NumericEdgeCaseTests : IAsyncLifetime
 	[Fact] public async Task Sub_TwoPositives() => Assert.Equal("333", await Scalar("SELECT 456 - 123"));
 	[Fact] public async Task Mul_TwoPositives() => Assert.Equal("56088", await Scalar("SELECT 123 * 456"));
 	[Fact] public async Task Div_Exact() => Assert.Equal("5", await Scalar("SELECT 25 / 5"));
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Div_Fractional() => Assert.Equal("2.5", await Scalar("SELECT 5.0 / 2"));
 	[Fact] public async Task Div_WithDecimals() => Assert.Equal("3", await Scalar("SELECT 7.5 / 2.5"));
 	[Fact] public async Task Add_Negative() => Assert.Equal("-333", await Scalar("SELECT -456 + 123"));

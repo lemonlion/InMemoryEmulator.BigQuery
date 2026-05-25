@@ -122,6 +122,8 @@ public class CastAndTypeTests : IAsyncLifetime
 	// ---- Special float values ----
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/lexical#floating_point_literals
 	//   "inf and -inf represent positive and negative infinity."
+	// GO emulator bug: cannot parse inf/nan string literals to FLOAT64.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Float_Infinity()
 	{
 		var v = await Scalar("SELECT CAST('inf' AS FLOAT64)");
@@ -130,6 +132,8 @@ public class CastAndTypeTests : IAsyncLifetime
 		Assert.True(v == "Infinity" || v == "\u221E", $"Expected Infinity or ∞, got: {v}");
 	}
 
+	// GO emulator bug: cannot parse inf/nan string literals to FLOAT64.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Float_NegInfinity()
 	{
 		var v = await Scalar("SELECT CAST('-inf' AS FLOAT64)");

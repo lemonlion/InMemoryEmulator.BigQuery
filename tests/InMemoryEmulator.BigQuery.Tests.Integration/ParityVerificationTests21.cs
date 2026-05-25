@@ -103,6 +103,8 @@ public class ParityVerificationTests21 : IAsyncLifetime
 		Assert.Equal("example.com", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task RegexpExtract_NoMatch()
 	{
 		var result = await S("SELECT REGEXP_EXTRACT('hello', r'[0-9]+')");
@@ -152,6 +154,8 @@ public class ParityVerificationTests21 : IAsyncLifetime
 		Assert.Equal("5", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task DateDiff_Years()
 	{
 		var result = await S("SELECT DATE_DIFF(DATE '2024-06-15', DATE '2020-06-15', YEAR)");

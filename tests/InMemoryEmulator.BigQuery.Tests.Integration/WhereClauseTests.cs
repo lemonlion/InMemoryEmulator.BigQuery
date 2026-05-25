@@ -32,6 +32,8 @@ public class WhereClauseTests : IAsyncLifetime
 	}
 
 	// ---- Comparison operators ----
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Where_EQ() => Assert.Equal("1", await Scalar("SELECT COUNT(*) FROM UNNEST(GENERATE_ARRAY(1, 10)) AS x WHERE x = 5"));
 	[Fact] public async Task Where_NEQ() => Assert.Equal("9", await Scalar("SELECT COUNT(*) FROM UNNEST(GENERATE_ARRAY(1, 10)) AS x WHERE x != 5"));
 	[Fact] public async Task Where_GT() => Assert.Equal("5", await Scalar("SELECT COUNT(*) FROM UNNEST(GENERATE_ARRAY(1, 10)) AS x WHERE x > 5"));
@@ -54,6 +56,8 @@ public class WhereClauseTests : IAsyncLifetime
 	// ---- BETWEEN ----
 	[Fact] public async Task Where_BETWEEN() => Assert.Equal("5", await Scalar("SELECT COUNT(*) FROM UNNEST(GENERATE_ARRAY(1, 10)) AS x WHERE x BETWEEN 3 AND 7"));
 	[Fact] public async Task Where_BETWEEN_Single() => Assert.Equal("1", await Scalar("SELECT COUNT(*) FROM UNNEST(GENERATE_ARRAY(1, 10)) AS x WHERE x BETWEEN 5 AND 5"));
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Where_BETWEEN_All() => Assert.Equal("10", await Scalar("SELECT COUNT(*) FROM UNNEST(GENERATE_ARRAY(1, 10)) AS x WHERE x BETWEEN 1 AND 10"));
 	[Fact] public async Task Where_BETWEEN_None() => Assert.Equal("0", await Scalar("SELECT COUNT(*) FROM UNNEST(GENERATE_ARRAY(1, 10)) AS x WHERE x BETWEEN 20 AND 30"));
 

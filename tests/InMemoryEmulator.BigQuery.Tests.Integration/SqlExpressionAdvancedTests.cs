@@ -266,6 +266,8 @@ public class SqlExpressionAdvancedTests : IAsyncLifetime
 
 	// ---- LIKE ----
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators#like_operator
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Like_Percent() => Assert.Equal("True", await Scalar("SELECT 'hello world' LIKE 'hello%'"));
 	[Fact] public async Task Like_Underscore() => Assert.Equal("True", await Scalar("SELECT 'cat' LIKE 'c_t'"));
 	[Fact] public async Task Like_Exact() => Assert.Equal("True", await Scalar("SELECT 'abc' LIKE 'abc'"));

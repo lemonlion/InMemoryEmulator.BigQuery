@@ -36,6 +36,8 @@ public class ParityVerificationTests49 : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
 	//   "All operators will throw an error if the computation result overflows."
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Add_IntegerOverflow_ThrowsError()
 	{
@@ -49,6 +51,8 @@ public class ParityVerificationTests49 : IAsyncLifetime
 	// Integer overflow on * operator → error
 	// ============================================================
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Multiply_IntegerOverflow_ThrowsError()
 	{
@@ -62,6 +66,8 @@ public class ParityVerificationTests49 : IAsyncLifetime
 	// Integer overflow on - operator → error
 	// ============================================================
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Subtract_IntegerOverflow_ThrowsError()
 	{
@@ -105,6 +111,8 @@ public class ParityVerificationTests49 : IAsyncLifetime
 	// SAFE versions correctly return NULL for overflow
 	// ============================================================
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task SafeAdd_Overflow_ReturnsNull()
 	{
@@ -112,6 +120,8 @@ public class ParityVerificationTests49 : IAsyncLifetime
 		Assert.Equal("NULL", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task SafeMultiply_Overflow_ReturnsNull()
 	{

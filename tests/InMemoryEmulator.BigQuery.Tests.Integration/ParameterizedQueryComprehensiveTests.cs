@@ -118,6 +118,8 @@ public class ParameterizedQueryComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- Parameter in LIKE ----
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Param_InLike()
 	{
 		var rows = await Q("SELECT name FROM `{ds}.items` WHERE name LIKE @pattern ORDER BY name",
@@ -159,6 +161,8 @@ public class ParameterizedQueryComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- Parameter with ORDER BY and LIMIT ----
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Param_WithLimit()
 	{
 		var rows = await Q("SELECT name FROM `{ds}.items` WHERE active = @flag ORDER BY price DESC LIMIT 3",

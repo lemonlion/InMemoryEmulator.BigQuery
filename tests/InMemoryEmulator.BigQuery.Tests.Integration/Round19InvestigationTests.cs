@@ -59,6 +59,8 @@ public class Round19InvestigationTests : IAsyncLifetime
 		Assert.Null(result);
 	}
 
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task GenerateDateArray_NullEnd_ReturnsNull()
 	{
@@ -136,6 +138,8 @@ public class Round19InvestigationTests : IAsyncLifetime
 
 	// ============ AREA 9: FORMAT_DATE format elements ============
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/format-elements#format_elements_date_time
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task FormatDate_FullDayName()
 	{
@@ -151,6 +155,8 @@ public class Round19InvestigationTests : IAsyncLifetime
 		Assert.Equal("Mon", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task FormatDate_DayOfYear()
 	{
@@ -183,6 +189,8 @@ public class Round19InvestigationTests : IAsyncLifetime
 		Assert.Equal("2024-02-29", result);
 	}
 
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task LastDay_Year()
 	{
@@ -190,6 +198,8 @@ public class Round19InvestigationTests : IAsyncLifetime
 		Assert.Equal("2024-12-31", result);
 	}
 
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task LastDay_Quarter_Q1()
 	{
@@ -217,6 +227,8 @@ public class Round19InvestigationTests : IAsyncLifetime
 
 	// ============ AREA 12: ERROR function ============
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/debugging_functions#error
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Error_ThrowsWithMessage()
 	{
@@ -244,6 +256,8 @@ public class Round19InvestigationTests : IAsyncLifetime
 		Assert.Equal("5", result);
 	}
 
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task RegexpInstr_WithOccurrence()
 	{
@@ -269,6 +283,8 @@ public class Round19InvestigationTests : IAsyncLifetime
 	}
 
 	// ============ AREA 6 extended: UNIX_DATE roundtrip ============
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task DateFromUnixDate_NegativeDay()
 	{
@@ -278,6 +294,8 @@ public class Round19InvestigationTests : IAsyncLifetime
 	}
 
 	// ============ AREA 9 extended: FORMAT_DATE %B (full month name) ============
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task FormatDate_FullMonthName()
 	{
@@ -312,6 +330,8 @@ public class Round19InvestigationTests : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#last_day
 	//   "LAST_DAY(date_expression[, date_part])"
 	//   For WEEK(WEEKDAY), returns the last day of that week definition
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task LastDay_WeekMonday()
 	{

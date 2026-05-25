@@ -95,6 +95,8 @@ public class WhereClauseAdvancedPatternTests : IAsyncLifetime
 		var v = await S("SELECT COUNT(*) FROM `{ds}.emp` WHERE name LIKE '%e'");
 		Assert.Equal("4", v); // Alice, Dave, Eve, Grace
 	}
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Like_Contains()
 	{
 		var v = await S("SELECT COUNT(*) FROM `{ds}.emp` WHERE name LIKE '%a%'");

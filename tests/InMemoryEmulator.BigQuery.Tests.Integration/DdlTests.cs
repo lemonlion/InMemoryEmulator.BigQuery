@@ -67,6 +67,8 @@ public class DdlTests : IAsyncLifetime
 		Assert.NotNull(table);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task CreateTable_IfNotExists_NoError()
 	{
@@ -116,6 +118,8 @@ public class DdlTests : IAsyncLifetime
 			() => client.GetTableAsync(_datasetId, "to_drop"));
 	}
 
+	// GO emulator bug: DDL operation fails with 'failed to find table spec'.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task DropTable_IfExists_NoError()
 	{
@@ -128,6 +132,8 @@ public class DdlTests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#alter_table_add_column_statement
 	//   "Adds one or more columns."
+	// GO emulator limitation: AlterTableStatement not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task AlterTable_AddColumn()
 	{
@@ -179,6 +185,8 @@ public class DdlTests : IAsyncLifetime
 				$"SELECT * FROM `{_datasetId}.drop_view`", parameters: null));
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task CreateOrReplace_Table()
 	{

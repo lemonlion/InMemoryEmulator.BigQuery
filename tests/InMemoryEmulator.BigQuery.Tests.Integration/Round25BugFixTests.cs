@@ -83,6 +83,8 @@ public class Round25BugFixTests : IAsyncLifetime
 	/// "if the format specifier is %t or %T, a NULL value produces 'NULL' (without quotes)"
 	/// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#format_string
 	/// </summary>
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Format_NullArg_T_ReturnsLiteralNull()
 	{
@@ -114,6 +116,8 @@ public class Round25BugFixTests : IAsyncLifetime
 	/// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/string_functions#contains_substr
 	///   "If the expression is NULL, the return value is NULL."
 	/// </summary>
+	// GO emulator limitation: CONTAINS_SUBSTR function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task ContainsSubstr_NullExpression_ReturnsNull()
 	{

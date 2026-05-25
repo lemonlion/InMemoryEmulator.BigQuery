@@ -41,6 +41,8 @@ public class InformationSchemaTests : IAsyncLifetime
         return rows.Count > 0 ? rows[0][0]?.ToString() : null;
     }
 
+    // GO emulator limitation: INFORMATION_SCHEMA tables not supported in goccy/bigquery-emulator.
+    [Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
     [Fact] public async Task Tables_ListAll()
     {
         var rows = await Query("SELECT table_name FROM `{ds}.INFORMATION_SCHEMA.TABLES` ORDER BY table_name");
@@ -55,6 +57,8 @@ public class InformationSchemaTests : IAsyncLifetime
         Assert.All(rows, r => Assert.Equal("BASE TABLE", r["table_type"]?.ToString()));
     }
 
+    // GO emulator limitation: INFORMATION_SCHEMA tables not supported in goccy/bigquery-emulator.
+    [Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
     [Fact] public async Task Columns_ListAll()
     {
         var rows = await Query("SELECT column_name FROM `{ds}.INFORMATION_SCHEMA.COLUMNS` WHERE table_name = 'users' ORDER BY ordinal_position");
@@ -64,6 +68,8 @@ public class InformationSchemaTests : IAsyncLifetime
         Assert.Equal("email", rows[2]["column_name"]?.ToString());
     }
 
+    // GO emulator limitation: INFORMATION_SCHEMA tables not supported in goccy/bigquery-emulator.
+    [Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
     [Fact] public async Task Columns_DataType()
     {
         var rows = await Query("SELECT column_name, data_type FROM `{ds}.INFORMATION_SCHEMA.COLUMNS` WHERE table_name = 'users' ORDER BY ordinal_position");
@@ -77,6 +83,8 @@ public class InformationSchemaTests : IAsyncLifetime
         Assert.Equal(3, rows.Count);
     }
 
+    // GO emulator limitation: INFORMATION_SCHEMA tables not supported in goccy/bigquery-emulator.
+    [Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
     [Fact] public async Task Tables_Count()
     {
         var result = await Scalar("SELECT COUNT(*) FROM `{ds}.INFORMATION_SCHEMA.TABLES`");

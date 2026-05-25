@@ -78,6 +78,8 @@ public class DdlAdvancedOperationTests : IAsyncLifetime
 	}
 
 	// CREATE TABLE IF NOT EXISTS
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task CreateTableIfNotExists_NewTable()
 	{
 		await Execute("CREATE TABLE IF NOT EXISTS `{ds}.maybe_table` (id INT64)");
@@ -96,6 +98,8 @@ public class DdlAdvancedOperationTests : IAsyncLifetime
 	}
 
 	// CREATE OR REPLACE TABLE
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task CreateOrReplace_NewTable()
 	{
 		await Execute("CREATE OR REPLACE TABLE `{ds}.replace_table` (id INT64, name STRING)");
@@ -140,6 +144,8 @@ public class DdlAdvancedOperationTests : IAsyncLifetime
 		await Assert.ThrowsAnyAsync<Exception>(async () => await Scalar("SELECT * FROM `{ds}.to_drop`"));
 	}
 
+	// GO emulator bug: DDL operation fails with 'failed to find table spec'.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task DropTableIfExists_Exists()
 	{
 		await Execute("CREATE TABLE `{ds}.maybe_drop` (id INT64)");
@@ -154,6 +160,8 @@ public class DdlAdvancedOperationTests : IAsyncLifetime
 	}
 
 	// TRUNCATE TABLE
+	// GO emulator limitation: AlterTableStatement not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task TruncateTable()
 	{
 		await Execute("CREATE TABLE `{ds}.to_truncate` (id INT64, name STRING)");
@@ -163,6 +171,8 @@ public class DdlAdvancedOperationTests : IAsyncLifetime
 	}
 
 	// ALTER TABLE ADD COLUMN
+	// GO emulator limitation: AlterTableStatement not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task AlterTable_AddColumn()
 	{
 		await Execute("CREATE TABLE `{ds}.alter_test` (id INT64)");
@@ -182,6 +192,8 @@ public class DdlAdvancedOperationTests : IAsyncLifetime
 	}
 
 	// ALTER TABLE DROP COLUMN
+	// GO emulator limitation: AlterTableStatement not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task AlterTable_DropColumn()
 	{
 		await Execute("CREATE TABLE `{ds}.drop_col` (id INT64, name STRING, extra STRING)");

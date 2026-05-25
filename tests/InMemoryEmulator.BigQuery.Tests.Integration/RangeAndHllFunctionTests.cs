@@ -48,6 +48,8 @@ public class RangeAndHllFunctionTests : IAsyncLifetime
 	[Fact] [Trait(TestTraits.Target, TestTraits.InMemoryOnly)] public async Task Range_NullEnd() => Assert.NotNull(await Scalar("SELECT RANGE(DATE '2024-01-01', NULL)"));
 
 	// ---- RANGE_START / RANGE_END ----
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task RangeStart_Date() { var v = await Scalar("SELECT RANGE_START(RANGE(DATE '2024-01-01', DATE '2024-12-31'))"); Assert.Contains("2024-01-01", v); }
 	[Fact] public async Task RangeEnd_Date() { var v = await Scalar("SELECT RANGE_END(RANGE(DATE '2024-01-01', DATE '2024-12-31'))"); Assert.Contains("2024-12-31", v); }
 	[Fact] public async Task RangeStart_Null() => Assert.Null(await Scalar("SELECT RANGE_START(RANGE(NULL, DATE '2024-12-31'))"));

@@ -56,6 +56,8 @@ public class WindowFunctionAdvancedTests : IAsyncLifetime
 	}
 
 	// ---- RANK / DENSE_RANK ----
+	// GO emulator bug: incorrectly attempts to parse string columns as integers in window ORDER BY.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Rank_WithTies()
 	{
 		var rows = await Query("SELECT product, RANK() OVER (ORDER BY product) AS rnk FROM `{ds}.sales` ORDER BY product, id");

@@ -60,6 +60,8 @@ public class StringFunctionPatternTests : IAsyncLifetime
 	// ---- REPLACE ----
 	[Fact] public async Task Replace_Single() => Assert.Equal("hi world", await Scalar("SELECT REPLACE('hello world', 'hello', 'hi')"));
 	[Fact] public async Task Replace_Multiple() => Assert.Equal("hellx wxrld", await Scalar("SELECT REPLACE('hello world', 'o', 'x')"));
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Replace_Remove() => Assert.Equal("hell wrld", await Scalar("SELECT REPLACE('hello world', 'o', '')"));
 	[Fact] public async Task Replace_NoMatch() => Assert.Equal("hello", await Scalar("SELECT REPLACE('hello', 'xyz', 'abc')"));
 	[Fact] public async Task Replace_Empty() => Assert.Equal("", await Scalar("SELECT REPLACE('', 'a', 'b')"));
@@ -78,14 +80,20 @@ public class StringFunctionPatternTests : IAsyncLifetime
 
 	// ---- SUBSTR ----
 	[Fact] public async Task Substr_From2() => Assert.Equal("ello", await Scalar("SELECT SUBSTR('Hello', 2)"));
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Substr_From1Len3() => Assert.Equal("Hel", await Scalar("SELECT SUBSTR('Hello', 1, 3)"));
 	[Fact] public async Task Substr_From3Len2() => Assert.Equal("ll", await Scalar("SELECT SUBSTR('Hello', 3, 2)"));
 	[Fact] public async Task Substr_Full() => Assert.Equal("Hello", await Scalar("SELECT SUBSTR('Hello', 1, 5)"));
 	[Fact] public async Task Substr_Last() => Assert.Equal("o", await Scalar("SELECT SUBSTR('Hello', 5)"));
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Substr_Negative() => Assert.Equal("lo", await Scalar("SELECT SUBSTR('Hello', -2)"));
 
 	// ---- STARTS_WITH / ENDS_WITH ----
 	[Fact] public async Task StartsWith_True() => Assert.Equal("True", await Scalar("SELECT STARTS_WITH('Hello', 'He')"));
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task StartsWith_False() => Assert.Equal("False", await Scalar("SELECT STARTS_WITH('Hello', 'lo')"));
 	[Fact] public async Task StartsWith_Full() => Assert.Equal("True", await Scalar("SELECT STARTS_WITH('Hello', 'Hello')"));
 	[Fact] public async Task StartsWith_Empty() => Assert.Equal("True", await Scalar("SELECT STARTS_WITH('Hello', '')"));
@@ -97,6 +105,8 @@ public class StringFunctionPatternTests : IAsyncLifetime
 	// ---- STRPOS / INSTR ----
 	[Fact] public async Task Strpos_Found() => Assert.Equal("7", await Scalar("SELECT STRPOS('Hello World', 'World')"));
 	[Fact] public async Task Strpos_NotFound() => Assert.Equal("0", await Scalar("SELECT STRPOS('Hello World', 'xyz')"));
+	// GO emulator bug: INSTR fails with 'invalid position number' even with valid default position.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Strpos_FirstOccurrence() => Assert.Equal("3", await Scalar("SELECT STRPOS('abcabc', 'c')"));
 	[Fact] public async Task Instr_Found() => Assert.Equal("7", await Scalar("SELECT INSTR('Hello World', 'World')"));
 
@@ -126,10 +136,14 @@ public class StringFunctionPatternTests : IAsyncLifetime
 	[Fact] public async Task Concat_WithEmpty() => Assert.Equal("ac", await Scalar("SELECT CONCAT('a', '', 'c')"));
 
 	// ---- LEFT / RIGHT ----
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Left_3() => Assert.Equal("Hel", await Scalar("SELECT LEFT('Hello', 3)"));
 	[Fact] public async Task Left_Full() => Assert.Equal("Hello", await Scalar("SELECT LEFT('Hello', 10)"));
 	[Fact] public async Task Left_0() => Assert.Equal("", await Scalar("SELECT LEFT('Hello', 0)"));
 	[Fact] public async Task Right_3() => Assert.Equal("llo", await Scalar("SELECT RIGHT('Hello', 3)"));
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Right_Full() => Assert.Equal("Hello", await Scalar("SELECT RIGHT('Hello', 10)"));
 	[Fact] public async Task Right_0() => Assert.Equal("", await Scalar("SELECT RIGHT('Hello', 0)"));
 

@@ -199,6 +199,8 @@ public class ConditionalAndCastComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task ConcatOperator_Strings() => Assert.Equal("hello world", await Scalar("SELECT 'hello' || ' ' || 'world'"));
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/operators
 	//   "Operands of || cannot be literal NULL"
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task ConcatOperator_WithNull()
 	{

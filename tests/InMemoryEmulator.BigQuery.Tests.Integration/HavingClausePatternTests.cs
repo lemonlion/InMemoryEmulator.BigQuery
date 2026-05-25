@@ -99,6 +99,8 @@ public class HavingClausePatternTests : IAsyncLifetime
 	}
 
 	// ---- HAVING with multi-column GROUP BY ----
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Having_MultiGroup()
 	{
 		var rows = await Q("SELECT region, product, COUNT(*) AS cnt FROM `{ds}.sales` GROUP BY region, product HAVING COUNT(*) > 1 ORDER BY region, product");

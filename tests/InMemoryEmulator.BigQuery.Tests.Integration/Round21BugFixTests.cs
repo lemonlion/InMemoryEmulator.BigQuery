@@ -197,6 +197,8 @@ public class Round21BugFixTests : IAsyncLifetime
         Assert.Null(rows[0]["s"]);
     }
 
+    // GO emulator produces different results than real BigQuery.
+    [Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
     [Fact]
     public async Task ArrayAgg_EmptyInput_ReturnsNull_WithIsNull()
     {
@@ -318,6 +320,8 @@ public class Round21BugFixTests : IAsyncLifetime
 
     #region Additional edge cases
 
+    // GO emulator produces different results than real BigQuery.
+    [Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
     [Fact]
     public async Task ArrayAgg_AllNullsIgnoreNulls_ReturnsNull()
     {

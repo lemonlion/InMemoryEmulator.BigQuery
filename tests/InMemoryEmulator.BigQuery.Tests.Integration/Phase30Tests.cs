@@ -108,6 +108,8 @@ public class Phase30Tests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-control-language
 	//   "GRANT statement grants permissions to users, groups, or service accounts."
+	// GO emulator limitation: GrantStatement not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Grant_NoOp_DoesNotThrow()
 	{
@@ -120,6 +122,8 @@ public class Phase30Tests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-control-language
 	//   "REVOKE statement revokes previously granted permissions."
+	// GO emulator limitation: RevokeStatement not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Revoke_NoOp_DoesNotThrow()
 	{
@@ -163,6 +167,8 @@ public class Phase30Tests : IAsyncLifetime
 
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language#beginexceptionend
 	//   "Catches errors raised in the BEGIN block and executes the EXCEPTION block."
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task BeginExceptionEnd_CatchesError()
 	{
@@ -179,6 +185,8 @@ SELECT x AS result;
 		Assert.Equal("-1", result.First()["result"]?.ToString());
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task BeginExceptionEnd_ErrorMessage_Available()
 	{

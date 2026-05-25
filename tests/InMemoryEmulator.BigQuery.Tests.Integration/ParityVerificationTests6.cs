@@ -279,6 +279,8 @@ public class ParityVerificationTests6 : IAsyncLifetime
 	// ===== NTILE =====
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/numbering_functions#ntile
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Ntile_Basic()
 	{
@@ -539,6 +541,8 @@ public class ParityVerificationTests6 : IAsyncLifetime
 		Assert.Equal("2.5", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task IeeeDivide_ByZero_ReturnsInfinity()
 	{
@@ -546,6 +550,8 @@ public class ParityVerificationTests6 : IAsyncLifetime
 		Assert.Equal("inf", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task IeeeDivide_ZeroByZero_ReturnsNaN()
 	{
@@ -601,6 +607,8 @@ public class ParityVerificationTests6 : IAsyncLifetime
 	// ===== SAFE functions =====
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/functions-reference#safe_prefix
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Safe_Log_NegativeReturnsNull()
 	{
@@ -726,6 +734,8 @@ public class ParityVerificationTests6 : IAsyncLifetime
 		Assert.Equal("True", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Like_Underscore()
 	{

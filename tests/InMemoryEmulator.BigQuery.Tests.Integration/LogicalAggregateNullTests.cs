@@ -32,6 +32,8 @@ public class LogicalAggregateNullTests : IAsyncLifetime
 	/// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#logical_and
 	///   "Returns the logical AND of all non-NULL expressions."
 	/// </summary>
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task LogicalAnd_TrueAndNull_ReturnsTrue()
 	{
@@ -39,6 +41,8 @@ public class LogicalAggregateNullTests : IAsyncLifetime
 		Assert.Equal("True", result);
 	}
 
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task LogicalAnd_AllTrue_ReturnsTrue()
 	{
@@ -46,6 +50,8 @@ public class LogicalAggregateNullTests : IAsyncLifetime
 		Assert.Equal("True", result);
 	}
 
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task LogicalAnd_FalseAndNull_ReturnsFalse()
 	{
@@ -71,6 +77,8 @@ public class LogicalAggregateNullTests : IAsyncLifetime
 	/// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/aggregate_functions#logical_or
 	///   "Returns the logical OR of all non-NULL expressions."
 	/// </summary>
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task LogicalOr_FalseAndNull_ReturnsFalse()
 	{
@@ -85,6 +93,8 @@ public class LogicalAggregateNullTests : IAsyncLifetime
 		Assert.Equal("False", result);
 	}
 
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task LogicalOr_TrueAndNull_ReturnsTrue()
 	{

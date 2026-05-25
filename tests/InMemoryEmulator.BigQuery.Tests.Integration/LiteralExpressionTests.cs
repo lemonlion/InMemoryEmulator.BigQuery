@@ -193,6 +193,8 @@ public class LiteralExpressionTests : IAsyncLifetime
 
 	// ---- LIKE literals ----
 	[Fact] public async Task Literal_Like() => Assert.Equal("True", await S("SELECT 'hello' LIKE 'hel%'"));
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Literal_NotLike() => Assert.Equal("True", await S("SELECT 'hello' NOT LIKE 'xyz%'"));
 	[Fact] public async Task Literal_LikeUnderscore() => Assert.Equal("True", await S("SELECT 'hello' LIKE 'hell_'"));
 

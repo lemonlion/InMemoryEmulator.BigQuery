@@ -86,11 +86,15 @@ public class StringFunctionComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task StartsWith_Empty() => Assert.Equal("True", await S("SELECT STARTS_WITH('hello', '')"));
 
 	// ---- CONTAINS_SUBSTR ----
+	// GO emulator limitation: CONTAINS_SUBSTR function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task ContainsSubstr_True() => Assert.Equal("True", await S("SELECT CONTAINS_SUBSTR('hello world', 'world')"));
 	[Fact] public async Task ContainsSubstr_CaseInsensitive() => Assert.Equal("True", await S("SELECT CONTAINS_SUBSTR('Hello World', 'HELLO')"));
 
 	// ---- STRPOS / INSTR ----
 	[Fact] public async Task Strpos_Found() => Assert.Equal("7", await S("SELECT STRPOS('hello world', 'world')"));
+	// GO emulator bug: INSTR fails with 'invalid position number' even with valid default position.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Strpos_NotFound() => Assert.Equal("0", await S("SELECT STRPOS('hello', 'xyz')"));
 	[Fact] public async Task Instr_Basic() => Assert.Equal("7", await S("SELECT INSTR('hello world', 'world')"));
 

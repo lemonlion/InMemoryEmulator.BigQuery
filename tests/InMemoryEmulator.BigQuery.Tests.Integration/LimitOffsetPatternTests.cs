@@ -94,6 +94,8 @@ public class LimitOffsetPatternTests : IAsyncLifetime
 	}
 
 	// ---- Pagination simulation ----
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Pagination_Page1()
 	{
 		var rows = await Q("SELECT id, name FROM `{ds}.items` ORDER BY id LIMIT 5 OFFSET 0");

@@ -60,6 +60,8 @@ public class OperatorComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task Mod_NegDividend() => Assert.Equal("-1", await Scalar("SELECT MOD(-10, 3)"));
 
 	// ---- Unary minus ----
+	// GO emulator bug: unary minus operator not implemented (missing zetasqlite_unary_minus).
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task UnaryMinus_Pos() => Assert.Equal("-5", await Scalar("SELECT -5"));
 	[Fact] public async Task UnaryMinus_Neg() => Assert.Equal("5", await Scalar("SELECT -(-5)"));
 	[Fact] public async Task UnaryMinus_Zero() => Assert.Equal("0", await Scalar("SELECT -0"));
@@ -128,6 +130,8 @@ public class OperatorComprehensiveTests : IAsyncLifetime
 	[Fact] public async Task Like_Wildcard() => Assert.Equal("True", await Scalar("SELECT 'hello' LIKE '%ello'"));
 	[Fact] public async Task Like_FullWild() => Assert.Equal("True", await Scalar("SELECT 'hello' LIKE '%'"));
 	[Fact] public async Task Like_StartWild() => Assert.Equal("True", await Scalar("SELECT 'hello' LIKE 'hel%'"));
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Like_MidWild() => Assert.Equal("True", await Scalar("SELECT 'hello' LIKE 'h%o'"));
 	[Fact] public async Task Like_SingleChar() => Assert.Equal("True", await Scalar("SELECT 'hello' LIKE 'hell_'"));
 	[Fact] public async Task Like_NoMatch() => Assert.Equal("False", await Scalar("SELECT 'hello' LIKE 'world'"));

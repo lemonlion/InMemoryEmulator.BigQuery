@@ -52,6 +52,8 @@ public class FormatFunctionDeepTests : IAsyncLifetime
 	// FORMAT() with float patterns
 	// ============================================================
 	[Fact] public async Task Format_FloatDefault() => Assert.Contains("3.14", await Scalar("SELECT FORMAT('%f', 3.14159)") ?? "");
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Format_FloatPrecision2() => Assert.Equal("3.14", await Scalar("SELECT FORMAT('%.2f', 3.14159)"));
 	[Fact] public async Task Format_FloatPrecision0() => Assert.Equal("3", await Scalar("SELECT FORMAT('%.0f', 3.14159)"));
 	[Fact] public async Task Format_FloatScientific() => Assert.Contains("e", (await Scalar("SELECT FORMAT('%e', 12345.6789)"))?.ToLower() ?? "");
@@ -62,6 +64,8 @@ public class FormatFunctionDeepTests : IAsyncLifetime
 	// FORMAT() with string patterns
 	// ============================================================
 	[Fact] public async Task Format_String() => Assert.Equal("hello", await Scalar("SELECT FORMAT('%s', 'hello')"));
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Format_StringPadded() => Assert.Equal("   hi", await Scalar("SELECT FORMAT('%5s', 'hi')"));
 	[Fact] public async Task Format_StringLeftAligned() => Assert.Equal("hi   ", await Scalar("SELECT FORMAT('%-5s', 'hi')"));
 	[Fact] public async Task Format_MultipleArgs() => Assert.Equal("Name: Alice, Age: 30", await Scalar("SELECT FORMAT('Name: %s, Age: %d', 'Alice', 30)"));
@@ -112,6 +116,8 @@ public class FormatFunctionDeepTests : IAsyncLifetime
 	// FORMAT_TIME
 	// ============================================================
 	[Fact] public async Task FormatTime_Full() => Assert.Equal("14:30:00", await Scalar("SELECT FORMAT_TIME('%H:%M:%S', TIME '14:30:00')"));
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task FormatTime_HourMinute() => Assert.Equal("14:30", await Scalar("SELECT FORMAT_TIME('%H:%M', TIME '14:30:00')"));
 	[Fact] public async Task FormatTime_12Hour() => Assert.Equal("02", await Scalar("SELECT FORMAT_TIME('%I', TIME '14:30:00')"));
 	[Fact] public async Task FormatTime_NullInput() => Assert.Null(await Scalar("SELECT FORMAT_TIME('%H', NULL)"));

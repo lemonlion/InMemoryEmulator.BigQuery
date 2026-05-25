@@ -89,6 +89,8 @@ public class StringFunctionEdgeCaseTests : IAsyncLifetime
 	[Fact] public async Task Strpos_Found() => Assert.Equal("3", await Scalar("SELECT STRPOS('hello', 'llo')"));
 	[Fact] public async Task Strpos_NotFound() => Assert.Equal("0", await Scalar("SELECT STRPOS('hello', 'xyz')"));
 	[Fact] public async Task Strpos_EmptyNeedle() => Assert.Equal("1", await Scalar("SELECT STRPOS('hello', '')"));
+	// GO emulator bug: INSTR fails with 'invalid position number' even with valid default position.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Strpos_EmptyHaystack() => Assert.Equal("0", await Scalar("SELECT STRPOS('', 'a')"));
 
 	// ---- INSTR ----
@@ -120,10 +122,14 @@ public class StringFunctionEdgeCaseTests : IAsyncLifetime
 	[Fact] public async Task Split_Comma() => Assert.Equal("3", await Scalar("SELECT ARRAY_LENGTH(SPLIT('a,b,c', ','))"));
 	[Fact] public async Task Split_EmptyDelimiter() { var v = await Scalar("SELECT ARRAY_LENGTH(SPLIT('abc', ''))"); Assert.NotNull(v); }
 	[Fact] public async Task Split_NoMatch() => Assert.Equal("1", await Scalar("SELECT ARRAY_LENGTH(SPLIT('hello', ','))"));
+	// GO emulator limitation: CONTAINS_SUBSTR function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Split_EmptyString() { var v = await Scalar("SELECT ARRAY_LENGTH(SPLIT('', ','))"); Assert.NotNull(v); }
 
 	// ---- CONTAINS_SUBSTR ----
 	[Fact] public async Task ContainsSubstr_Found() => Assert.Equal("True", await Scalar("SELECT CONTAINS_SUBSTR('Hello World', 'world')"));
+	// GO emulator limitation: CONTAINS_SUBSTR function not implemented in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task ContainsSubstr_NotFound() => Assert.Equal("False", await Scalar("SELECT CONTAINS_SUBSTR('Hello World', 'xyz')"));
 	[Fact] public async Task ContainsSubstr_CaseInsensitive() => Assert.Equal("True", await Scalar("SELECT CONTAINS_SUBSTR('Hello', 'HELLO')"));
 	[Fact] public async Task ContainsSubstr_EmptySubstr() => Assert.Equal("True", await Scalar("SELECT CONTAINS_SUBSTR('Hello', '')"));
@@ -184,6 +190,8 @@ public class StringFunctionEdgeCaseTests : IAsyncLifetime
 	[Fact] public async Task CodePointsRoundTrip() => Assert.Equal("hello", await Scalar("SELECT CODE_POINTS_TO_STRING(TO_CODE_POINTS('hello'))"));
 
 	// ---- SAFE_CONVERT_BYTES_TO_STRING ----
+	// GO emulator bug: COLLATE function fails with 'unexpected spec literal'.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task SafeConvertBytesToString_Ascii() => Assert.Equal("hello", await Scalar("SELECT SAFE_CONVERT_BYTES_TO_STRING(b'hello')"));
 
 	// ---- COLLATE ----

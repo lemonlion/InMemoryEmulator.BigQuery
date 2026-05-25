@@ -44,6 +44,8 @@ public class SubqueryAdvancedCoverageTests : IAsyncLifetime
 	private async Task<List<BigQueryRow>> Q(string sql) { var c = await _fixture.GetClientAsync(); var r = await c.ExecuteQueryAsync(sql.Replace("{ds}", _ds), parameters: null); return r.ToList(); }
 
 	// ---- Scalar subquery in SELECT ----
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Scalar_MaxSalary()
 	{
 		var rows = await Q("SELECT name, salary, (SELECT MAX(salary) FROM `{ds}.emp`) AS max_sal FROM `{ds}.emp` ORDER BY name LIMIT 1");

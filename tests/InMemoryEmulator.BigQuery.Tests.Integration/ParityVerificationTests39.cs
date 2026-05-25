@@ -34,6 +34,8 @@ public class ParityVerificationTests39 : IAsyncLifetime
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/date_functions#extract
 	//   "WEEK: Returns the week number of the date in the range [0, 53].
 	//    Weeks begin with Sunday, and dates prior to the first Sunday of the year are in week 0."
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Extract_Week_Jan1Friday_ReturnsZero()
 	{
@@ -42,6 +44,8 @@ public class ParityVerificationTests39 : IAsyncLifetime
 		Assert.Equal("0", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Extract_Week_Jan3Sunday_ReturnsOne()
 	{
@@ -50,6 +54,8 @@ public class ParityVerificationTests39 : IAsyncLifetime
 		Assert.Equal("1", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Extract_Week_Jan1Sunday_ReturnsOne()
 	{
@@ -58,6 +64,8 @@ public class ParityVerificationTests39 : IAsyncLifetime
 		Assert.Equal("1", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Extract_Week_Dec31_2016()
 	{
@@ -104,6 +112,8 @@ public class ParityVerificationTests39 : IAsyncLifetime
 		Assert.Equal("2024-01-15 10:30:45.123456", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task ParseTimestamp_E_Star_S()
 	{
@@ -123,6 +133,8 @@ public class ParityVerificationTests39 : IAsyncLifetime
 	// DATETIME_TRUNC ISOWEEK / ISOYEAR
 	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/datetime_functions#datetime_trunc
 	//   "ISOWEEK: Truncates datetime_expression to the preceding Monday."
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task DatetimeTrunc_IsoWeek()
 	{
@@ -132,6 +144,8 @@ public class ParityVerificationTests39 : IAsyncLifetime
 		Assert.Equal("2024-01-08 00:00:00", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task DatetimeTrunc_IsoYear()
 	{

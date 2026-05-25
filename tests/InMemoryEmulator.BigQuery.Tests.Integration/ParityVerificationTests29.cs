@@ -114,6 +114,8 @@ public class ParityVerificationTests29 : IAsyncLifetime
 	// FULL OUTER JOIN
 	// ───────────────────────────────────────────────────────────────────────────
 
+	// GO emulator bug: FULL OUTER JOIN fails with 'Duplicate column name' in result table creation.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task FullOuterJoin_Basic()
 	{
 		var rows = await Q(@"

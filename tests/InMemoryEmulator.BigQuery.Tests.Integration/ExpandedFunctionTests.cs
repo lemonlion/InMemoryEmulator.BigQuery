@@ -149,6 +149,8 @@ public class ExpandedFunctionTests : IAsyncLifetime
 		Assert.Null(rows[0]["result"]);
 	}
 
+	// GO emulator bug: returns '+Inf'/'-Inf' format instead of standard 'inf'/'-inf'.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task IeeeDivide_ByZero_ReturnsInfinity()
 	{

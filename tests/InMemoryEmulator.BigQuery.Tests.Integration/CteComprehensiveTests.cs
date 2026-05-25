@@ -196,6 +196,8 @@ public class CteComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- CTE with EXISTS ----
+	// GO emulator limitation: RECURSIVE CTEs not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Cte_WithExists()
 	{
 		var v = await Scalar(@"
@@ -220,6 +222,8 @@ public class CteComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- Recursive CTE: factorial ----
+	// GO emulator limitation: RECURSIVE CTEs not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Cte_Recursive_Factorial()
 	{
 		var v = await Scalar(@"
@@ -233,6 +237,8 @@ public class CteComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- Recursive CTE: fibonacci ----
+	// GO emulator limitation: RECURSIVE CTEs not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Cte_Recursive_Fibonacci()
 	{
 		var rows = await Query(@"
@@ -248,6 +254,8 @@ public class CteComprehensiveTests : IAsyncLifetime
 	}
 
 	// ---- Recursive CTE: generate series ----
+	// GO emulator limitation: RECURSIVE CTEs not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Cte_Recursive_Series()
 	{
 		var v = await Scalar(@"

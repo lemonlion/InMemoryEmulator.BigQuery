@@ -110,6 +110,8 @@ public class Round16BugFixTests : IAsyncLifetime
 		Assert.Equal("TRUE", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task Format_T_Null_ProducesNULL()
 	{

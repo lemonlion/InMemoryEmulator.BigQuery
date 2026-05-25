@@ -25,11 +25,15 @@ public class OperatorDeepTests : IAsyncLifetime
 	}
 
 	// ---- Comparison: = ----
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Eq_IntTrue() => Assert.Equal("True", await Scalar("SELECT 1 = 1"));
 	[Fact] public async Task Eq_IntFalse() => Assert.Equal("False", await Scalar("SELECT 1 = 2"));
 	[Fact] public async Task Eq_StrTrue() => Assert.Equal("True", await Scalar("SELECT 'a' = 'a'"));
 	[Fact] public async Task Eq_StrFalse() => Assert.Equal("False", await Scalar("SELECT 'a' = 'b'"));
 	[Fact] public async Task Eq_FloatTrue() => Assert.Equal("True", await Scalar("SELECT 1.5 = 1.5"));
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Eq_FloatFalse() => Assert.Equal("False", await Scalar("SELECT 1.5 = 2.5"));
 	[Fact] public async Task Eq_BoolTrue() => Assert.Equal("True", await Scalar("SELECT TRUE = TRUE"));
 	[Fact] public async Task Eq_BoolFalse() => Assert.Equal("False", await Scalar("SELECT TRUE = FALSE"));
@@ -60,6 +64,8 @@ public class OperatorDeepTests : IAsyncLifetime
 	[Fact] public async Task StrLt_True() => Assert.Equal("True", await Scalar("SELECT 'abc' < 'abd'"));
 	[Fact] public async Task StrLt_False() => Assert.Equal("False", await Scalar("SELECT 'abd' < 'abc'"));
 	[Fact] public async Task StrGt_True() => Assert.Equal("True", await Scalar("SELECT 'b' > 'a'"));
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task StrGt_False() => Assert.Equal("False", await Scalar("SELECT 'a' > 'b'"));
 	[Fact] public async Task StrLte_True() => Assert.Equal("True", await Scalar("SELECT 'a' <= 'a'"));
 	[Fact] public async Task StrGte_True() => Assert.Equal("True", await Scalar("SELECT 'b' >= 'a'"));
@@ -95,6 +101,8 @@ public class OperatorDeepTests : IAsyncLifetime
 	[Fact] public async Task Or_TT() => Assert.Equal("True", await Scalar("SELECT TRUE OR TRUE"));
 	[Fact] public async Task Or_TF() => Assert.Equal("True", await Scalar("SELECT TRUE OR FALSE"));
 	[Fact] public async Task Or_FF() => Assert.Equal("False", await Scalar("SELECT FALSE OR FALSE"));
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Not_True() => Assert.Equal("False", await Scalar("SELECT NOT TRUE"));
 	[Fact] public async Task Not_False() => Assert.Equal("True", await Scalar("SELECT NOT FALSE"));
 	[Fact] public async Task And_Multi() => Assert.Equal("True", await Scalar("SELECT TRUE AND TRUE AND TRUE"));
@@ -105,6 +113,8 @@ public class OperatorDeepTests : IAsyncLifetime
 	// ---- IS NULL / IS NOT NULL ----
 	[Fact] public async Task IsNull_True2() => Assert.Equal("True", await Scalar("SELECT NULL IS NULL"));
 	[Fact] public async Task IsNull_False2() => Assert.Equal("False", await Scalar("SELECT 1 IS NULL"));
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task IsNotNull_True2() => Assert.Equal("True", await Scalar("SELECT 1 IS NOT NULL"));
 	[Fact] public async Task IsNotNull_False2() => Assert.Equal("False", await Scalar("SELECT NULL IS NOT NULL"));
 	[Fact] public async Task IsNull_String() => Assert.Equal("False", await Scalar("SELECT '' IS NULL"));
@@ -120,6 +130,8 @@ public class OperatorDeepTests : IAsyncLifetime
 	[Fact] public async Task Coalesce_Single() => Assert.Equal("5", await Scalar("SELECT COALESCE(5)"));
 	[Fact] public async Task Coalesce_String() => Assert.Equal("hello", await Scalar("SELECT COALESCE(NULL, 'hello')"));
 	[Fact] public async Task Coalesce_Zero() => Assert.Equal("0", await Scalar("SELECT COALESCE(0, 1)"));
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Coalesce_EmptyStr() => Assert.Equal("", await Scalar("SELECT COALESCE('', 'x')"));
 
 	// ---- IFNULL / NULLIF ----
@@ -127,6 +139,8 @@ public class OperatorDeepTests : IAsyncLifetime
 	[Fact] public async Task Ifnull_Null() => Assert.Equal("2", await Scalar("SELECT IFNULL(NULL, 2)"));
 	[Fact] public async Task Ifnull_String() => Assert.Equal("hello", await Scalar("SELECT IFNULL('hello', 'world')"));
 	[Fact] public async Task Ifnull_NullStr() => Assert.Equal("world", await Scalar("SELECT IFNULL(CAST(NULL AS STRING), 'world')"));
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Nullif_Different() => Assert.Equal("1", await Scalar("SELECT NULLIF(1, 2)"));
 	[Fact] public async Task Nullif_Same() => Assert.Null(await Scalar("SELECT NULLIF(1, 1)"));
 	[Fact] public async Task Nullif_StrDiff() => Assert.Equal("a", await Scalar("SELECT NULLIF('a', 'b')"));
@@ -142,11 +156,15 @@ public class OperatorDeepTests : IAsyncLifetime
 	[Fact] public async Task Case_SimpleElse() => Assert.Equal("other", await Scalar("SELECT CASE 3 WHEN 1 THEN 'one' WHEN 2 THEN 'two' ELSE 'other' END"));
 	[Fact] public async Task Case_Nested() => Assert.Equal("big", await Scalar("SELECT CASE WHEN 10 > 5 THEN CASE WHEN 10 > 8 THEN 'big' ELSE 'medium' END ELSE 'small' END"));
 	[Fact] public async Task Case_Int() => Assert.Equal("10", await Scalar("SELECT CASE WHEN TRUE THEN 10 ELSE 20 END"));
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Case_Multi() => Assert.Equal("b", await Scalar("SELECT CASE WHEN 1=2 THEN 'a' WHEN 2=2 THEN 'b' WHEN 3=3 THEN 'c' END"));
 
 	// ---- String concat operator || ----
 	[Fact] public async Task Pipe_Concat() => Assert.Equal("ab", await Scalar("SELECT 'a' || 'b'"));
 	[Fact] public async Task Pipe_Three() => Assert.Equal("abc", await Scalar("SELECT 'a' || 'b' || 'c'"));
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Pipe_Empty() => Assert.Equal("ab", await Scalar("SELECT 'a' || '' || 'b'"));
 	[Fact] public async Task Pipe_Space() => Assert.Equal("hello world", await Scalar("SELECT 'hello' || ' ' || 'world'"));
 
@@ -156,6 +174,8 @@ public class OperatorDeepTests : IAsyncLifetime
 	[Fact] public async Task Prec_DivSub() => Assert.Equal("8", await Scalar("SELECT 10 - 4 / 2"));
 	[Fact] public async Task Prec_ParenSub() => Assert.Equal("3", await Scalar("SELECT (10 - 4) / 2"));
 	[Fact] public async Task Prec_NotAnd() => Assert.Equal("False", await Scalar("SELECT NOT TRUE AND FALSE"));
+	// GO emulator crash: query causes emulator process to crash.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Prec_NotOr() => Assert.Equal("True", await Scalar("SELECT NOT FALSE OR FALSE"));
 	[Fact] public async Task Prec_Complex() => Assert.Equal("14", await Scalar("SELECT 2 + 3 * 4"));
 	[Fact] public async Task Prec_UnaryNeg() => Assert.Equal("-7", await Scalar("SELECT -3 - 4"));

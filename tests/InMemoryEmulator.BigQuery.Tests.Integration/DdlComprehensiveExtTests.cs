@@ -40,12 +40,16 @@ public class DdlComprehensiveExtTests : IAsyncLifetime
 		await Exec("INSERT INTO `{ds}.t1` (id, name) VALUES (1, 'test')");
 		Assert.Equal("1", await S("SELECT COUNT(*) FROM `{ds}.t1`"));
 	}
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Create_AllTypes()
 	{
 		await Exec("CREATE TABLE `{ds}.t2` (a INT64, b FLOAT64, c STRING, d BOOL, e BYTES, f DATE, g TIMESTAMP, h NUMERIC)");
 		await Exec("INSERT INTO `{ds}.t2` (a, b, c, d) VALUES (1, 1.5, 'hello', true)");
 		Assert.Equal("1", await S("SELECT COUNT(*) FROM `{ds}.t2`"));
 	}
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Create_IfNotExists()
 	{
 		await Exec("CREATE TABLE `{ds}.t3` (id INT64)");
@@ -85,6 +89,8 @@ public class DdlComprehensiveExtTests : IAsyncLifetime
 	}
 
 	// ---- DROP TABLE ----
+	// GO emulator bug: DDL operation fails with 'failed to find table spec'.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Drop_Basic()
 	{
 		await Exec("CREATE TABLE `{ds}.drp1` (id INT64)");
@@ -107,6 +113,8 @@ public class DdlComprehensiveExtTests : IAsyncLifetime
 	}
 
 	// ---- ALTER TABLE ----
+	// GO emulator limitation: AlterTableStatement not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact] public async Task Alter_AddColumn()
 	{
 		await Exec("CREATE TABLE `{ds}.alt1` (id INT64)");

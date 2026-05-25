@@ -89,6 +89,8 @@ public class Round23BugFixTests : IAsyncLifetime
 	// Falls through to default case returning end of month
 	// =====================================================
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task LastDay_IsoWeek_Monday_ReturnsSunday()
 	{
@@ -99,6 +101,8 @@ public class Round23BugFixTests : IAsyncLifetime
 		Assert.Equal("2024-01-14", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task LastDay_IsoWeek_Sunday_ReturnsSameDay()
 	{
@@ -107,6 +111,8 @@ public class Round23BugFixTests : IAsyncLifetime
 		Assert.Equal("2024-01-14", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task LastDay_IsoWeek_Wednesday_ReturnsSunday()
 	{
@@ -115,6 +121,8 @@ public class Round23BugFixTests : IAsyncLifetime
 		Assert.Equal("2024-01-14", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task LastDay_IsoWeek_Saturday_ReturnsSunday()
 	{
@@ -128,6 +136,8 @@ public class Round23BugFixTests : IAsyncLifetime
 	// Falls through to default case returning end of month
 	// =====================================================
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task LastDay_IsoYear_2024()
 	{
@@ -138,6 +148,8 @@ public class Round23BugFixTests : IAsyncLifetime
 		Assert.Equal("2024-12-29", result);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task LastDay_IsoYear_LeapYear()
 	{

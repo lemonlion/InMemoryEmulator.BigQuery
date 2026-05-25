@@ -73,6 +73,8 @@ public class JobVariantTests : IAsyncLifetime
 		Assert.NotNull(job.Statistics?.Query?.TotalBytesProcessed);
 	}
 
+	// GO emulator produces different results than real BigQuery.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task DryRun_InvalidQuery_ThrowsError()
 	{
@@ -128,6 +130,8 @@ public class JobVariantTests : IAsyncLifetime
 		Assert.Equal("DONE", fetched.Status.State);
 	}
 
+	// GO emulator limitation: VariableDeclaration not supported in goccy/bigquery-emulator.
+	[Trait(TestTraits.Target, TestTraits.EmulatorDivergence)]
 	[Fact]
 	public async Task InsertJob_WithScriptQuery()
 	{
