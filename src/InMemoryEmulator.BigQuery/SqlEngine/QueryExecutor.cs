@@ -182,7 +182,7 @@ return ExecuteGroupBy(sel, rows);
 bool hasWindow = sel.Columns.Any(c => ContainsWindowFunction(c.Expr));
 
 // SELECT projection
-var (schema, tableRows) = hasWindow ? ProjectWithWindows(sel, rows) : Project(sel, rows, cteResults);
+var (schema, tableRows) = hasWindow ? ProjectWithWindows(sel, rows, cteResults) : Project(sel, rows, cteResults);
 
 // QUALIFY - filter after window functions
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#qualify_clause
@@ -469,12 +469,20 @@ if (hasWindowInGroupBy && resultRows.Count > 0)
 			}
 		}
 	}
-	// Update schema types based on actual values
+	// Update schema types based on actual values — scan all rows for non-null values
 	schema = new TableSchema { Fields = sel.Columns.Select(c =>
 	{
 		var name = c.Alias ?? DeriveColumnName(c.Expr);
-		var val = resultRows[0].GetValueOrDefault(name);
-		return new TableFieldSchema { Name = name, Type = InferType(val) };
+		var t = "STRING";
+		foreach (var rr in resultRows)
+		{
+			if (rr.TryGetValue(name, out var v) && v is not null)
+			{
+				t = InferType(v);
+				break;
+			}
+		}
+		return new TableFieldSchema { Name = name, Type = t };
 	}).ToList() };
 }
 
@@ -1241,6 +1249,7 @@ Dictionary<string, (TableSchema, List<Dictionary<string, object?>>)>? cteResults
 var items = stmt.Columns;
 var schemaFields = new List<TableFieldSchema>();
 var resultRows = new List<TableRow>();
+var allCellDicts = new List<Dictionary<string, object?>>();
 
 foreach (var row in rows)
 {
@@ -1264,6 +1273,7 @@ var colName = item.Alias ?? DeriveColumnName(item.Expr);
 cells[colName] = Evaluate(item.Expr, row, cteResults: cteResults);
 }
 }
+allCellDicts.Add(cells);
 resultRows.Add(DictToTableRow(cells));
 if (schemaFields.Count == 0)
 {
@@ -1286,14 +1296,31 @@ schemaFields.AddRange(cells.Keys.Select(k =>
 if (schemaFields.Count == 0)
 		schemaFields.AddRange(items.Where(i => i.Expr is not StarExpr).Select(i => new TableFieldSchema { Name = i.Alias ?? DeriveColumnName(i.Expr), Type = "STRING" }));
 
+// Fix schema types inferred as STRING from null values in the first row.
+// Scan all rows to find non-null values and update the type.
+for (int fi = 0; fi < schemaFields.Count; fi++)
+{
+	if (schemaFields[fi].Type != "STRING") continue;
+	var fieldName = schemaFields[fi].Name;
+	foreach (var cellDict in allCellDicts)
+	{
+		if (cellDict.TryGetValue(fieldName, out var v) && v is not null)
+		{
+			schemaFields[fi].Type = InferType(v);
+			break;
+		}
+	}
+}
+
 return (new TableSchema { Fields = schemaFields }, resultRows);
 }
 
 private (TableSchema Schema, List<TableRow> Rows) ProjectWithWindows(
-SelectStatement stmt, List<RowContext> rows)
+SelectStatement stmt, List<RowContext> rows, Dictionary<string, (TableSchema, List<Dictionary<string, object?>>)>? cteResults = null)
 {
 var schemaFields = new List<TableFieldSchema>();
 var resultRows = new List<TableRow>();
+var allCellDicts = new List<Dictionary<string, object?>>();
 
 foreach (var row in rows)
 {
@@ -1323,9 +1350,38 @@ var colName = item.Alias ?? DeriveColumnName(item.Expr);
 cells[colName] = Evaluate(item.Expr, row);
 }
 }
+allCellDicts.Add(cells);
 resultRows.Add(DictToTableRow(cells));
 if (schemaFields.Count == 0)
-schemaFields.AddRange(cells.Keys.Select(k => new TableFieldSchema { Name = k, Type = InferType(cells[k]) }));
+schemaFields.AddRange(cells.Keys.Select(k =>
+{
+	var t = InferType(cells[k]);
+	if (t == "STRING" && cells[k] is null && cteResults is not null)
+	{
+		foreach (var (cteSchema, _) in cteResults.Values)
+		{
+			var cf = cteSchema?.Fields?.FirstOrDefault(f => f.Name.Equals(k, StringComparison.OrdinalIgnoreCase));
+			if (cf is not null && cf.Type != "STRING") { t = cf.Type; break; }
+		}
+	}
+	return new TableFieldSchema { Name = k, Type = t };
+}));
+}
+
+// Fix schema types inferred as STRING from null values in the first row.
+// Scan all rows to find non-null values and update the type.
+for (int fi = 0; fi < schemaFields.Count; fi++)
+{
+	if (schemaFields[fi].Type != "STRING") continue;
+	var fieldName = schemaFields[fi].Name;
+	foreach (var cellDict in allCellDicts)
+	{
+		if (cellDict.TryGetValue(fieldName, out var v) && v is not null)
+		{
+			schemaFields[fi].Type = InferType(v);
+			break;
+		}
+	}
 }
 
 return (new TableSchema { Fields = schemaFields }, resultRows);

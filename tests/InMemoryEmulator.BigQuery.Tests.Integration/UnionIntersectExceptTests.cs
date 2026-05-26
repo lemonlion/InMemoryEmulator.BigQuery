@@ -190,4 +190,120 @@ public class UnionIntersectExceptTests : IAsyncLifetime
         Assert.NotNull(rows[0]["cur_spend"]);
         Assert.NotNull(rows[0]["agg_cards"]);
     }
+
+    // Bug 1 regression: When a CTE group produces all-NULL aggregates for one period,
+    // ProjectWithWindows must still infer correct types from the CTE schema (not STRING).
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#with_clause
+    [Fact]
+    public async Task UnionAll_CTE_WindowFunctions_NullAggregates_InfersTypesFromCteSchema()
+    {
+        var client = await _fixture.GetClientAsync();
+        await client.ExecuteQueryAsync($@"CREATE TABLE `{_datasetId}.sales2` (
+            loc STRING, period DATE, spend NUMERIC, cards INT64, visits INT64
+        )", parameters: null);
+        // L3 only has data in the "current" period — "comparison" aggregates will all be NULL
+        await client.ExecuteQueryAsync($@"INSERT INTO `{_datasetId}.sales2` (loc, period, spend, cards, visits) VALUES
+            ('L3', DATE '2026-02-16', 500.00, 25, 30),
+            ('L3', DATE '2026-02-23', 700.00, 35, 40)", parameters: null);
+
+        var sql = $@"
+            WITH aggregated AS (
+                SELECT loc,
+                    SUM(IF(period >= DATE '2026-02-16', cards, NULL)) AS cur_cards,
+                    SUM(IF(period >= DATE '2026-02-16', spend, NULL)) AS cur_spend,
+                    SUM(IF(period >= DATE '2026-02-16', visits, NULL)) AS cur_visits,
+                    SUM(IF(period < DATE '2026-02-16', cards, NULL)) AS cmp_cards,
+                    SUM(IF(period < DATE '2026-02-16', spend, NULL)) AS cmp_spend,
+                    SUM(IF(period < DATE '2026-02-16', visits, NULL)) AS cmp_visits
+                FROM `{_datasetId}.sales2`
+                GROUP BY loc
+            )
+            SELECT loc, cur_cards, cur_spend,
+                SAFE_DIVIDE(cur_spend, cur_visits) AS avg_spend,
+                SAFE_DIVIDE(cur_cards - cmp_cards, cmp_cards) AS cards_change,
+                SUM(cur_cards) OVER () AS agg_cards,
+                SAFE_DIVIDE(SUM(cur_spend) OVER (), SUM(cur_visits) OVER ()) AS agg_avg_spend
+            FROM aggregated
+            UNION ALL
+            SELECT loc, cmp_cards, cmp_spend,
+                SAFE_DIVIDE(cmp_spend, cmp_visits) AS avg_spend,
+                0.0 AS cards_change,
+                SUM(cmp_cards) OVER () AS agg_cards,
+                SAFE_DIVIDE(SUM(cmp_spend) OVER (), SUM(cmp_visits) OVER ()) AS agg_avg_spend
+            FROM aggregated";
+
+        var result = await client.ExecuteQueryAsync(sql, parameters: null);
+        var rows = result.ToList();
+
+        Assert.Equal(2, rows.Count);
+
+        // The schema types must NOT be STRING — they should be INT64/NUMERIC/FLOAT64
+        var curCardsField = result.Schema.Fields.First(f => f.Name == "cur_cards");
+        var curSpendField = result.Schema.Fields.First(f => f.Name == "cur_spend");
+        var avgSpendField = result.Schema.Fields.First(f => f.Name == "avg_spend");
+        var aggCardsField = result.Schema.Fields.First(f => f.Name == "agg_cards");
+        var cardsChangeField = result.Schema.Fields.First(f => f.Name == "cards_change");
+
+        Assert.NotEqual("STRING", curCardsField.Type);
+        Assert.NotEqual("STRING", curSpendField.Type);
+        Assert.NotEqual("STRING", avgSpendField.Type);
+        Assert.NotEqual("STRING", aggCardsField.Type);
+        Assert.NotEqual("STRING", cardsChangeField.Type);
+    }
+
+    // Bug 1 core: SELECT with window functions from a CTE where the first row has NULL aggregates
+    // must infer column types from the CTE schema, not from the NULL value.
+    // This tests ProjectWithWindows CTE schema lookup directly (no UNION ALL coercion to mask it).
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#with_clause
+    [Fact]
+    public async Task WindowFunction_CTE_NullFirstRow_InfersTypesFromCteSchema()
+    {
+        var client = await _fixture.GetClientAsync();
+        await client.ExecuteQueryAsync($@"CREATE TABLE `{_datasetId}.sales3` (
+            loc STRING, period DATE, spend NUMERIC, cards INT64, visits INT64
+        )", parameters: null);
+        // 'A1' only has comparison-period data → cur_ aggregates are NULL
+        // 'B2' has current-period data → cur_ aggregates are non-NULL
+        // GROUP BY loc ORDER BY loc makes A1 the first row
+        await client.ExecuteQueryAsync($@"INSERT INTO `{_datasetId}.sales3` (loc, period, spend, cards, visits) VALUES
+            ('A1', DATE '2026-01-10', 500.00, 25, 30),
+            ('A1', DATE '2026-01-17', 700.00, 35, 40),
+            ('B2', DATE '2026-02-16', 1000.00, 50, 60),
+            ('B2', DATE '2026-02-23', 2000.00, 100, 120)", parameters: null);
+
+        var sql = $@"
+            WITH aggregated AS (
+                SELECT loc,
+                    SUM(IF(period >= DATE '2026-02-16', cards, NULL)) AS cur_cards,
+                    SUM(IF(period >= DATE '2026-02-16', spend, NULL)) AS cur_spend,
+                    SUM(IF(period >= DATE '2026-02-16', visits, NULL)) AS cur_visits
+                FROM `{_datasetId}.sales3`
+                GROUP BY loc
+            )
+            SELECT loc, cur_cards, cur_spend,
+                SAFE_DIVIDE(cur_spend, cur_visits) AS avg_spend,
+                SUM(cur_cards) OVER () AS agg_cards
+            FROM aggregated
+            ORDER BY loc";
+
+        var result = await client.ExecuteQueryAsync(sql, parameters: null);
+        var rows = result.ToList();
+
+        Assert.Equal(2, rows.Count);
+
+        // A1 should have NULL cur_cards, B2 should have 150
+        Assert.Null(rows[0]["cur_cards"]);
+        Assert.NotNull(rows[1]["cur_cards"]);
+
+        // Schema types must NOT be STRING — they should reflect the CTE types
+        var curCardsField = result.Schema.Fields.First(f => f.Name == "cur_cards");
+        var curSpendField = result.Schema.Fields.First(f => f.Name == "cur_spend");
+        var avgSpendField = result.Schema.Fields.First(f => f.Name == "avg_spend");
+        var aggCardsField = result.Schema.Fields.First(f => f.Name == "agg_cards");
+
+        Assert.NotEqual("STRING", curCardsField.Type);
+        Assert.NotEqual("STRING", curSpendField.Type);
+        Assert.NotEqual("STRING", avgSpendField.Type);
+        Assert.NotEqual("STRING", aggCardsField.Type);
+    }
 }
