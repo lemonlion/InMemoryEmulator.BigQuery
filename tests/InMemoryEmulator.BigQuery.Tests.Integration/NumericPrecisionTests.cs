@@ -166,4 +166,72 @@ public class NumericPrecisionTests : IAsyncLifetime
         var v = double.Parse((await Scalar("SELECT LN(1)"))!);
         Assert.Equal(0.0, v);
     }
+
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#numeric_type
+    //   NUMERIC division rounds half away from zero to 9 decimal places.
+    [Fact]
+    public async Task Numeric_Division_RoundsHalfAwayFromZero()
+    {
+        // 2/3 = 0.666666666... → 10th digit is 6 (≥5), so rounds up to 0.666666667
+        var result = await Scalar("SELECT CAST(2 AS NUMERIC) / CAST(3 AS NUMERIC)");
+        Assert.Equal("0.666666667", result);
+    }
+
+    [Fact]
+    public async Task Numeric_SafeDivide_RoundsHalfAwayFromZero()
+    {
+        var result = await Scalar("SELECT SAFE_DIVIDE(CAST(2 AS NUMERIC), CAST(3 AS NUMERIC))");
+        Assert.Equal("0.666666667", result);
+    }
+
+    [Fact]
+    public async Task Numeric_Division_TruncatesWhenDigitBelow5()
+    {
+        // 1/3 = 0.333333333... → 10th digit is 3 (<5), so truncates to 0.333333333
+        var result = await Scalar("SELECT CAST(1 AS NUMERIC) / CAST(3 AS NUMERIC)");
+        Assert.Equal("0.333333333", result);
+    }
+
+    [Fact]
+    public async Task Numeric_SafeDivide_NegativeRoundsAwayFromZero()
+    {
+        // -2/3 = -0.666666666... → rounds away from zero to -0.666666667
+        var result = await Scalar("SELECT SAFE_DIVIDE(CAST(-2 AS NUMERIC), CAST(3 AS NUMERIC))");
+        Assert.Equal("-0.666666667", result);
+    }
+
+    [Fact]
+    public async Task Numeric_SafeDivide_NestedPrecision()
+    {
+        // Nested SAFE_DIVIDE matching the production pattern
+        var client = await _fixture.GetClientAsync();
+        await client.ExecuteQueryAsync($"CREATE TABLE `{_datasetId}.num_t` (a NUMERIC, b NUMERIC)", parameters: null);
+        await client.ExecuteQueryAsync($"INSERT INTO `{_datasetId}.num_t` (a, b) VALUES (12125.48, 492), (25506.26, 1108)", parameters: null);
+
+        var sql = $@"
+            WITH agg AS (
+                SELECT
+                    SUM(IF(a > 20000, a, NULL)) AS cmp_takings,
+                    SUM(IF(a > 20000, b, NULL)) AS cmp_visits,
+                    SUM(IF(a < 20000, a, NULL)) AS cur_takings,
+                    SUM(IF(a < 20000, b, NULL)) AS cur_visits
+                FROM `{_datasetId}.num_t`
+            )
+            SELECT
+                SAFE_DIVIDE(cur_takings, cur_visits) AS cur_avg,
+                SAFE_DIVIDE(cmp_takings, cmp_visits) AS cmp_avg,
+                SAFE_DIVIDE(
+                    SAFE_DIVIDE(cur_takings, cur_visits) - SAFE_DIVIDE(cmp_takings, cmp_visits),
+                    SAFE_DIVIDE(cmp_takings, cmp_visits)
+                ) AS change
+            FROM agg";
+
+        var result = await client.ExecuteQueryAsync(sql, parameters: null);
+        var rows = result.ToList();
+        Assert.Single(rows);
+
+        var changeField = result.Schema.Fields.First(f => f.Name == "change");
+        Assert.NotEqual("STRING", changeField.Type);
+        Assert.NotNull(rows[0]["change"]);
+    }
 }

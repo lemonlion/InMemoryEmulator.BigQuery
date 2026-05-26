@@ -127,4 +127,67 @@ public class UnionIntersectExceptTests : IAsyncLifetime
         Assert.Equal(2, rows.Count);
         Assert.Equal("4", rows[0]["cnt"]?.ToString());
     }
+
+    // Bug 1 regression: CTE + SUM(IF()) + UNION ALL + Window functions should return correct types
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#with_clause
+    [Fact]
+    public async Task UnionAll_CTE_SumIf_WindowFunctions_ReturnsCorrectTypes()
+    {
+        var client = await _fixture.GetClientAsync();
+        await client.ExecuteQueryAsync($@"CREATE TABLE `{_datasetId}.sales` (
+            loc STRING, period DATE, spend NUMERIC, cards INT64, visits INT64
+        )", parameters: null);
+        await client.ExecuteQueryAsync($@"INSERT INTO `{_datasetId}.sales` (loc, period, spend, cards, visits) VALUES
+            ('L1', DATE '2026-02-16', 1000.50, 50, 60),
+            ('L1', DATE '2026-02-23', 2000.75, 100, 120),
+            ('L1', DATE '2026-01-19', 900.25, 45, 55),
+            ('L1', DATE '2026-01-26', 1800.00, 90, 110),
+            ('L2', DATE '2026-02-16', 500.00, 25, 30),
+            ('L2', DATE '2026-01-19', 450.00, 22, 28)", parameters: null);
+
+        var sql = $@"
+            WITH aggregated AS (
+                SELECT loc,
+                    SUM(IF(period >= DATE '2026-02-16', cards, NULL)) AS cur_cards,
+                    SUM(IF(period >= DATE '2026-02-16', spend, NULL)) AS cur_spend,
+                    SUM(IF(period >= DATE '2026-02-16', visits, NULL)) AS cur_visits,
+                    SUM(IF(period < DATE '2026-02-16', cards, NULL)) AS cmp_cards,
+                    SUM(IF(period < DATE '2026-02-16', spend, NULL)) AS cmp_spend,
+                    SUM(IF(period < DATE '2026-02-16', visits, NULL)) AS cmp_visits
+                FROM `{_datasetId}.sales`
+                GROUP BY loc
+            )
+            SELECT loc, cur_cards, cur_spend,
+                SAFE_DIVIDE(cur_spend, cur_visits) AS avg_spend,
+                SAFE_DIVIDE(cur_cards - cmp_cards, cmp_cards) AS cards_change,
+                SUM(cur_cards) OVER () AS agg_cards,
+                SAFE_DIVIDE(SUM(cur_spend) OVER (), SUM(cur_visits) OVER ()) AS agg_avg_spend
+            FROM aggregated
+            UNION ALL
+            SELECT loc, cmp_cards, cmp_spend,
+                SAFE_DIVIDE(cmp_spend, cmp_visits) AS avg_spend,
+                0.0 AS cards_change,
+                SUM(cmp_cards) OVER () AS agg_cards,
+                SAFE_DIVIDE(SUM(cmp_spend) OVER (), SUM(cmp_visits) OVER ()) AS agg_avg_spend
+            FROM aggregated";
+
+        var result = await client.ExecuteQueryAsync(sql, parameters: null);
+        var rows = result.ToList();
+
+        Assert.Equal(4, rows.Count);
+
+        var curCardsField = result.Schema.Fields.First(f => f.Name == "cur_cards");
+        var curSpendField = result.Schema.Fields.First(f => f.Name == "cur_spend");
+        var avgSpendField = result.Schema.Fields.First(f => f.Name == "avg_spend");
+        var aggCardsField = result.Schema.Fields.First(f => f.Name == "agg_cards");
+
+        Assert.NotEqual("STRING", curCardsField.Type);
+        Assert.NotEqual("STRING", curSpendField.Type);
+        Assert.NotEqual("STRING", avgSpendField.Type);
+        Assert.NotEqual("STRING", aggCardsField.Type);
+
+        Assert.NotNull(rows[0]["cur_cards"]);
+        Assert.NotNull(rows[0]["cur_spend"]);
+        Assert.NotNull(rows[0]["agg_cards"]);
+    }
 }

@@ -191,4 +191,77 @@ public class DistinctAdvancedPatternTests : IAsyncLifetime
 		var distinct = await Q("SELECT DISTINCT * FROM `{ds}.t`");
 		Assert.True(distinct.Count <= all.Count);
 	}
+
+	// ---- Bug 3 regression: DISTINCT with alias + ORDER BY DESC + many duplicates ----
+	// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#select_distinct
+	//   "DISTINCT can be used in conjunction with ORDER BY."
+	[Fact]
+	public async Task Distinct_OrderByDesc_WithAlias_DuplicateRows_ReturnsAllDistinctRows()
+	{
+		var c = await _fixture.GetClientAsync();
+		await c.ExecuteQueryAsync($@"CREATE TABLE `{_ds}.dates` (
+			location_id STRING, transaction_period DATE, weekly_or_monthly STRING, customer_id STRING
+		)", parameters: null);
+
+		var values = new System.Text.StringBuilder();
+		var startDate = new DateTime(2025, 9, 15);
+		for (int i = 0; i < 24; i++)
+		{
+			var date = startDate.AddDays(i * 7).ToString("yyyy-MM-dd");
+			for (int dup = 0; dup < 3; dup++)
+			{
+				if (values.Length > 0) values.Append(',');
+				values.Append($"('LOC1',DATE '{date}','weekly','CUST1')");
+			}
+		}
+
+		await c.ExecuteQueryAsync(
+			$"INSERT INTO `{_ds}.dates` (location_id, transaction_period, weekly_or_monthly, customer_id) VALUES {values}",
+			parameters: null);
+
+		var rows = await Q($@"
+			SELECT DISTINCT transaction_period AS report_date, weekly_or_monthly, location_id, customer_id
+			FROM `{_ds}.dates`
+			WHERE location_id = 'LOC1'
+			ORDER BY report_date DESC");
+
+		Assert.Equal(24, rows.Count);
+		var firstDate = Convert.ToDateTime(rows[0]["report_date"]).ToString("yyyy-MM-dd");
+		var lastDate = Convert.ToDateTime(rows[^1]["report_date"]).ToString("yyyy-MM-dd");
+		Assert.Equal("2026-02-23", firstDate);
+		Assert.Equal("2025-09-15", lastDate);
+	}
+
+	[Fact]
+	public async Task Distinct_OrderByDesc_NoAlias_DuplicateRows_ReturnsAllDistinctRows()
+	{
+		var c = await _fixture.GetClientAsync();
+		await c.ExecuteQueryAsync($@"CREATE TABLE `{_ds}.dates2` (
+			report_date DATE, cat STRING
+		)", parameters: null);
+
+		var values = new System.Text.StringBuilder();
+		for (int i = 0; i < 10; i++)
+		{
+			var date = new DateTime(2025, 1, 1).AddDays(i * 7).ToString("yyyy-MM-dd");
+			for (int dup = 0; dup < 5; dup++)
+			{
+				if (values.Length > 0) values.Append(',');
+				values.Append($"(DATE '{date}','X')");
+			}
+		}
+
+		await c.ExecuteQueryAsync(
+			$"INSERT INTO `{_ds}.dates2` (report_date, cat) VALUES {values}",
+			parameters: null);
+
+		var rows = await Q($@"
+			SELECT DISTINCT report_date, cat
+			FROM `{_ds}.dates2`
+			ORDER BY report_date DESC");
+
+		Assert.Equal(10, rows.Count);
+		Assert.Equal("2025-03-05", Convert.ToDateTime(rows[0]["report_date"]).ToString("yyyy-MM-dd"));
+		Assert.Equal("2025-01-01", Convert.ToDateTime(rows[^1]["report_date"]).ToString("yyyy-MM-dd"));
+	}
 }

@@ -224,13 +224,23 @@ var projFieldNames = schema.Fields.Select(f => f.Name).ToHashSet();
 var dicts = tableRows.Select((r, i) =>
 {
     var d = ParseTypedRow(RowToDict(r, schema), schema);
-    if (i < rows.Count)
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#select_distinct
+    //   After DISTINCT, source row indices no longer correspond to projected row indices,
+    //   so merging source fields would introduce wrong values. BigQuery also requires
+    //   ORDER BY with DISTINCT to reference only output columns.
+    if (!sel.Distinct && i < rows.Count)
         foreach (var kv in rows[i].Fields)
             d.TryAdd(kv.Key, kv.Value);
     return d;
 }).ToList();
 var contexts = dicts.Select(d => new RowContext(d, null)).ToList();
-var resolvedOrderBy = ResolveOrderByAliases(ResolveOrderByOrdinals(sel.OrderBy, sel.Columns), sel.Columns);
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/query-syntax#select_distinct
+//   With DISTINCT, ORDER BY must reference output columns, so keep aliases as-is
+//   (they match projected column names). Resolving to original expressions would
+//   look up columns that are absent from the post-DISTINCT projected row.
+var resolvedOrderBy = sel.Distinct
+    ? ResolveOrderByOrdinals(sel.OrderBy, sel.Columns)
+    : ResolveOrderByAliases(ResolveOrderByOrdinals(sel.OrderBy, sel.Columns), sel.Columns);
 contexts = OrderBy(contexts, resolvedOrderBy);
 tableRows = contexts.Select(c =>
 {
@@ -2200,7 +2210,17 @@ bool b => b ? 1L : 0L,
 string s => ParseInt64String(s),
 _ => Convert.ToInt64(val, CultureInfo.InvariantCulture)
 },
-"FLOAT64" or "FLOAT" or "NUMERIC" or "BIGNUMERIC" or "DECIMAL" => val switch
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_numeric
+//   NUMERIC/BIGNUMERIC: exact decimal with 38 digits precision, 9 decimal places.
+"NUMERIC" or "BIGNUMERIC" or "DECIMAL" => val switch
+{
+decimal m => m,
+long l => (decimal)l,
+double d => (decimal)d,
+string s => decimal.Parse(s, NumberStyles.Any, CultureInfo.InvariantCulture),
+_ => Convert.ToDecimal(val, CultureInfo.InvariantCulture)
+},
+"FLOAT64" or "FLOAT" => val switch
 {
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_float64
 //   "Invalid cast from BOOL to FLOAT64"
@@ -9062,10 +9082,11 @@ private static decimal ToDecimal(object? val) => val switch
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#numeric_type
 //   BigQuery NUMERIC truncates toward zero to 9 decimal places.
+// Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#numeric_type
+//   NUMERIC results round half away from zero to 9 decimal places.
 private static decimal RoundNumeric(decimal val)
 {
-	var factor = 1_000_000_000m; // 10^9
-	return decimal.Truncate(val * factor) / factor;
+	return Math.Round(val, 9, MidpointRounding.AwayFromZero);
 }
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/conversion_functions#cast_as_string

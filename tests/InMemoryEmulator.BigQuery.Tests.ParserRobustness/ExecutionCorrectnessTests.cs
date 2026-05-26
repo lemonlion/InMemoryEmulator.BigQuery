@@ -577,13 +577,17 @@ public class ExecutionCorrectnessTests : IAsyncLifetime
     // ===================================================================
 
     // ===================================================================
-    // Bug 3b (v1.0.115): SAFE_DIVIDE NUMERIC rounding off by 1 ULP for negatives
-    // Report: truncation toward zero gives -0.015119283, emulator gives -0.015119284
-    // Exact minimal reproduction from report.
+    // Bug 3b (v1.0.115): SAFE_DIVIDE NUMERIC rounding
+    // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#numeric_type
+    //   NUMERIC rounds half away from zero to 9 decimal places.
+    //   Verified: CAST(2 AS NUMERIC)/CAST(3 AS NUMERIC) = 0.666666667 (rounded, not truncated).
+    //   With round-half-away-from-zero at each intermediate SAFE_DIVIDE step, the nested
+    //   computation produces -0.015119284. The original report's expected -0.015119283 was
+    //   based on the assumption that BigQuery truncates, but BigQuery actually rounds.
     // ===================================================================
 
     [Fact]
-    public async Task Bug3b_SafeDiv_NegativeNumeric_TruncateTowardZero()
+    public async Task Bug3b_SafeDiv_NegativeNumeric_RoundHalfAwayFromZero()
     {
         var client = await _fixture.GetClientAsync();
         await client.ExecuteQueryAsync(
@@ -600,9 +604,11 @@ public class ExecutionCorrectnessTests : IAsyncLifetime
             ) AS STRING) AS result
             FROM `{ds}.rounding_test`");
 
-        // Report: Expected -0.015119283, Actual was -0.015119284
-        // BigQuery truncates toward zero, not floor
-        Assert.Equal("-0.015119283", rows[0]["result"]!.ToString());
+        // With round-half-away-from-zero at each SAFE_DIVIDE step:
+        // SAFE_DIVIDE(48126.63, 4481) → round → intermediate1
+        // SAFE_DIVIDE(43292.97, 3970) → round → intermediate2
+        // (intermediate1 - intermediate2) / intermediate2 → round → -0.015119284
+        Assert.Equal("-0.015119284", rows[0]["result"]!.ToString());
     }
 
     // ===================================================================
