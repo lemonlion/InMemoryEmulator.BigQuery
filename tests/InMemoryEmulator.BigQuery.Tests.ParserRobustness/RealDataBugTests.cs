@@ -277,6 +277,48 @@ public class RealDataBugTests : IAsyncLifetime
         Assert.NotNull(rows[0]["unique_customers"]);
     }
 
+    [Fact]
+    public async Task Bug7_SumIf_AllNull_SchemaType_ShouldNotBeString()
+    {
+        // When NO rows match the IF condition, SUM returns NULL.
+        // The schema should still reflect the correct type, not STRING.
+        var client = await _fixture.GetClientAsync();
+        await client.ExecuteQueryAsync(
+            $"CREATE TABLE `{_ds}.bug7_null` (id STRING, val INT64, amount FLOAT64)", parameters: null);
+        await client.ExecuteQueryAsync(
+            $"INSERT INTO `{_ds}.bug7_null` (id, val, amount) VALUES ('a', 10, 100.0), ('b', 20, 200.0)",
+            parameters: null);
+
+        // IF condition is FALSE for all rows → SUM returns NULL
+        // Test plain GROUP BY (no CTE) to isolate schema inference
+        var directGroupBy = await Raw(@"
+            SELECT id, SUM(IF(val > 999, val, NULL)) AS val_sum,
+                       SUM(IF(val > 999, amount, NULL)) AS amount_sum
+            FROM `{ds}.bug7_null`
+            GROUP BY id");
+
+        var directValField = directGroupBy.Schema.Fields.First(f => f.Name == "val_sum");
+        Assert.NotEqual("STRING", directValField.Type);
+
+        // Now with UNION ALL
+        var result = await Raw(@"
+            WITH cte AS (
+              SELECT id, SUM(IF(val > 999, val, NULL)) AS val_sum,
+                         SUM(IF(val > 999, amount, NULL)) AS amount_sum
+              FROM `{ds}.bug7_null`
+              GROUP BY id
+            )
+            SELECT val_sum, amount_sum FROM cte
+            UNION ALL
+            SELECT val_sum, amount_sum FROM cte");
+
+        // Even though values are all NULL, schema should NOT be STRING
+        var valField = result.Schema.Fields.First(f => f.Name == "val_sum");
+        var amtField = result.Schema.Fields.First(f => f.Name == "amount_sum");
+        Assert.NotEqual("STRING", valField.Type);
+        Assert.NotEqual("STRING", amtField.Type);
+    }
+
     // ===================================================================
     // Bug 9: SAFE_DIVIDE rounding off by 1 ULP (-1e-9) for NUMERIC
     // Report: truncation produces value 1e-9 less than expected

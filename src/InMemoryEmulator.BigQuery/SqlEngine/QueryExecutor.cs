@@ -388,7 +388,12 @@ else
 	var value = EvaluateWithAggregates(col.Expr, groupRows);
 	dict[name] = value;
 	if (schema is null)
-		fields.Add(new TableFieldSchema { Name = name, Type = InferType(value) });
+	{
+		var inferredType = InferType(value);
+		if (inferredType == "STRING" && value is null)
+			inferredType = InferExpressionType(col.Expr, groupRows) ?? "STRING";
+		fields.Add(new TableFieldSchema { Name = name, Type = inferredType });
+	}
 }
 }
 
@@ -398,6 +403,25 @@ resultRows.Add(dict);
 
 schema ??= new TableSchema { Fields = sel.Columns.Select(c =>
 new TableFieldSchema { Name = c.Alias ?? DeriveColumnName(c.Expr), Type = "STRING" }).ToList() };
+
+// Fix schema types inferred as STRING from null values in the first group.
+// Scan all result rows to find non-null values and update the type.
+if (resultRows.Count > 0)
+{
+	for (int fi = 0; fi < schema.Fields.Count; fi++)
+	{
+		if (schema.Fields[fi].Type != "STRING") continue;
+		var fieldName = schema.Fields[fi].Name;
+		foreach (var row in resultRows)
+		{
+			if (row.TryGetValue(fieldName, out var v) && v is not null)
+			{
+				schema.Fields[fi].Type = InferType(v);
+				break;
+			}
+		}
+	}
+}
 
 // Ref: https://cloud.google.com/bigquery/docs/reference/standard-sql/window-function-calls
 //   "Window functions can be applied to the result of GROUP BY aggregation."
@@ -1232,7 +1256,21 @@ cells[colName] = Evaluate(item.Expr, row, cteResults: cteResults);
 }
 resultRows.Add(DictToTableRow(cells));
 if (schemaFields.Count == 0)
-schemaFields.AddRange(cells.Keys.Select(k => new TableFieldSchema { Name = k, Type = InferType(cells[k]) }));
+{
+schemaFields.AddRange(cells.Keys.Select(k =>
+{
+	var t = InferType(cells[k]);
+	if (t == "STRING" && cells[k] is null && cteResults is not null)
+	{
+		foreach (var (cteSchema, _) in cteResults.Values)
+		{
+			var cf = cteSchema?.Fields?.FirstOrDefault(f => f.Name.Equals(k, StringComparison.OrdinalIgnoreCase));
+			if (cf is not null && cf.Type != "STRING") { t = cf.Type; break; }
+		}
+	}
+	return new TableFieldSchema { Name = k, Type = t };
+}));
+}
 }
 
 if (schemaFields.Count == 0)
@@ -8954,6 +8992,41 @@ internal static object? CoerceToSchemaType(object val, string? schemaType) => sc
 	"BOOLEAN" or "BOOL" => val is bool ? val : bool.TryParse(val.ToString(), out var b) ? b : val,
 	_ => val,
 };
+
+// Infer the return type of an expression from its AST when the runtime value is null.
+// This handles SUM(IF(cond, col, NULL)) where the SUM returns null but the type
+// should match the source column.
+private string? InferExpressionType(SqlExpression expr, List<RowContext> rows)
+{
+	if (expr is AggregateCall agg && agg.Arg is not null)
+		return InferExpressionType(agg.Arg, rows);
+	if (expr is FunctionCall fc)
+	{
+		var name = fc.FunctionName.ToUpperInvariant();
+		// Aggregates: SUM, AVG, MIN, MAX, ANY_VALUE — type follows the inner expression
+		if (name is "SUM" or "AVG" or "MIN" or "MAX" or "ANY_VALUE" or "COALESCE"
+			&& fc.Args.Count > 0)
+			return InferExpressionType(fc.Args[0], rows);
+		// IF(cond, true_val, false_val) — type follows the true branch
+		if (name == "IF" && fc.Args.Count >= 2)
+			return InferExpressionType(fc.Args[1], rows);
+		// SAFE_DIVIDE → FLOAT
+		if (name == "SAFE_DIVIDE") return "FLOAT";
+	}
+	if (expr is ColumnRef col)
+	{
+		if (rows.Count > 0)
+		{
+			foreach (var row in rows)
+			{
+				var val = row.Fields.GetValueOrDefault(col.ColumnName)
+					?? (col.TableAlias is not null ? row.Fields.GetValueOrDefault($"{col.TableAlias}.{col.ColumnName}") : null);
+				if (val is not null) return InferType(val);
+			}
+		}
+	}
+	return null;
+}
 
 private static string InferType(object? val)
 {
