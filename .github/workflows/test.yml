@@ -45,7 +45,7 @@ jobs:
       - name: Start BigQuery emulator
         run: |
           docker run -d --name bq-emulator -p 9050:9050 --memory=2g --restart=on-failure:5 \
-            ghcr.io/goccy/bigquery-emulator:0.6.6 --project=test-project
+            ghcr.io/goccy/bigquery-emulator:0.7.2 --project=test-project
           # Wait for emulator to be ready
           for i in $(seq 1 30); do
             if curl -sf http://localhost:9050/bigquery/v2/projects/test-project/datasets > /dev/null 2>&1; then

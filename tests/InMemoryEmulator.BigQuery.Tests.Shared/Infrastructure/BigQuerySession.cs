@@ -21,7 +21,7 @@ public class BigQuerySession : IAsyncLifetime
 
 	private string? _containerId;
 	private bool _externalEmulator;
-	private const string EmulatorImage = "ghcr.io/goccy/bigquery-emulator:0.6.6";
+	private const string EmulatorImage = "ghcr.io/goccy/bigquery-emulator:0.7.2";
 	private const int EmulatorRestPort = 9050;
 	private const string EmulatorProjectId = "test-project";
 	private readonly SemaphoreSlim _restartLock = new(1, 1);
