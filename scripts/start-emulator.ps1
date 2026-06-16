@@ -3,7 +3,7 @@
     Starts the goccy/bigquery-emulator Docker container.
 #>
 param(
-    [string]$Image = 'ghcr.io/goccy/bigquery-emulator:0.6.6',
+    [string]$Image = 'ghcr.io/goccy/bigquery-emulator:0.7.2',
     [int]$RestPort = 9050,
     [string]$ProjectId = 'test-project'
 )
